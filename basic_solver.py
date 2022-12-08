@@ -8,7 +8,7 @@ def basic_solver(
     mu_arr_pos, weights_mu,
     tau0, w0,
     mu0, phi0, I0, 
-    scale_tau, scale_beam,
+    scale_tau,
 ):  # This function has many redundant arguments to maximize precomputation in the wrapper function
     
     """Basic radiative transfer solver which performs no corrections
@@ -28,7 +28,6 @@ def basic_solver(
      - *phi0* (float) - Azimuthal angle of the direct beam
      - *I0* (float) - Intensity of the direct beam
      - *scale_tau* (float) - Delta-M scale factor for tau
-     - *scale_beam* (float) - Delta-M scale factor for the direct beam
      
      
     :Output:
@@ -93,7 +92,7 @@ def basic_solver(
                 eigenvals, N,
                 B_pos, B_neg,
                 mu_arr_pos, weights_mu,
-                scale_tau, scale_beam,
+                scale_tau,
             )
         
         GC_collect[:, m, :] = G * C[None, :]
@@ -129,5 +128,5 @@ def basic_solver(
         eigenvals_collect[:, 0], N,
         B_collect[:N, 0], B_collect[N:, 0],
         mu_arr_pos, weights_mu,
-        scale_tau, scale_beam,
+        scale_tau,
     )

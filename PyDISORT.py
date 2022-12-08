@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sc
 from math import pi
 from numpy.polynomial import legendre
+from inspect import signature
 
 def PyDISORT(
     b_pos, b_neg, only_flux, NQuad, NLeg, Leg_coeffs_full, tau0, w0, mu0, phi0, I0, f=0, p_for_NT_with_g=(None,),
@@ -31,20 +32,21 @@ def PyDISORT(
      :Optional:
      - *u* (function) - Intensity function with arguments (tau, phi); the output is in the order (mu, tau, phi)
     """
-    Leg_coeffs = Leg_coeffs_full[:NLeg]
+    Leg_coeffs = Leg_coeffs_full[:NLeg].copy()
     
     # INPUT CHECKS
     # -----------------------------------------------------------
-    # The fractional scattering into peak must be 0<= and <1
+    # The Legendre coefficients must have magnitude <= 1
+    assert all(np.abs(Leg_coeffs) <= 1)
+    # Conditions on fractional scattering
     assert 0 <= f < 1
     # We require principal angles and a downward beam
     assert 0 < mu0 and mu0 < 1
     assert 0 <= phi0 and phi0 < 2 * pi
-    # We require NQuad to be >= 2, and even
-    # NLeg must obviously be >0
-    assert NQuad % 2 == 0
+    # Conditions on the number of quadrature angles (NQuad) and Legendre coefficients (NLeg)
     assert NQuad >= 2
-    assert NLeg > 0
+    assert NQuad % 2 == 0
+    # assert NLeg <= NQuad
 
     N = NQuad // 2
     # The following ensures that the BC inputs are of the correct shape
@@ -67,8 +69,7 @@ def PyDISORT(
 
     # Delta-M scaling; there is no scaling if f==0
     scale_tau = 1 - w0 * f
-    scale_beam = 1 + w0 * f
-    Leg_coeffs = (Leg_coeffs - f) / (1 - f)
+    Leg_coeffs = (Leg_coeffs - f) / (1 - f) * (2 * np.arange(NLeg) + 1)
     w0 *= (1 - f) / scale_tau
     tau0 *= scale_tau
 
@@ -82,13 +83,13 @@ def PyDISORT(
         
         # The magnitude of the asymmetry factor must be <1
         assert np.abs(g) < 1
-        # We check that the last Legendre coefficient in Leg_coeffs matches the inputed phase function
+        # We check that the last WEIGHTED Legendre coefficient in Leg_coeffs matches the inputed phase function
         assert np.isclose(
-            ((2 * (NLeg - 1) + 1) / 2)
+            (1 / 2)
             * integrate.quad(
                 lambda nu: p_for_NT(nu, g) * sc.special.eval_legendre(NLeg - 1, nu), -1, 1
             )[0],
-            Leg_coeffs[NLeg - 1] * (1 - f) + f,
+            Leg_coeffs[NLeg - 1] / (2 * (NLeg - 1) + 1) * (1 - f) + f,
         )
         
         # Delta-M scaled solution; no further corrections to the flux
@@ -100,7 +101,7 @@ def PyDISORT(
             mu_arr_pos, weights_mu,
             tau0, w0,
             mu0, phi0, I0, 
-            scale_tau, scale_beam,
+            scale_tau,
         )
 
         # NT corrections for the intensity
@@ -113,7 +114,7 @@ def PyDISORT(
             tilde_mathcal_B = lambda tau, mu_arr, phi: (
                 ((w0 * I0) / (4 * np.pi * (1 - f)))
                 * np.exp(-tau / mu0)[None, :, None]
-                * atleast_2d_back(p_for_NT_muphi(mu_arr, phi, -mu0, phi0, g))[:, None, :]
+                * atleast_2d_append(p_for_NT_muphi(mu_arr, phi, -mu0, phi0, g))[:, None, :]
                 / (mu_arr / mu0 + 1)[:, None, None]
             )
             tilde_u_star1_pos = (
@@ -141,7 +142,7 @@ def PyDISORT(
             mathcal_B = lambda tau, mu_arr, phi: (
                 ((w0 * I0) / (4 * np.pi))
                 * np.exp(-tau / mu0)[None, :, None]
-                * atleast_2d_back(p_truncated(mu_arr, phi, -mu0, phi0))[:, None, :]
+                * atleast_2d_append(p_truncated(mu_arr, phi, -mu0, phi0))[:, None, :]
                 / (mu_arr / mu0 + 1)[:, None, None]
             )
             u_star1_pos = (
@@ -173,5 +174,5 @@ def PyDISORT(
             mu_arr_pos, weights_mu,
             tau0, w0,
             mu0, phi0, I0, 
-            scale_tau, scale_beam,
+            scale_tau,
         )

@@ -89,7 +89,6 @@ def generate_Ds(m, Leg_coeffs, mu_arr_pos, w0, ells, degree_tile):
     return D_pos, D_neg
 	
 
-# Generate the X term in the system of ODEs
 def generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile):
     """Generates the X term in the system of ODEs for each Fourier mode, see Section 3.2
     
@@ -125,14 +124,13 @@ def generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile):
     return X_pos, X_neg
 	
 	
-# Create the up and down flux functions
 def generate_flux_functions(
     I0, mu0, tau0,
     GC_pos, GC_neg, 
     eigenvals, N,
     B_pos, B_neg, 
     mu_arr_pos, weights_mu, 
-    scale_tau, scale_beam,
+    scale_tau,
 ): 
     """Generates the flux functions with respect to the radiative transfer equation
     
@@ -144,7 +142,6 @@ def generate_flux_functions(
      - *B_pos / neg* (vector) - Coefficients of the inhomogenity that correspond to positive / negative mu values
      - *mu_arr_pos / neg* (vector) - Positive / negative mu (quadrature) values
      - *scale_tau* (float) - Delta-M scale factor for tau
-     - *scale_beam* (float) - Delta-M scale factor for the direct beam
      
      
     :Output:
@@ -152,6 +149,14 @@ def generate_flux_functions(
      - *flux_down* (vector) - Flux function with argument tau for negative (downward) mu values
     """
     def flux_up(tau):
+        """Returns the magnitude of the upwards flux at the specified tau levels
+
+        :Input:
+        - *tau* - Optical depth levels
+
+        :Output:
+        - Magnitude of diffuse upwards flux, which is also the total upwards flux
+        """
         tau = scale_tau * np.atleast_1d(tau) # Delta-M scaling
         exponent = np.vstack(
             (
@@ -160,10 +165,21 @@ def generate_flux_functions(
             )
         )
         um = GC_pos @ np.exp(exponent) + B_pos[:, None] * np.exp(-tau[None, :] / mu0)
-        return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ um)
+        return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ um)[()]
 
     def flux_down(tau):
-        tau = scale_tau * np.atleast_1d(tau) # Delta-M scaling
+        """Returns the magnitude of the downwards fluxes at the specified tau levels
+
+        :Input:
+        - *tau* - Optical depth levels
+
+        :Output:
+        - Magnitude of diffuse downwards flux
+        - Magnitude of direct downwards flux
+        """
+        direct_beam = I0 * mu0 * np.exp(-tau / mu0)
+        
+        tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
         exponent = np.vstack(
             (
                 eigenvals[:N, None] * tau[None, :],
@@ -171,18 +187,18 @@ def generate_flux_functions(
             )
         )
         um = GC_neg @ np.exp(exponent) + B_neg[:, None] * np.exp(-tau[None, :] / mu0)
-        return np.squeeze(
-            2 * pi * (mu_arr_pos * weights_mu) @ um
-            + scale_beam * I0 * mu0 * np.exp(-tau / mu0)
+        return (
+            np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ um)[()],
+            direct_beam,
         )
 
     return flux_up, flux_down
     
 
-# The following function is exactly NumPy's `atleast_2d` function but edited
+# The following function is exactly NumPy's `atleast_2d` function but altered
 # to add dimensions to the back of the shape tuple rather than to the front.
-# Documentation for `np.atleast_2d`: https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
-def atleast_2d_back(*arys):
+# Documentation for `np.atleast_2d` taken from https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
+def atleast_2d_append(*arys):
     """
     View inputs as arrays with at least two dimensions.
     Parameters
