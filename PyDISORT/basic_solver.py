@@ -1,27 +1,31 @@
-import numpy as np
+import PyDISORT
+try:
+    import autograd.numpy as np
+except ImportError:
+    import numpy as np
 
 def basic_solver(
     b_pos, b_neg,
     only_flux,
-    N, NQuad, NLeg,
+    N, NQuad, NLeg, NLoops,
     Leg_coeffs,
     mu_arr_pos, weights_mu,
     tau0, w0,
     mu0, phi0, I0, 
     scale_tau,
 ):  # This function has many redundant arguments to maximize precomputation in the wrapper function
-    
     """Basic radiative transfer solver which performs no corrections
     
     :Input:
-     - *b_pos / neg* (matrix) - Boundary conditions for the upward / downward directions
+     - *b_pos / neg* (float matrix) - Boundary conditions for the upward / downward directions
      - *only_flux* (boolean) - Flag for whether to compute the intensity function
      - *N* (integer) - Equals NQuad // 2
      - *NQuad* (integer) - Number of mu quadrature points
-     - *NLeg* (integer) - Number of phase function Legendre coefficients to use in the basic solver
-     - *Leg_coeffs* (vector) - Long vector of weighted phase function Legendre coefficients
-     - *mu_arr_pos* (vector) - Positive mu (quadrature) values
-     - *weights_mu* (vector) - Weights for mu quadrature
+     - *NLeg* (integer) - Number of phase function Legendre coefficients
+     - *NLoops* (integer) - Number of loops, also number of Fourier modes in the numerical solution
+     - *Leg_coeffs* (float vector) - WEIGHTED phase function Legendre coefficients
+     - *mu_arr_pos* (float vector) - Positive mu (quadrature) values
+     - *weights_mu* (float vector) - Weights for mu quadrature
      - *tau0* (float) - Optical depth
      - *w0* (float) - Single-scattering albedo
      - *mu0* (float) - Polar angle of the direct beam
@@ -32,24 +36,23 @@ def basic_solver(
      
     :Output:
      - *flux_up* (function) - Flux function with argument tau for positive (upward) mu values
-     - *flux_down* (vector) - Flux function with argument tau for negative (downward) mu values
+     - *flux_down* (function) - Flux function with argument tau for negative (downward) mu values
      :Optional:
      - *u* (function) - Intensity function with arguments (tau, phi); the output is in the order (mu, tau, phi)
     """
-    
     # If we want to solve for the intensity we need to solve for NLeg Fourier modes
     # If we only want to solve for the flux we only need to solve for the 0th Fourier mode
     if not only_flux:
-        GC_collect = np.empty((NQuad, NLeg, NQuad))
-        eigenvals_collect = np.empty((NQuad, NLeg))
-        B_collect = np.empty((NQuad, NLeg))
+        GC_collect = np.empty((NQuad, NLoops, NQuad))
+        eigenvals_collect = np.empty((NQuad, NLoops))
+        B_collect = np.empty((NQuad, NLoops))
 
-    # Loop over the number of Fourier modes
-    for m in range(NLeg):
+    # Loop over NLoops Fourier modes
+    for m in range(NLoops):
         ells = np.arange(m, NLeg)
         degree_tile = np.tile(ells, (N, 1)).T
         
-        D_pos, D_neg = generate_Ds(m, Leg_coeffs, mu_arr_pos, w0, ells, degree_tile)
+        D_pos, D_neg = PyDISORT.subroutines.generate_Ds(m, Leg_coeffs, mu_arr_pos, w0, ells, degree_tile)
         M_inv = 1 / mu_arr_pos
         W = weights_mu[None, :]
         alpha = M_inv[:, None] * (D_pos * W - np.eye(N))
@@ -71,7 +74,7 @@ def basic_solver(
         G = np.vstack((G_pos, G_neg))
         
         # Solve for the coefficients of the particular solution, B
-        X_pos, X_neg = generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile)
+        X_pos, X_neg = PyDISORT.subroutines.generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile)
         X_tilde = np.concatenate((-M_inv * X_pos, M_inv * X_neg))
         B = np.linalg.solve(-(np.eye(NQuad) / mu0 + A), X_tilde)
         
@@ -86,7 +89,7 @@ def basic_solver(
         C = np.linalg.solve(LHS, RHS)
 
         if only_flux:
-            return generate_flux_functions(
+            return PyDISORT.subroutines.generate_flux_functions(
                 I0, mu0, tau0,
                 G_pos * C[None, :], G_neg * C[None, :],
                 eigenvals, N,
@@ -117,12 +120,12 @@ def basic_solver(
                 np.einsum(
                     "imt, mp -> itp",
                     um,
-                    np.cos(np.arange(NLeg)[:, None] * (phi0 - phi)[None, :]),
+                    np.cos(np.arange(NLoops)[:, None] * (phi0 - phi)[None, :]),
                     optimize=True,
                 )
             )
 
-    return (u, ) + generate_flux_functions(
+    return (u, ) + PyDISORT.subroutines.generate_flux_functions(
         I0, mu0, tau0,
         GC_collect[:N, 0, :], GC_collect[N:, 0, :],
         eigenvals_collect[:, 0], N,
