@@ -4,53 +4,87 @@ try:
 except ImportError:
     import numpy as np
 import scipy as sc
-import warnings
 import PyDISORT
 from math import pi
-from numpy.polynomial import legendre
+from numpy.polynomial.legendre import Legendre
 from scipy import integrate
 from inspect import signature
 
 def pydisort(
-    b_pos, b_neg, only_flux, NQuad, NLoops, Leg_coeffs, tau0, w0, mu0, phi0, I0, f=0, p_for_NT=None,
+    tau_arr, omega_arr,
+    NQuad, NLeg, NLoops,
+    Leg_coeffs_all,
+    mu0, I0, phi0,
+    b_pos, b_neg,
+    only_flux=False,
+    f_arr=0, 
+    NT_cor=False,
+    Leg_coeffs_BDRF=[],
+    mathscr_vs=None,
+    parfor_Fourier=False
 ):
     """Full radiative transfer solver which performs corrections
-    
-    :Input:
-     - *b_pos / neg* (float matrix) - Boundary conditions for the upward / downward directions
-     - *only_flux* (boolean) - Flag for whether to compute the intensity function
-     - *NQuad* (integer) - Number of mu quadrature points
-     - *NLoops* (integer) - Number of loops, also number of Fourier modes in the numerical solution
-     - *Leg_coeffs* (float vector) - Phase function Legendre coefficients
-     - *tau0* (float) - Optical depth
-     - *w0* (float) - Single-scattering albedo
-     - *mu0* (float) - Polar angle of the direct beam
-     - *phi0* (float) - Azimuthal angle of the direct beam
-     - *I0* (float) - Intensity of the direct beam
-     :Optional:
-     - *f* (float) - fractional scattering into the forward peak for use in delta-M scaling
-     - *p_for_NT* (function) - True phase function with cosine of scattering angle as vector argument
-     
-     
-    :Output:
-     - *mu_arr* (float vector) - All mu values
-     - *flux_up* (function) - Flux function with argument tau for positive (upward) mu values
-     - *flux_down* (function) - Flux function with argument tau for negative (downward) mu values
-     :Optional:
-     - *u* (function) - Intensity function with arguments (tau, phi); the output is in the order (mu, tau, phi)
+
+    Args:
+        tau_arr (array): Optical depth of the lower boundary of each atmospheric layer
+        omega_arr (array): Single-scattering albedo of each atmospheric layer
+        NQuad (int): Number of mu quadrature nodes
+        NLeg (int): Number of phase function Legendre coefficients
+        NLoops (int): Number of outermost loops to perform, also number of Fourier modes in the numerical solution
+        Leg_coeffs_all (ndarray): All available unweighted phase function Legendre coefficients
+        mu0 (float): Polar angle of the incident beam
+        I0 (float): Intensity of the incident beam
+        phi0 (float): Azimuthal angle of the incident beam
+        b_pos (2darray or float): Dirichlet boundary condition for the upward direction
+        b_neg (2darray or float): Dirichlet boundary condition for the downward direction
+        only_flux (bool): Do not compute the intensity function?
+        f_arr (optional, array): Do not compute the intensity function?
+        NT_cor (optional, bool): Perform Nakajima-Tanaka intensity corrections?
+        Leg_coeffs_BDRF (optional, array): Unweighted BDRF Legendre coefficients
+        vs (optional, function): Particular solution corresponding to the other internal sources.
+            Must have arguments (tau_arr, int, 2darray, array, 2darray) and output (2darray).
+        parfor_Fourier (optional, bool): Parallelize for-loop over Fourier modes?
+        
+        GC_pos (2darray): Product of eigenvectors and coefficients that correspond to positive mu values
+        GC_neg (2darray): Product of eigenvectors and coefficients that correspond to negative mu values
+        eigenvals (array): Eigenvalues arranged negative then positive, from largest to smallest magnitude
+        N (int): Half the number of quadrature points
+        B_pos (array): Coefficients of the incident beam inhomogeneity that correspond to positive mu values
+        B_neg (array): Coefficients of the incident beam inhomogeneity that correspond to negative mu values
+        mu_arr_pos (array): Positive mu quadrature nodes
+        weights_mu (array): mu quadrature weights for positive mu nodes
+        scale_tau (array): Delta-M scale factors for tau
+        
+    Returns:
+        array: All mu (cosine of polar angle) quadrature nodes
+        function: Flux function with argument tau (array) for positive (upward) mu values
+        function: Flux function with argument tau (array) for negative (downward) mu values
+        function, optional: Intensity function with arguments (tau, phi) (array, array).
+            The output is an ndarray with axes corresponding to (mu, tau, phi)
+        
     """
-    NLeg = len(Leg_coeffs)
+    tau_arr = np.atleast_1d(tau_arr)
+    omega_arr = np.atleast_1d(omega_arr)
+    Leg_coeffs_all = np.atleast_2d(Leg_coeffs_all)
+    f_arr = np.atleast_1d(f_arr)
+    
+    Leg_coeffs = Leg_coeffs_all[:, :NLeg]
+    NLayers = len(tau_arr)
+    scalar_b_pos, scalar_b_neg = False, False
+    mathscr_vs_callable = callable(mathscr_vs)
     
     # INPUT CHECKS
     # -----------------------------------------------------------
     # Optical depth must be positive
-    assert tau0 > 0
+    assert np.all(tau_arr > 0)
     # Single-scattering albedo must be between 0 and 1, excluding 1
-    assert w0 >= 0
-    assert w0 < 1
+    assert np.all(omega_arr >= 0)
+    assert np.all(omega_arr < 1)
     # There must be a positive number of Legendre coefficients each with magnitude <= 1
+    # We must obviously supply more Legendre coefficients than we intend to use
     assert NLeg > 0
-    assert np.all(np.abs(Leg_coeffs) <= 1)
+    assert np.all(np.abs(Leg_coeffs_all) <= 1)
+    assert NLeg <= np.shape(Leg_coeffs_all)[0]
     # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NLoops)
     assert NQuad >= 2
     assert NQuad % 2 == 0
@@ -58,130 +92,135 @@ def pydisort(
     assert NLoops <= NLeg
     assert NQuad >= NLeg # Not strictly necessary but there will be tremendous inaccuracies if this is violated
     N = NQuad // 2
-    # The fractional scattering must be between 0 and 1, excluding 1
-    assert 0 <= f < 1
-    # We require principal angles and a downward beam
+    # We require principal angles, a downward incident beam and 
     assert 0 < mu0 and mu0 < 1
     assert 0 <= phi0 and phi0 < 2 * pi
     # This ensures that the BC inputs are of the correct shape
+    # Ensure that the BC inputs are of the correct shape
     if len(np.atleast_1d(b_pos)) == 1:
-        b_pos = np.full((N, NLoops), b_pos)
+        scalar_b_pos = True
     else:
         assert np.shape(b_pos) == (N, NLoops)
+        
     if len(np.atleast_1d(b_neg)) == 1:
-        b_neg = np.full((N, NLoops), b_pos)
+        scalar_b_neg = True
     else:
         assert np.shape(b_neg) == (N, NLoops)
+    # The fractional scattering must be between 0 and 1, excluding 1
+    assert np.all(0 <= f_arr < 1)
+    assert np.all(np.abs(Leg_coeffs_BDRF) <= 1)
+    if mathscr_vs_callable:
+        assert len(signature(mathscr_vs).parameters) == 5
+        assert np.allclose(
+            mathscr_vs(
+                np.array([tau_arr[-1]]),
+                NQuad,
+                np.random.random((NQuad, NQuad)),
+                np.random.random(NQuad),
+                np.random.random((NQuad, NQuad)),
+            ),
+            0,
+        )
     # -----------------------------------------------------------
 
     # For positive mu values (the weights are identical for both domains)
-    mu_arr_pos, weights_mu = legendre.leggauss(N)
-    mu_arr_pos = PyDISORT.subroutines.transform_interval(mu_arr_pos, 0, 1)  # mu_arr_neg = -mu_arr_pos
-    weights_mu = PyDISORT.subroutines.transform_weights(weights_mu, 0, 1)
+    mu_arr_pos, weights_mu = PyDISORT.subroutines.Gauss_Legendre_quad(N) # mu_arr_neg = -mu_arr_pos
+    mu_arr = np.concatenate((mu_arr_pos, -mu_arr_pos))
+    full_weights_mu = np.concatenate((weights_mu, weights_mu))
     # We do not allow mu0 to equal a quadrature / computational angle
     assert not np.any(np.isclose(mu_arr_pos, mu0))
-
+    
     # Delta-M scaling; there is no scaling if f = 0
-    scale_tau = 1 - w0 * f
-    Leg_coeffs = (Leg_coeffs - f) / (1 - f) * (2 * np.arange(NLeg) + 1)
-    w0 *= (1 - f) / scale_tau
-    tau0 *= scale_tau
+    scale_tau = 1 - omega_arr * f_arr
+    Leg_coeffs = ((Leg_coeffs - f_arr[:, None]) / (1 - f_arr[:, None])) * (2 * np.arange(NLeg)[None, :] + 1)
+    omega_arr *= (1 - f_arr) / scale_tau
+    #tau_arr *= scale_tau
 
     # Perform NT correction on the intensity but not the flux
-    if callable(p_for_NT) and not only_flux:
-        # Verify that the true phase function has one argument
-        assert len(signature(p_for_NT).parameters) == 1
-        # We check that the last Legendre coefficient in Leg_coeffs matches the inputed phase function
-        assert np.isclose(
-            (1 / 2)
-            * integrate.quad(
-                lambda nu: p_for_NT(nu) * sc.special.eval_legendre(NLeg - 1, nu), -1, 1
-            )[0],
-            Leg_coeffs[NLeg - 1] / (2 * (NLeg - 1) + 1) * (1 - f) + f,
-        )
-        
+    if NT_cor and not only_flux and I0 != 0 and np.any(f_arr > 0) and NLeg < np.shape(Leg_coeffs_all)[0]:
         # Delta-M scaled solution; no further corrections to the flux
-        u_star, flux_up, flux_down = PyDISORT.basic_solver(
+        u_star, flux_up, flux_down = PyDISORT.basic_solver._basic_solver(
+            tau_arr, omega_arr,
+            N, NQuad, NLeg, NLoops,
+            Leg_coeffs_all,
+            I0, mu0, phi0,
             b_pos, b_neg,
             False,
-            N, NQuad, NLeg, NLoops,
-            Leg_coeffs,
+            BDRF_Leg_coeffs,
             mu_arr_pos, weights_mu,
-            tau0, w0,
-            mu0, phi0, I0, 
-            scale_tau,
+            scale_tau
         )
 
-        # NT corrections for the intensity
-        def p_for_NT_muphi(mu, phi, mu_p, phi_p):
-            nu = PyDISORT.subroutines.calculate_nu(mu, phi, mu_p, phi_p)
-            return p_for_NT(nu)
+        # NT (TMS) correction for the intensity
+        def mathscr_B(tau, phi):
+            nu = PyDISORT.subroutines.atleast_2d_append(
+                PyDISORT.subroutines.calculate_nu(mu_arr, phi, -mu0, phi0)
+            )
+            l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
+            l_unique = np.unique(l)
 
-        def tilde_u_star1(tau, phi):
+            p_true = np.concatenate(
+                [f(nu)[:, None, :] for f in map(Legendre, iter(Leg_coeffs_all[l_unique, :]))],
+                axis=1,
+            )
+            p_trun = np.concatenate(
+                [
+                    f(nu)[:, None, :]
+                    for f in map(Legendre, iter(Leg_coeffs[l_unique, :]))
+                ],
+                axis=1,
+            )
+
+            return (
+                (omega_arr[None, l_unique, None] * I0)
+                / (4 * np.pi)
+                * (mu0 / (mu0 + mu_arr))[:, None, None]
+                * p_true
+                / (1 - f_arr[None, l_unique, None])
+                - p_trun
+            )[:, l, :]  # The tau variation is due to the different atmospheric layers
+        
+        def TMS_correction(tau, phi):
             tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
-            tilde_mathcal_B = lambda tau, mu, phi: (
-                ((w0 * I0) / (4 * np.pi * (1 - f)))
-                * (mu0 / (mu0 + mu))[:, None, None]
-                * PyDISORT.subroutines.atleast_2d_append(p_for_NT_muphi(mu, phi, -mu0, phi0))[
-                    :, None, :
-                ]
-            )
-            tilde_u_star1_pos = (
-                tilde_mathcal_B(tau, mu_arr_pos, phi)
-                * (
-                    np.exp(-tau / mu0)[None, :]
-                    - np.exp((tau - tau0)[None, :] * (1 / mu_arr_pos)[:, None] - tau0 / mu0)
-                )[:, :, None]
-            )
-            tilde_u_star1_neg = (
-                tilde_mathcal_B(tau, -mu_arr_pos, phi)
-                * (
-                    np.exp(-tau / mu0)[None, :]
-                    - np.exp(tau[None, :] * (-1 / mu_arr_pos)[:, None])
-                )[:, :, None]
-            )
-            return np.squeeze(np.concatenate((tilde_u_star1_pos, tilde_u_star1_neg), axis=0))
+            l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
+            l_unique = np.unique(l)
 
-
-        def p_truncated(mu, phi, mu_p, phi_p):
-            nu = PyDISORT.subroutines.calculate_nu(mu, phi, mu_p, phi_p)
-            return legendre.Legendre(Leg_coeffs)(nu)
-
-
-        def u_star1(tau, phi):
-            tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
-            mathcal_B = lambda tau, mu, phi: (
-                ((w0 * I0) / (4 * np.pi))
-                * (mu0 / (mu0 + mu))[:, None, None]
-                * PyDISORT.subroutines.atleast_2d_append(p_truncated(mu, phi, -mu0, phi0))[
-                    :, None, :
-                ]
+            TMS_correction_pos = np.exp(-tau / mu0)[None, :] - np.exp(
+                (tau - tau_arr[l])[None, :] * (1 / mu_arr_pos)[:, None] - tau_arr[None, l] / mu0
             )
-            u_star1_pos = (
-                mathcal_B(tau, mu_arr_pos, phi)
-                * (
-                    np.exp(-tau / mu0)[None, :]
-                    - np.exp((tau - tau0)[None, :] * (1 / mu_arr_pos)[:, None] - tau0 / mu0)
-                )[:, :, None]
+            TMS_correction_neg = np.exp(-tau / mu0)[None, :] - np.exp(
+                tau[None, :] * (-1 / mu_arr_pos)[:, None]
             )
-            u_star1_neg = (
-                mathcal_B(tau, -mu_arr_pos, phi)
-                * (
-                    np.exp(-tau / mu0)[None, :]
-                    - np.exp(tau[None, :] * (-1 / mu_arr_pos)[:, None])
-                )[:, :, None]
+
+            return np.squeeze(
+                mathscr_B(tau, phi)
+                * np.concatenate((TMS_correction_pos, TMS_correction_neg))[:, :, None]
             )
-            return np.squeeze(np.concatenate((u_star1_pos, u_star1_neg), axis=0))
-
-
+            
+        # NT (IMS) correction for the intensity
+        sum1 = np.sum(omega_arr * tau_arr)
+        omega_avg = sum1 / np.sum(tau_arr)
+        sum2 = np.sum(omega_arr * f_arr * tau_arr)
+        f_avg = sum2 / sum1
+        Leg_coeffs_residue = Leg_coeffs_all.copy()
+        Leg_coeffs_residue[:, :NLeg] = np.tile(f_arr, (1, NLeg))
+        Leg_coeffs_residue_avg = (
+            np.sum(Leg_coeffs_residue * omega_arr[:, None] * tau_arr[:, None], axis=0) / sum2
+        )
+        scaled_mu0 = mu0 / (1 - omega_avg * f_avg)
+        
+        #def chi(tau):
+            
+        
+        
         # The corrected intensity
         u_corrected = (
-            lambda tau, phi: u_star(tau, phi) - u_star1(tau, phi) + tilde_u_star1(tau, phi)
+            lambda tau, phi: u_star(tau, phi) + TMS_correction(tau, phi)
         )
-        return np.concatenate((mu_arr_pos, -mu_arr_pos)), u_corrected, flux_up, flux_down
+        return mu_arr, u_corrected, flux_up, flux_down
 
     else: # Do not perform NT corrections
-        return (np.concatenate((mu_arr_pos, -mu_arr_pos)),) + PyDISORT.basic_solver(
+        return (mu_arr,) + PyDISORT.basic_solver._basic_solver(
             b_pos, b_neg,
             only_flux,
             N, NQuad, NLeg, NLoops,

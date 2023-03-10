@@ -4,15 +4,16 @@ try:
 except ImportError:
     import numpy as np
 
-def basic_solver(
+def _basic_solver(
+    tau_arr, omega_arr,
+    N, NQuad, NLeg, NLoops,
+    weighted_Leg_coeffs,
+    I0, mu0, phi0,
     b_pos, b_neg,
     only_flux,
-    N, NQuad, NLeg, NLoops,
-    Leg_coeffs,
+    BDRF_Leg_coeffs,
     mu_arr_pos, weights_mu,
-    tau0, w0,
-    mu0, phi0, I0, 
-    scale_tau,
+    scale_tau
 ):  # This function has many redundant arguments to maximize precomputation in the wrapper function
     """Basic radiative transfer solver which performs no corrections
     
@@ -23,7 +24,7 @@ def basic_solver(
      - *NQuad* (integer) - Number of mu quadrature points
      - *NLeg* (integer) - Number of phase function Legendre coefficients
      - *NLoops* (integer) - Number of loops, also number of Fourier modes in the numerical solution
-     - *Leg_coeffs* (float vector) - WEIGHTED phase function Legendre coefficients
+     - *Leg_coeffs* (float vector) - Weighted phase function Legendre coefficients
      - *mu_arr_pos* (float vector) - Positive mu (quadrature) values
      - *weights_mu* (float vector) - Weights for mu quadrature
      - *tau0* (float) - Optical depth
@@ -31,6 +32,7 @@ def basic_solver(
      - *mu0* (float) - Polar angle of the direct beam
      - *phi0* (float) - Azimuthal angle of the direct beam
      - *I0* (float) - Intensity of the direct beam
+     - *BDRF_Leg_coeffs* (float vector) - Weighted BDRF Legendre coefficients
      - *scale_tau* (float) - Delta-M scale factor for tau
      
      
@@ -82,7 +84,7 @@ def basic_solver(
         B_pos, B_neg = B[:N], B[N:]
         K_tau0_neg = np.exp(eigenvals[:N] * tau0)
 
-        LHS = np.vstack((G_neg, G_pos))
+        LHS = np.vstack((G_neg, G_pos)) # LHS is a re-arranged COPY of matrix G
         LHS[:N, N:] *= K_tau0_neg[None, :]
         LHS[N:, :N] *= K_tau0_neg[None, :]
         RHS = np.concatenate((b_neg[:, m] - B_neg, b_pos[:, m] - B_pos * np.exp(-tau0 / mu0)))
@@ -90,7 +92,7 @@ def basic_solver(
 
         if only_flux:
             return PyDISORT.subroutines.generate_flux_functions(
-                I0, mu0, tau0,
+                mu0, I0, tau0,
                 G_pos * C[None, :], G_neg * C[None, :],
                 eigenvals, N,
                 B_pos, B_neg,
@@ -126,7 +128,7 @@ def basic_solver(
             )
 
     return (u, ) + PyDISORT.subroutines.generate_flux_functions(
-        I0, mu0, tau0,
+        mu0, I0, tau0,
         GC_collect[:N, 0, :], GC_collect[N:, 0, :],
         eigenvals_collect[:, 0], N,
         B_collect[:N, 0], B_collect[N:, 0],
