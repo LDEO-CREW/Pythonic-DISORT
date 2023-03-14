@@ -4,7 +4,6 @@ try:
 except ImportError:
     import numpy as np
 import scipy as sc
-import PyDISORT
 from math import pi
 from numpy.polynomial.legendre import Legendre
 from scipy import integrate
@@ -12,10 +11,13 @@ from inspect import signature
 
 def pydisort(
     tau_arr, omega_arr,
-    NQuad, NLeg, NLoops,
+    NQuad,
     Leg_coeffs_all,
     mu0, I0, phi0,
-    b_pos, b_neg,
+    NLeg=None, 
+    NLoops=None,
+    b_pos=0, 
+    b_neg=0,
     only_flux=False,
     f_arr=0, 
     NT_cor=False,
@@ -23,51 +25,68 @@ def pydisort(
     mathscr_vs=None,
     parfor_Fourier=False
 ):
-    """Full radiative transfer solver which performs corrections
+    """Full radiative transfer solver with corrections and input checks.
 
-    Args:
-        tau_arr (array): Optical depth of the lower boundary of each atmospheric layer
-        omega_arr (array): Single-scattering albedo of each atmospheric layer
-        NQuad (int): Number of mu quadrature nodes
-        NLeg (int): Number of phase function Legendre coefficients
-        NLoops (int): Number of outermost loops to perform, also number of Fourier modes in the numerical solution
-        Leg_coeffs_all (ndarray): All available unweighted phase function Legendre coefficients
-        mu0 (float): Polar angle of the incident beam
-        I0 (float): Intensity of the incident beam
-        phi0 (float): Azimuthal angle of the incident beam
-        b_pos (2darray or float): Dirichlet boundary condition for the upward direction
-        b_neg (2darray or float): Dirichlet boundary condition for the downward direction
-        only_flux (bool): Do not compute the intensity function?
-        f_arr (optional, array): Do not compute the intensity function?
-        NT_cor (optional, bool): Perform Nakajima-Tanaka intensity corrections?
-        Leg_coeffs_BDRF (optional, array): Unweighted BDRF Legendre coefficients
-        vs (optional, function): Particular solution corresponding to the other internal sources.
-            Must have arguments (tau_arr, int, 2darray, array, 2darray) and output (2darray).
-        parfor_Fourier (optional, bool): Parallelize for-loop over Fourier modes?
+    Parameters
+    ----------
+    tau_arr : array
+        Optical depth of the lower boundary of each atmospheric layer.
+    omega_arr : array
+        Single-scattering albedo of each atmospheric layer.
+    NQuad : int
+        Number of mu quadrature nodes.
+    Leg_coeffs_all : ndarray
+        All available unweighted phase function Legendre coefficients.
+    mu0 : float
+        Polar angle of the incident beam.
+    I0 : float
+        Intensity of the incident beam.
+    phi0 : float
+        Azimuthal angle of the incident beam.
+    NLeg : optional, int
+        Number of phase function Legendre coefficients.
+    NLoops : optional, int
+        Number of outermost loops to perform, also number of Fourier modes in the numerical solution.
+    b_pos : optional, 2darray or float
+        Dirichlet boundary condition for the upward direction.
+    b_neg : optional, 2darray or float
+        Dirichlet boundary condition for the downward direction.
+    only_flux : optional, bool
+        Do NOT compute the intensity function?.
+    f_arr : optional, array
+        Fractional scattering into peak for each atmospheric layer.
+    NT_cor : optional, bool
+        Perform Nakajima-Tanaka intensity corrections?
+    Leg_coeffs_BDRF : optional, array
+        Unweighted BDRF Legendre coefficients.
+    mathscr_vs : optional, function
+        Particular solution corresponding to the other internal sources.
+        Must have arguments (tau_arr, int, 2darray, array, 2darray) and output (2darray)..
+    parfor_Fourier : optional, bool
+        Parallelize the for-loop over Fourier modes?
         
-        GC_pos (2darray): Product of eigenvectors and coefficients that correspond to positive mu values
-        GC_neg (2darray): Product of eigenvectors and coefficients that correspond to negative mu values
-        eigenvals (array): Eigenvalues arranged negative then positive, from largest to smallest magnitude
-        N (int): Half the number of quadrature points
-        B_pos (array): Coefficients of the incident beam inhomogeneity that correspond to positive mu values
-        B_neg (array): Coefficients of the incident beam inhomogeneity that correspond to negative mu values
-        mu_arr_pos (array): Positive mu quadrature nodes
-        weights_mu (array): mu quadrature weights for positive mu nodes
-        scale_tau (array): Delta-M scale factors for tau
-        
-    Returns:
-        array: All mu (cosine of polar angle) quadrature nodes
-        function: Flux function with argument tau (array) for positive (upward) mu values
-        function: Flux function with argument tau (array) for negative (downward) mu values
-        function, optional: Intensity function with arguments (tau, phi) (array, array).
-            The output is an ndarray with axes corresponding to (mu, tau, phi)
-        
+    Returns
+    -------
+    mu_arr : array
+        All mu (cosine of polar angle) quadrature nodes.
+    flux_up : function
+        Flux function with argument tau (array) for positive (upward) mu values.
+    flux_down : function
+        Flux function with argument tau (array) for negative (downward) mu values.
+    u : function, optional
+        Intensity function with arguments (tau, phi) of types (array, array).
+        The output is an ndarray with axes corresponding to (mu, tau, phi) variation.
+
     """
     tau_arr = np.atleast_1d(tau_arr)
     omega_arr = np.atleast_1d(omega_arr)
     Leg_coeffs_all = np.atleast_2d(Leg_coeffs_all)
     f_arr = np.atleast_1d(f_arr)
     
+    if NLeg == None:
+        NLeg = NQuad
+    if NLoops == None:
+        NLoops = NQuad
     Leg_coeffs = Leg_coeffs_all[:, :NLeg]
     NLayers = len(tau_arr)
     scalar_b_pos, scalar_b_neg = False, False
@@ -217,7 +236,7 @@ def pydisort(
         u_corrected = (
             lambda tau, phi: u_star(tau, phi) + TMS_correction(tau, phi)
         )
-        return mu_arr, u_corrected, flux_up, flux_down
+        return mu_arr, flux_up, flux_down, u_corrected
 
     else: # Do not perform NT corrections
         return (mu_arr,) + PyDISORT.basic_solver._basic_solver(
