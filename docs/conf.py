@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'Pythonic-DISORT'
+project = 'PyDISORT'
 copyright = '2023, Dion Ho'
 author = 'Dion Ho'
 release = '1.0'
