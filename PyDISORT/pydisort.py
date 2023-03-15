@@ -70,9 +70,11 @@ def pydisort(
     mu_arr : array
         All mu (cosine of polar angle) quadrature nodes.
     flux_up : function
-        Flux function with argument tau (array) for positive (upward) mu values.
+        Flux function with argument tau (type: array) for positive (upward) mu values.
+        Returns the diffuse flux magnitudes (type: array).
     flux_down : function
-        Flux function with argument tau (array) for negative (downward) mu values.
+        Flux function with argument tau (type: array)  for negative (downward) mu values.
+        Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)). 
     u : function, optional
         Intensity function with arguments (tau, phi) of types (array, array).
         The output is an ndarray with axes corresponding to (mu, tau, phi) variation.

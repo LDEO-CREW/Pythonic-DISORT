@@ -22,8 +22,7 @@ classifiers = [
 dependencies = {file = ["docs\requirements.txt"]}
 
 [project.urls]
-"Homepage" = "https://github.com/pypa/sampleproject"
-"Bug Tracker" = "https://github.com/pypa/sampleproject/issues"
+"Homepage" = "https://github.com/Maths2209/Pythonic-DISORT"
 
 MIT License
 

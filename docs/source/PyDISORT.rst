@@ -1,9 +1,6 @@
 PyDISORT package
 ================
 
-Submodules
-----------
-
 PyDISORT.pydisort module
 ------------------------
 

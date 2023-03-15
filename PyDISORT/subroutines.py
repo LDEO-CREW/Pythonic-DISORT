@@ -125,25 +125,14 @@ def generate_flux_functions(
     Returns
     -------
     flux_up : function
-        Flux function with argument tau (array) for positive (upward) mu values.
+        Flux function with argument tau (type: array) for positive (upward) mu values.
+        Returns the diffuse flux magnitudes (type: array).
     flux_down : function
-        Flux function with argument tau (array) for negative (downward) mu values.        
+        Flux function with argument tau (type: array)  for negative (downward) mu values.
+        Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)). 
 
     """
     def flux_up(tau):
-        """Returns the magnitude of the upwards flux at the specified tau levels.
-
-        Parameters
-        ----------
-        tau : array
-            Optical depth levels.
-
-        Returns
-        -------
-        flux_up_arr : array
-            Magnitude of diffuse upwards flux, which is also the total upwards flux.
-
-        """
         tau = scale_tau * np.atleast_1d(tau) # Delta-M scaling
         exponent = np.vstack(
             (
@@ -154,22 +143,7 @@ def generate_flux_functions(
         u0_pos = GC_pos @ np.exp(exponent) + B_pos[:, None] * np.exp(-tau[None, :] / mu0)
         return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ u0_pos)[()]
 
-    def flux_down(tau):
-        """Returns the magnitude of the downwards flux at the specified tau levels.
-
-        Parameters
-        ----------
-        tau : array
-            Optical depth levels.
-
-        Returns
-        -------
-        flux_down_diffuse_arr : array
-            Magnitude of diffuse downwards flux.
-        flux_down_direct_arr : array
-            Magnitude of direct downwards flux.
-            
-        """        
+    def flux_down(tau):   
         direct_beam = I0 * mu0 * np.exp(-tau / mu0)
 
         tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
