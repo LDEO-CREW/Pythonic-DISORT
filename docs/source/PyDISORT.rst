@@ -16,11 +16,3 @@ PyDISORT.subroutines module
    :members:
    :undoc-members:
    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: PyDISORT
-   :members:
-   :undoc-members:
-   :show-inheritance:
