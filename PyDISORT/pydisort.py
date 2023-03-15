@@ -158,6 +158,9 @@ def pydisort(
     full_weights_mu = np.concatenate((weights_mu, weights_mu))
     # We do not allow mu0 to equal a quadrature / computational angle
     assert not np.any(np.isclose(mu_arr_pos, mu0))
+    
+    NBDRF = len(Leg_coeffs_BDRF)
+    weighted_Leg_coeffs_BDRF = (2 * np.arange(NBDRF) + 1) * Leg_coeffs_BDRF
 
     # Delta-M scaling; there is no scaling if f = 0
     scale_tau = 1 - omega_arr * f_arr
@@ -176,7 +179,8 @@ def pydisort(
             mu0, I0, phi0,
             b_pos, b_neg,
             False,
-            Leg_coeffs_BDRF,
+            NBDRF,
+            weighted_Leg_coeffs_BDRF,
             mathscr_vs,
             parfor_Fourier,
             mu_arr_pos, weights_mu,
@@ -285,7 +289,8 @@ def pydisort(
             mu0, I0, phi0,
             b_pos, b_neg,
             only_flux,
-            Leg_coeffs_BDRF,
+            NBDRF,
+            weighted_Leg_coeffs_BDRF,
             mathscr_vs,
             parfor_Fourier,
             mu_arr_pos, weights_mu,
