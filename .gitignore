@@ -132,3 +132,4 @@ ui-tests/playwright-report
 
 # Author's addition
 Error-analysis-images/
+.ipynb_checkpoints/
