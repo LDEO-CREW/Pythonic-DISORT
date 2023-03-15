@@ -1,4 +1,5 @@
-import PyDISORT
+from PyDISORT import subroutines
+
 try:
     import autograd.numpy as np
 except ImportError:
@@ -12,10 +13,12 @@ def _basic_solver(
     tau_arr, omega_arr,
     N, NQuad, NLeg, NLoops,
     weighted_Leg_coeffs,
-    I0, mu0, phi0,
+    mu0, I0, phi0,
     b_pos, b_neg,
     only_flux,
-    BDRF_Leg_coeffs,
+    Leg_coeffs_BDRF,
+    mathscr_vs,
+    parfor_Fourier,
     mu_arr_pos, weights_mu,
     scale_tau
 ):  

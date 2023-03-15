@@ -31,6 +31,7 @@ def transform_interval(arr, c, d, a=-1, b=1):
     """
     return (((arr - a) * (d - c)) / (b - a)) + c
 
+
 def transform_weights(weights, c, d, a=-1, b=1):
     """Transforms quadrature weights from interval [a, b] to [c, d].
 
@@ -54,8 +55,8 @@ def transform_weights(weights, c, d, a=-1, b=1):
 
     """
     return weights * (d - c) / (b - a)
-	
-	
+
+
 def calculate_nu(mu, phi, mu_p, phi_p):
     """Calculates the scattering angle nu between incident angle (mu_p, phi_p) and scattering angle (mu, phi).
 
@@ -83,16 +84,17 @@ def calculate_nu(mu, phi, mu_p, phi_p):
         phi_p[None, None, None, :] - phi[None, :, None, None]
     )
     return np.squeeze(nu)
-	
-    
+
+
 def generate_flux_functions(
-    tau_arr, I0, mu0,
+    tau_arr, 
+    I0, mu0,
     GC_pos, GC_neg, 
     eigenvals, N,
     B_pos, B_neg, 
     mu_arr_pos, weights_mu, 
     scale_tau,
-): 
+):
     """Generates the flux functions with respect to the radiative transfer equation.
 
     Parameters
@@ -129,21 +131,24 @@ def generate_flux_functions(
         Returns diffuse flux magnitudes (type: array).
     function
         Flux function with argument tau (type: array)  for negative (downward) mu values.
-        Returns a tuple of diffuse and direct flux magnitudes respectively (type: (array, array)). 
+        Returns a tuple of diffuse and direct flux magnitudes respectively (type: (array, array)).
 
     """
+
     def flux_up(tau):
-        tau = scale_tau * np.atleast_1d(tau) # Delta-M scaling
+        tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
         exponent = np.vstack(
             (
                 eigenvals[:N, None] * tau[None, :],
                 eigenvals[N:, None] * (tau - taul)[None, :],
             )
         )
-        u0_pos = GC_pos @ np.exp(exponent) + B_pos[:, None] * np.exp(-tau[None, :] / mu0)
+        u0_pos = GC_pos @ np.exp(exponent) + B_pos[:, None] * np.exp(
+            -tau[None, :] / mu0
+        )
         return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ u0_pos)[()]
 
-    def flux_down(tau):   
+    def flux_down(tau):
         direct_beam = I0 * mu0 * np.exp(-tau / mu0)
 
         tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
@@ -154,17 +159,23 @@ def generate_flux_functions(
                 eigenvals[N:, None] * (tau - taul)[None, :],
             )
         )
-        u0_neg = GC_neg @ np.exp(exponent) + B_neg[:, None] * np.exp(-tau[None, :] / mu0)
+        u0_neg = GC_neg @ np.exp(exponent) + B_neg[:, None] * np.exp(
+            -tau[None, :] / mu0
+        )
         return (
-            np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ u0_neg + direct_beam_scaled - direct_beam)[()],
+            np.squeeze(
+                2 * pi * (mu_arr_pos * weights_mu) @ u0_neg
+                + direct_beam_scaled
+                - direct_beam
+            )[()],
             direct_beam,
         )
 
     return flux_up, flux_down
-    
+
 
 def Gauss_Legendre_quad(N, c=0, d=1):
-    """Generates Gauss-Legendre quadrature weights and points for integration from c to d. Only the positive (top) half of mu_arr is generated.
+    """Generates Gauss-Legendre quadrature weights and points for integration from c to d.
 
     Parameters
     ----------
@@ -182,12 +193,10 @@ def Gauss_Legendre_quad(N, c=0, d=1):
     array
         Quadrature weights.
 
-    """    
+    """
     mu_arr_pos, weights_mu = leggauss(N)
 
-    return transform_interval(
-        mu_arr_pos, c, d
-    ),transform_weights(weights_mu, c, d)
+    return transform_interval(mu_arr_pos, c, d), transform_weights(weights_mu, c, d)
 
 
 def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
@@ -209,7 +218,7 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     array
         Quadrature weights.
 
-    """   
+    """
     # Ensure that the number of nodes is odd and greater than 2
     assert Nphi > 2
     assert Nphi % 2 == 1
@@ -223,13 +232,11 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     weights_phi_pos[0] /= 2
     full_weights_phi = np.hstack((weights_phi_pos, np.flip(weights_phi_pos[:-1])))
 
-    return transform_interval(
-        phi_arr, c, d
-    ), transform_weights(full_weights_phi, c, d)
-    
- 
+    return transform_interval(phi_arr, c, d), transform_weights(full_weights_phi, c, d)
+
+
 def generate_FD_mat(Ntau, a, b):
-    """Generates diagonal storage sparse first derivative matrix with second-order accuracy 
+    """Generates diagonal storage sparse first derivative matrix with second-order accuracy
     on [a,b] with Ntau grid points. We use second order forward and backward differences at the edges.
 
     Parameters
@@ -253,19 +260,19 @@ def generate_FD_mat(Ntau, a, b):
     h = tau_arr[1] - tau_arr[0]
 
     diagonal = np.ones(Ntau) / (2 * h)
-    first_deriv = sc.sparse.diags(diagonal[:-1], 1, format = "lil")
+    first_deriv = sc.sparse.diags(diagonal[:-1], 1, format="lil")
     first_deriv.setdiag(-diagonal[:-1], -1)
-    
+
     first_deriv[0, 0] = -3 / (2 * h)
     first_deriv[0, 1] = 2 / h
     first_deriv[0, 2] = -1 / (2 * h)
     first_deriv[-1, -1] = 3 / (2 * h)
     first_deriv[-1, -2] = -2 / h
     first_deriv[-1, -3] = 1 / (2 * h)
-    
+
     return tau_arr, first_deriv.asformat("dia")
-    
-    
+
+
 # The following function is exactly NumPy's `atleast_2d` function but altered
 # to add dimensions to the back of the shape tuple rather than to the front.
 # Documentation for `np.atleast_2d` at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html but reformatted
