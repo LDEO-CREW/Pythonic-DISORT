@@ -4,6 +4,6 @@ Based on Stamnes' DISORT (see reference in Jupyter Notebook) and has its main fe
 
 Documentation: https://pythonic-disort.readthedocs.io/en/latest/.
 Find the accompanying Jupyter Notebook (Pythonic-DISORT.ipynb) at https://github.com/Maths2209/Pythonic-DISORT.
-The Jupyter Notebook provides comprehensive documentation, suggestions, explanations, 
+The Jupyter Notebook provides comprehensive documentation, suggested inputs, explanations, 
 mathematical derivations and verification tests (separate from the tests implemented using pytest).
 We HIGHLY recommend reading sections 1 and 2, though the optional parts can be safely skipped.

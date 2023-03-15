@@ -155,7 +155,7 @@ def pydisort(
     scale_tau = 1 - omega_arr * f_arr
     Leg_coeffs = ((Leg_coeffs - f_arr[:, None]) / (1 - f_arr[:, None])) * (2 * np.arange(NLeg)[None, :] + 1)
     omega_arr *= (1 - f_arr) / scale_tau
-    #tau_arr *= scale_tau
+    #################tau_arr *= scale_tau
 
     # Perform NT correction on the intensity but not the flux
     if NT_cor and not only_flux and I0 != 0 and np.any(f_arr > 0) and NLeg < np.shape(Leg_coeffs_all)[0]:
