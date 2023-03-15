@@ -1,9 +1,0 @@
-numpy
-scipy
-parfor # Optional; comment out if desired
-autograd # Optional; comment out if desired
-ipython # Comment out before distribution
-sphinx # Comment out before distribution
-nbsphinx # Comment out before distribution
-python_docs_theme # Comment out before distribution
-

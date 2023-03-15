@@ -68,7 +68,7 @@ coverage.xml
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+_build/
 
 # PyBuilder
 target/
@@ -117,8 +117,8 @@ notebook/static/*
 !notebook/static/favicons
 notebook/labextension
 notebook/schemas
-docs/source/changelog.md
-docs/source/contributing.md
+source/changelog.md
+source/contributing.md
 
 # playwright
 ui-tests/test-results

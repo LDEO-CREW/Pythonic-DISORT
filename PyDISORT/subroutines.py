@@ -126,10 +126,10 @@ def generate_flux_functions(
     -------
     function
         Flux function with argument tau (type: array) for positive (upward) mu values.
-        Returns the diffuse flux magnitudes (type: array).
+        Returns diffuse flux magnitudes (type: array).
     function
         Flux function with argument tau (type: array)  for negative (downward) mu values.
-        Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)). 
+        Returns a tuple of diffuse and direct flux magnitudes respectively (type: (array, array)). 
 
     """
     def flux_up(tau):

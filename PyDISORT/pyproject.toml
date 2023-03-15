@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 [tool.setuptools.dynamic]
-dependencies = {file = ["docs\requirements.txt"]}
+dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
 "Homepage" = "https://github.com/Maths2209/Pythonic-DISORT"
