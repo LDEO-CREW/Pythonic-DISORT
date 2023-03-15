@@ -72,7 +72,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
 
     Returns
     -------
-    nu_arr : ndarray
+    ndarray
         Cosine of scattering angles.
 
     """
@@ -124,10 +124,10 @@ def generate_flux_functions(
 
     Returns
     -------
-    flux_up : function
+    function
         Flux function with argument tau (type: array) for positive (upward) mu values.
         Returns the diffuse flux magnitudes (type: array).
-    flux_down : function
+    function
         Flux function with argument tau (type: array)  for negative (downward) mu values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)). 
 
@@ -177,9 +177,9 @@ def Gauss_Legendre_quad(N, c=0, d=1):
 
     Returns
     -------
-    mu_arr_pos : array
+    array
         Quadrature points.
-    full_weights_mu : array
+    array
         Quadrature weights.
 
     """    
@@ -204,9 +204,9 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
 
     Returns
     -------
-    phi_arr : array
+    array
         Quadrature points.
-    full_weights_phi : array
+    array
         Quadrature weights.
 
     """   
