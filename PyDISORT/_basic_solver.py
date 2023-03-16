@@ -16,8 +16,7 @@ def _basic_solver(
     mu0, I0, phi0,
     b_pos, b_neg,
     only_flux,
-    NBDRF,
-    weighted_Leg_coeffs_BDRF,
+    Leg_coeffs_BDRF,
     mathscr_vs,
     parfor_Fourier,
     mu_arr_pos, weights_mu,
@@ -29,6 +28,12 @@ def _basic_solver(
     and many of its arguments are shared with the `pydisort` function.
     
     """
+    
+    NLayers = len(tau_arr)
+    NBDRF = len(Leg_coeffs_BDRF)
+    weighted_Leg_coeffs_l = weighted_Leg_coeffs[l]
+    weighted_Leg_coeffs_BDRF = (2 * np.arange(NBDRF) + 1) * Leg_coeffs_BDRF
+    
     # If we want to solve for the intensity we need to solve for NLoops Fourier modes
     # If we only want to solve for the flux we only need to solve for the 0th Fourier mode
     if not only_flux:
@@ -42,102 +47,95 @@ def _basic_solver(
         
     # Loop over NLoops Fourier modes
     for m in range(NLoops):
-        # --------------------------------------------------------------------------------------------------------------------------
-        # Generate D and X (phase function terms)
-        # --------------------------------------------------------------------------------------------------------------------------
-        ells = np.arange(m, NLeg)
-        degree_tile = np.tile(ells, (N, 1)).T
-        fac = np.prod(ells[:, None] + np.arange(-m + 1, m + 1)[None, :], axis=-1)
-        asso_weights = np.divide(1, fac, out=np.zeros(NLeg - m), where=(fac != 0))
-        signs = np.empty(NLeg - m)
-        signs[::2] = 1
-        signs[1::2] = -1
-        if m == 0:
-            prefactor = omegal * I0 / (4 * pi)
-        else:
-            prefactor = omegal * I0 / (2 * pi)
+        if not np.allclose(weighted_Leg_coeffs_l, 0) or m < NBDRF:
+            # Setup
+            # --------------------------------------------------------------------------------------------------------------------------
+            M_inv = 1 / mu_arr_pos
+            W = weights_mu[None, :]
 
-        asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
-        asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
-        asso_leg_term_mu0 = sc.special.lpmv(m, ells, -mu0)
-        weighted_asso_Leg_coeffs = weighted_Leg_coeffs[ells] * asso_weights
+            ells = np.arange(m, NLeg)
+            degree_tile = np.tile(ells, (N, 1)).T
+            fac = np.prod(ells[:, None] + np.arange(-m + 1, m + 1)[None, :], axis=-1)
+            signs = np.empty(NLeg - m)
+            signs[::2] = 1
+            signs[1::2] = -1
+            if m == 0:
+                prefactor = omegal * I0 / (4 * pi)
+            else:
+                prefactor = omegal * I0 / (2 * pi)
+                
+            asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
+            asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
+            asso_leg_term_mu0 = sc.special.lpmv(m, ells, -mu0)
 
-        D_temp = weighted_asso_Leg_coeffs[None, :] * asso_leg_term_pos.T
-        D_pos = (omegal / 2) * D_temp @ asso_leg_term_pos
-        D_neg = (omegal / 2) * D_temp @ asso_leg_term_neg
-
-        X_temp = prefactor * weighted_asso_Leg_coeffs * asso_leg_term_mu0
-        X_pos = X_temp @ asso_leg_term_pos
-        X_neg = X_temp @ asso_leg_term_neg
-        # --------------------------------------------------------------------------------------------------------------------------
         # Generate mathscr_D and mathscr_X (BDRF terms)
         # --------------------------------------------------------------------------------------------------------------------------
+        # If h_\ell = 0 for all \ell \geq m, then there is no BDRF contribution
         if m < NBDRF:
             if m == 0:
-                prefactor = mu0 * I0 / pi
+                prefactor_mathscr = mu0 * I0 / pi
             else:
-                prefactor = mu0 * I0 * 2 / pi
+                prefactor_mathscr = mu0 * I0 * 2 / pi
 
-            asso_leg_term_pos = asso_leg_term_pos[:NBDRF, :]
-            asso_leg_term_neg = asso_leg_term_neg[:NBDRF, :]
-            asso_leg_term_mu0 = asso_leg_term_mu0[:NBDRF]
-            weighted_asso_Leg_coeffs = (
-                weighted_Leg_coeffs_BDRF[ells[: (NBDRF - m)]] * asso_weights[: (NBDRF - m)]
+            weighted_asso_Leg_coeffs_BDRF = (
+                weighted_Leg_coeffs_BDRF[ells[: (NBDRF - m)]] / fac[: (NBDRF - m)]
             )
 
             mathscr_D_temp = (
-                weighted_asso_Leg_coeffs[None, :] * asso_leg_term_pos.T * mu_arr_pos[:, None]
+                weighted_asso_Leg_coeffs_BDRF[None, :] * asso_leg_term_pos[:NBDRF, :].T * mu_arr_pos[:, None]
             )
-            mathscr_D_neg = 2 * mathscr_D_temp @ asso_leg_term_neg
+            mathscr_D_neg = 2 * mathscr_D_temp @ asso_leg_term_neg[:NBDRF, :]
+            weighted_mathscr_D_neg = mathscr_D_neg * W
 
-            mathscr_X_temp = prefactor * weighted_asso_Leg_coeffs * asso_leg_term_mu0
-            mathscr_X_pos = mathscr_X_temp @ asso_leg_term_pos
-        # --------------------------------------------------------------------------------------------------------------------------
-        # Assemble the coefficient matrix and additional terms
-        # --------------------------------------------------------------------------------------------------------------------------
-        M_inv = 1 / mu_arr_pos
-        W = weights_mu[None, :]
-        alpha = M_inv[:, None] * (D_pos * W - np.eye(N))
-        beta = M_inv[:, None] * D_neg * W
-        A = np.vstack((np.hstack((-alpha, -beta)), np.hstack((beta, alpha))))
+            mathscr_X_temp = prefactor_mathscr * weighted_asso_Leg_coeffs_BDRF * asso_leg_term_mu0[:NBDRF]
+            mathscr_X_pos = mathscr_X_temp @ asso_leg_term_pos[:NBDRF, :]
+        for l in range(NLayers):
+            if not np.allclose(weighted_asso_Leg_coeffs_l, 0):
+                # Generate mathscr_D and mathscr_X (BDRF terms)
+                # --------------------------------------------------------------------------------------------------------------------------
+                weighted_asso_Leg_coeffs_l = weighted_Leg_coeffs_l[ells] / fac
+                
+                D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
+                D_pos = (omegal / 2) * D_temp @ asso_leg_term_pos
+                D_neg = (omegal / 2) * D_temp @ asso_leg_term_neg
 
-        weighted_mathscr_D_neg = mathscr_D_neg * W
-        X_tilde = np.concatenate((-M_inv * X_pos, M_inv * X_neg))
-        # --------------------------------------------------------------------------------------------------------------------------
-        # Diagonalization of coefficient matrix
-        # --------------------------------------------------------------------------------------------------------------------------
-        ##### Computation of G^{-1} #####
-        K_squared, eigenvecs_GpG = np.linalg.eig((alpha - beta) @ (alpha + beta))
+                X_temp = prefactor * weighted_asso_Leg_coeffs_l * asso_leg_term_mu0
+                X_pos = X_temp @ asso_leg_term_pos
+                X_neg = X_temp @ asso_leg_term_neg
 
-        # Eigenvalues arranged negative then positive, from largest to smallest magnitude
-        K = np.concatenate((-np.sqrt(K_squared), np.sqrt(K_squared)))
-        eigenvecs_GpG = np.hstack((eigenvecs_GpG, eigenvecs_GpG))
-        eigenvecs_GmG = (alpha + beta) @ eigenvecs_GpG / K
+                # Assemble the coefficient matrix and additional terms
+                # --------------------------------------------------------------------------------------------------------------------------
+                alpha = M_inv[:, None] * (D_pos * W - np.eye(N))
+                beta = M_inv[:, None] * D_neg * W
+                A = np.vstack((np.hstack((-alpha, -beta)), np.hstack((beta, alpha))))
 
-        # Eigenvector matrix
-        G_pos = (eigenvecs_GpG - eigenvecs_GmG) / 2
-        G_neg = (eigenvecs_GpG + eigenvecs_GmG) / 2
-        G = np.vstack((G_pos, G_neg))
-        
-        ##### Computation of H^{-1} #####
-        eigenvecs_HpH = np.linalg.eig(((alpha - beta) @ (alpha + beta)).T)[1]
-        eigenvecs_HpH = np.hstack((eigenvecs_HpH, eigenvecs_HpH))
-        eigenvecs_HmH = (alpha - beta).T @ eigenvecs_HpH / K
+                X_tilde = np.concatenate((-M_inv * X_pos, M_inv * X_neg))
 
-        # Inverse of eigenvector matrix
-        H_pos = (eigenvecs_HpH - eigenvecs_HmH) / 2
-        H_neg = (eigenvecs_HpH + eigenvecs_HmH) / 2
-        G_inv = np.vstack((H_pos, H_neg)).T
-        G_inv = G_inv / np.diag(G_inv @ G)[:, None]
-        
-        # Solve for the coefficients of the particular solution, B
-        X_pos, X_neg = PyDISORT.subroutines.generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile)
-        X_tilde = np.concatenate((-M_inv * X_pos, M_inv * X_neg))
-        # -------------------------------------------
-        # Particular solution for the sunbeam source
-        # -------------------------------------------
-        B = np.linalg.solve(-(np.eye(NQuad) / mu0 + A), X_tilde) # coefficient vector
-        # --------------------------------------------------------------------------------------------------------------------------
+                # Diagonalization of coefficient matrix
+                # --------------------------------------------------------------------------------------------------------------------------
+                K_squared, eigenvecs_GpG = np.linalg.eig((alpha - beta) @ (alpha + beta))
+
+                # Eigenvalues arranged negative then positive, from largest to smallest magnitude
+                K = np.concatenate((-np.sqrt(K_squared), np.sqrt(K_squared)))
+                eigenvecs_GpG = np.hstack((eigenvecs_GpG, eigenvecs_GpG))
+                eigenvecs_GmG = (alpha + beta) @ eigenvecs_GpG / K
+
+                # Eigenvector matrix
+                G_pos = (eigenvecs_GpG - eigenvecs_GmG) / 2
+                G_neg = (eigenvecs_GpG + eigenvecs_GmG) / 2
+                G = np.vstack((G_pos, G_neg))
+                G_inv = np.linalg.inv(G)
+                
+                # Particular solution for the sunbeam source
+                # --------------------------------------------------------------------------------------------------------------------------
+                B = np.linalg.solve(-(np.eye(NQuad) / mu0 + A), X_tilde) # coefficient vector
+            
+            else:
+                K = 1 / mu_arr
+                G, G_inv = np.eye(NQuad), np.eye(NQuad)
+            
+                
+                
         
         
     # Solve for the coefficients of the homogeneous solution
