@@ -1,5 +1,6 @@
+from PyDISORT import _one_Fourier_mode
 from PyDISORT import subroutines
-
+from math import pi
 try:
     import autograd.numpy as np
 except ImportError:
@@ -9,64 +10,56 @@ try:
 except ImportError:
     None
 
-def _basic_solver(
+def _loop_and_assemble_results(
     tau_arr, omega_arr,
     N, NQuad, NLeg, NLoops,
     weighted_Leg_coeffs,
     mu0, I0, phi0,
     b_pos, b_neg,
-    only_flux,
-    Leg_coeffs_BDRF,
+    NLayers, NBDRF,
+    weighted_Leg_coeffs_BDRF,
     mathscr_vs,
-    parfor_Fourier,
     mu_arr_pos, weights_mu,
-    scale_tau
+    M_inv, W,
+    scale_tau,
+    only_flux,
+    parfor_Fourier
 ):  
-    """This function is wrapped by the `pydisort` function and should be called through `pydisort`.
+    """This function is wrapped by the `pydisort` function.
+    It should be called through `pydisort` and never directly.
     It has many seemingly redundant arguments to maximize precomputation in `pydisort`.
-    We do not have an indepth docstring for this function but documentation can be found in the accompanying Jupyter Notebook,
-    and many of its arguments are shared with the `pydisort` function.
+    Most of the arguments are passed to the `_one_Fourier_mode` function 
+    which this function wraps and loops.
     
     """
-    
-    NLayers = len(tau_arr)
-    NBDRF = len(Leg_coeffs_BDRF)
-    weighted_Leg_coeffs_l = weighted_Leg_coeffs[l]
-    weighted_Leg_coeffs_BDRF = (2 * np.arange(NBDRF) + 1) * Leg_coeffs_BDRF
-    
-    # If we want to solve for the intensity we need to solve for NLoops Fourier modes
+    '''# If we want to solve for the intensity we need to solve for NLoops Fourier modes
     # If we only want to solve for the flux we only need to solve for the 0th Fourier mode
     if not only_flux:
         GC_collect = np.empty((L, NQuad, NQuad, NLoops))
         eigenvals_collect = np.empty((L, NQuad, NLoops))
         B_collect = np.empty((L, NQuad, NLoops))
-    else:
-        GC_collect = np.empty((L, NQuad, NQuad))
-        eigenvals_collect = np.empty((L, NQuad))
-        B_collect = np.empty((L, NQuad))
         
     # Loop over NLoops Fourier modes
     for m in range(NLoops):
-        if not np.allclose(weighted_Leg_coeffs_l, 0) or m < NBDRF:
-            # Setup
-            # --------------------------------------------------------------------------------------------------------------------------
-            M_inv = 1 / mu_arr_pos
-            W = weights_mu[None, :]
+        # Setup
+        # --------------------------------------------------------------------------------------------------------------------------
+        M_inv = 1 / mu_arr_pos
+        W = weights_mu[None, :]
 
-            ells = np.arange(m, NLeg)
-            degree_tile = np.tile(ells, (N, 1)).T
-            fac = np.prod(ells[:, None] + np.arange(-m + 1, m + 1)[None, :], axis=-1)
-            signs = np.empty(NLeg - m)
-            signs[::2] = 1
-            signs[1::2] = -1
-            if m == 0:
-                prefactor = omegal * I0 / (4 * pi)
-            else:
-                prefactor = omegal * I0 / (2 * pi)
-                
-            asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
-            asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
-            asso_leg_term_mu0 = sc.special.lpmv(m, ells, -mu0)
+        ells = np.arange(m, NLeg)
+        degree_tile = np.tile(ells, (N, 1)).T
+        fac = np.prod(ells[:, None] + np.arange(-m + 1, m + 1)[None, :], axis=-1)
+        signs = np.empty(NLeg - m)
+        signs[::2] = 1
+        signs[1::2] = -1
+        if m == 0:
+            prefactor = omegal * I0 / (4 * pi)
+        else:
+            prefactor = omegal * I0 / (2 * pi)
+            
+        asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
+        asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
+        asso_leg_term_mu0 = sc.special.lpmv(m, ells, -mu0)
 
         # Generate mathscr_D and mathscr_X (BDRF terms)
         # --------------------------------------------------------------------------------------------------------------------------
@@ -90,7 +83,10 @@ def _basic_solver(
             mathscr_X_temp = prefactor_mathscr * weighted_asso_Leg_coeffs_BDRF * asso_leg_term_mu0[:NBDRF]
             mathscr_X_pos = mathscr_X_temp @ asso_leg_term_pos[:NBDRF, :]
         for l in range(NLayers):
-            if not np.allclose(weighted_asso_Leg_coeffs_l, 0):
+            G_collect_l = np.empty((L, NQuad, NQuad))
+            K_collect_l = np.empty((L, NQuad))
+            B_collect_l = np.zeros((L, NQuad))
+            if not np.allclose(weighted_Leg_coeffs_l, 0):
                 # Generate mathscr_D and mathscr_X (BDRF terms)
                 # --------------------------------------------------------------------------------------------------------------------------
                 weighted_asso_Leg_coeffs_l = weighted_Leg_coeffs_l[ells] / fac
@@ -128,11 +124,18 @@ def _basic_solver(
                 
                 # Particular solution for the sunbeam source
                 # --------------------------------------------------------------------------------------------------------------------------
-                B = np.linalg.solve(-(np.eye(NQuad) / mu0 + A), X_tilde) # coefficient vector
+                B_collect_l[l, :] = np.linalg.solve(-(np.eye(NQuad) / mu0 + A), X_tilde) # coefficient vector
             
             else:
                 K = 1 / mu_arr
                 G, G_inv = np.eye(NQuad), np.eye(NQuad)
+            
+            G_collect_l[l, :, :] = G
+            K_collect_l[l, :] = K
+        
+        if only_flux:'''
+            
+            
             
                 
                 

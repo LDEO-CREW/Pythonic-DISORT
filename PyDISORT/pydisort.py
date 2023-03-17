@@ -1,14 +1,13 @@
-from PyDISORT import subroutines, _basic_solver
-
-try:
-    import autograd.numpy as np
-except ImportError:
-    import numpy as np
+from PyDISORT import subroutines, _loop_and_assemble_results
 import scipy as sc
 from math import pi
 from numpy.polynomial.legendre import Legendre
 from scipy import integrate
 from inspect import signature
+try:
+    import autograd.numpy as np
+except ImportError:
+    import numpy as np
 
 
 def pydisort(
@@ -85,22 +84,29 @@ def pydisort(
         The output is an ndarray with axes corresponding to (mu, tau, phi) variation.
 
     """
+    # Turn scalars to arrays
+    # ---------------------------------------------------------------------------------------------------------
     tau_arr = np.atleast_1d(tau_arr)
     omega_arr = np.atleast_1d(omega_arr)
     Leg_coeffs_all = np.atleast_2d(Leg_coeffs_all)
     f_arr = np.atleast_1d(f_arr)
 
+    # Some setup
+    # ---------------------------------------------------------------------------------------------------------
     if NLeg == None:
         NLeg = NQuad
     if NLoops == None:
         NLoops = NQuad
-    Leg_coeffs = Leg_coeffs_all[:, :NLeg]
     NLeg_all = np.shape(Leg_coeffs_all)[1]
+    Leg_coeffs = Leg_coeffs_all[:, :NLeg]
     scalar_b_pos, scalar_b_neg = False, False
     mathscr_vs_callable = callable(mathscr_vs)
+    NLayers = len(tau_arr)
+    NBDRF = len(Leg_coeffs_BDRF)
+    weighted_Leg_coeffs_BDRF *= (2 * np.arange(NBDRF) + 1) * Leg_coeffs_BDRF
 
-    # INPUT CHECKS
-    # -----------------------------------------------------------
+    # Input checks
+    # ---------------------------------------------------------------------------------------------------------
     # Optical depth must be positive
     assert np.all(tau_arr > 0)
     # Single-scattering albedo must be between 0 and 1, excluding 1
@@ -149,40 +155,49 @@ def pydisort(
             ),
             0,
         )
-    # -----------------------------------------------------------
-
+    
+    # Generation of Double Gauss-Legendre quadrature weights and points
+    # ---------------------------------------------------------------------------------------------------------
     # For positive mu values (the weights are identical for both domains)
     mu_arr_pos, weights_mu = PyDISORT.subroutines.Gauss_Legendre_quad(N)  # mu_arr_neg = -mu_arr_pos
     mu_arr = np.concatenate((mu_arr_pos, -mu_arr_pos))
     full_weights_mu = np.concatenate((weights_mu, weights_mu))
     # We do not allow mu0 to equal a quadrature / computational angle
     assert not np.any(np.isclose(mu_arr_pos, mu0))
+    # Some more setup
+    M_inv = 1 / mu_arr_pos
+    W = weights_mu[None, :]
 
     # Delta-M scaling; there is no scaling if f = 0
+    # ---------------------------------------------------------------------------------------------------------
     scale_tau = 1 - omega_arr * f_arr
     weighted_Leg_coeffs = ((Leg_coeffs - f_arr[:, None]) / (1 - f_arr[:, None])) * (
         2 * np.arange(NLeg) + 1
     )[None, :]
     omega_arr *= (1 - f_arr) / scale_tau
 
-    # Perform NT correction on the intensity but not the flux
+    # Perform NT corrections on the intensity but not the flux
+    # ---------------------------------------------------------------------------------------------------------
     if NT_cor and not only_flux and I0 != 0 and np.any(f_arr > 0) and NLeg < NLeg_all:
         # Delta-M scaled solution; no further corrections to the flux
-        u_star, flux_up, flux_down = PyDISORT._basic_solver(
+        u_star, flux_up, flux_down = PyDISORT._loop_and_assemble_results(
             tau_arr, omega_arr,
             N, NQuad, NLeg, NLoops,
             weighted_Leg_coeffs,
             mu0, I0, phi0,
             b_pos, b_neg,
-            False,
-            Leg_coeffs_BDRF,
+            NLayers, NBDRF,
+            weighted_Leg_coeffs_BDRF,
             mathscr_vs,
-            parfor_Fourier,
             mu_arr_pos, weights_mu,
-            scale_tau
+            M_inv, W,
+            scale_tau,
+            False,
+            parfor_Fourier
         )
 
-        # NT (TMS; IMS below) correction for the intensity
+        # NT (TMS) correction for the intensity
+        # ---------------------------------------------------------------------------------------------------------
         def mathscr_B(phi, l_unique):
             nu = PyDISORT.subroutines.atleast_2d_append(
                 PyDISORT.subroutines.calculate_nu(mu_arr, phi, -mu0, phi0)
@@ -214,10 +229,11 @@ def pydisort(
             )[:, None, None] * p_true / (1 - f_arr[None, l_unique, None]) - p_trun
 
         def TMS_correction(tau, phi):
+            # Atmospheric layer indices
             l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
             l_unique = np.unique(l)
 
-            # delta-M scaling
+            # Delta-M scaling
             tau *= scale_tau[l]
             tau_arr_l = tau_arr[l] * scale_tau[l]
 
@@ -234,7 +250,8 @@ def pydisort(
                 * np.concatenate((TMS_correction_pos, TMS_correction_neg))[:, :, None]
             )
 
-        # NT (IMS; TMS above) correction for the intensity
+        # NT (IMS) correction for the intensity
+        # ---------------------------------------------------------------------------------------------------------
         sum1 = np.sum(omega_arr * tau_arr)
         omega_avg = sum1 / np.sum(tau_arr)
         sum2 = np.sum(f_arr * omega_arr * tau_arr)
@@ -270,23 +287,28 @@ def pydisort(
             )[:, None, :] * chi(tau)[:, :, None]
 
         # The corrected intensity
+        # ---------------------------------------------------------------------------------------------------------
         def u_corrected(tau, phi):
             tau = np.atleast_1d(tau)
             return u_star + TMS_correction(tau, phi) + IMS_correction(tau, phi)
 
         return mu_arr, flux_up, flux_down, u_corrected
 
-    else:  # Do not perform NT corrections
-        return (mu_arr,) + PyDISORT._basic_solver(
+    # Do not perform NT corrections
+    # ---------------------------------------------------------------------------------------------------------
+    else:
+        return (mu_arr,) + PyDISORT._loop_and_assemble_results(
             tau_arr, omega_arr,
             N, NQuad, NLeg, NLoops,
             weighted_Leg_coeffs,
             mu0, I0, phi0,
             b_pos, b_neg,
-            only_flux,
-            Leg_coeffs_BDRF,
+            NLayers, NBDRF,
+            weighted_Leg_coeffs_BDRF,
             mathscr_vs,
-            parfor_Fourier,
             mu_arr_pos, weights_mu,
-            scale_tau
+            M_inv, W,
+            scale_tau,
+            only_flux,
+            parfor_Fourier
         )

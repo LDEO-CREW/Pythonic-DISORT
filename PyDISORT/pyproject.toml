@@ -8,7 +8,7 @@ dependencies = [
   'scipy>=1.2.1',
 ]
 name = "PyDISORT"
-version = "1.0"
+version = "0.0.0"
 authors = [
   { name="Dion Ho", email="dh3065@columbia.edu" },
 ]

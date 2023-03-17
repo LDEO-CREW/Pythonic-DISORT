@@ -1,10 +1,10 @@
+import scipy as sc
+from math import pi
+from numpy.polynomial.legendre import leggauss
 try:
     import autograd.numpy as np
 except ImportError:
     import numpy as np
-import scipy as sc
-from math import pi
-from numpy.polynomial.legendre import leggauss
 
 
 def transform_interval(arr, c, d, a=-1, b=1):
@@ -270,7 +270,7 @@ def generate_FD_mat(Ntau, a, b):
     first_deriv[-1, -2] = -2 / h
     first_deriv[-1, -3] = 1 / (2 * h)
 
-    return tau_arr, first_deriv.asformat("dia")
+    return tau_arr, first_deriv.asformat("csr")
 
 
 # The following function is exactly NumPy's `atleast_2d` function but altered
