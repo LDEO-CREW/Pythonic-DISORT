@@ -86,7 +86,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
     return np.squeeze(nu)
 
 
-def generate_flux_functions(
+"""def generate_flux_functions(
     tau_arr, 
     I0, mu0,
     GC_pos, GC_neg, 
@@ -95,7 +95,7 @@ def generate_flux_functions(
     mu_arr_pos, weights_mu, 
     scale_tau,
 ):
-    """Generates the flux functions with respect to the radiative transfer equation.
+    ""Generates the flux functions with respect to the radiative transfer equation.
 
     Parameters
     ----------
@@ -133,7 +133,7 @@ def generate_flux_functions(
         Flux function with argument tau (type: array)  for negative (downward) mu values.
         Returns a tuple of diffuse and direct flux magnitudes respectively (type: (array, array)).
 
-    """
+    ""
 
     def flux_up(tau):
         tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
@@ -171,7 +171,7 @@ def generate_flux_functions(
             direct_beam,
         )
 
-    return flux_up, flux_down
+    return flux_up, flux_down"""
 
 
 def Gauss_Legendre_quad(N, c=0, d=1):
@@ -273,11 +273,11 @@ def generate_FD_mat(Ntau, a, b):
     return tau_arr, first_deriv.asformat("csr")
 
 
-# The following function is exactly NumPy's `atleast_2d` function but altered
-# to add dimensions to the back of the shape tuple rather than to the front.
-# Documentation for `np.atleast_2d` at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html but reformatted
 def atleast_2d_append(*arys):
     """View inputs as arrays with at least two dimensions. Dimensions are added, when necessary, to the back of the shape tuple rather than to the front.
+        
+        This is exactly NumPy's `atleast_2d` function but altered to add dimensions to the back of the shape tuple rather than to the front.
+        Documentation for `np.atleast_2d` at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
 
     Parameters
     ----------

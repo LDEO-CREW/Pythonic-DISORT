@@ -7,9 +7,9 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Pythonic-DISORT'
-copyright = '2023, Dion Ho'
+copyright = '2023, HO Jia Xu Dion'
 author = 'Dion Ho'
-release = '1.0'
+release = '0.0.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

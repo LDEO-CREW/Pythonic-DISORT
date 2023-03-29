@@ -3,25 +3,29 @@ import numpy as np
 import scipy as sc
 from math import pi
 
+
 def _one_Fourier_mode(
     m,
-    tau_arr, omega_arr,
-    N, NQuad, NLeg,
-    weighted_Leg_coeffs,
-    mu0, I0, phi0,
-    b_pos, b_neg,
-    NLayers, NBDRF,
-    weighted_Leg_coeffs_BDRF,
-    mathscr_vs,
-    mu_arr_pos, weights_mu,
+    scaled_omega_arr, 
+    scaled_tau_arr_with_0,
+    mu_arr_pos, mu_arr,
     M_inv, W,
-    scale_tau
-):  
+    N, NQuad, NLeg,
+    NLayers, NBDRF,
+    weighted_Leg_coeffs,
+    weighted_Leg_coeffs_BDRF,
+    mu0, I0,
+    b_pos, b_neg,
+    mathscr_vs,
+    mathscr_vs_callable,
+    scale_tau,
+    use_sparse_NLayers
+):
     """This function is wrapped and looped by the `_loop_and_assemble_results` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
-    The labels in this file reference labels in the Jupyter Notebook, especially section 3.
-    
+    The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 5.
+
     """
     # Setup
     # --------------------------------------------------------------------------------------------------------------------------
@@ -31,15 +35,12 @@ def _one_Fourier_mode(
     signs = np.empty(NLeg - m)
     signs[::2] = 1
     signs[1::2] = -1
-    if m == 0:
-        prefactor = omegal * I0 / (4 * pi)
-    else:
-        prefactor = omegal * I0 / (2 * pi)
-        
+
     asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
     asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
     asso_leg_term_mu0 = sc.special.lpmv(m, ells, -mu0)
-
+    # --------------------------------------------------------------------------------------------------------------------------
+    
     # Generate mathscr_D and mathscr_X (BDRF terms)
     # --------------------------------------------------------------------------------------------------------------------------
     # If h_\ell = 0 for all \ell \geq m, then there is no BDRF contribution
@@ -54,129 +55,219 @@ def _one_Fourier_mode(
         )
 
         mathscr_D_temp = (
-            weighted_asso_Leg_coeffs_BDRF[None, :] * asso_leg_term_pos[:NBDRF, :].T * mu_arr_pos[:, None]
+            weighted_asso_Leg_coeffs_BDRF[None, :]
+            * asso_leg_term_pos.T[:, :NBDRF]
+            * mu_arr_pos[:, None]
         )
         mathscr_D_neg = 2 * mathscr_D_temp @ asso_leg_term_neg[:NBDRF, :]
         weighted_mathscr_D_neg = mathscr_D_neg * W
 
-        mathscr_X_temp = prefactor_mathscr * weighted_asso_Leg_coeffs_BDRF * asso_leg_term_mu0[:NBDRF]
+        mathscr_X_temp = (
+            prefactor_mathscr
+            * weighted_asso_Leg_coeffs_BDRF
+            * asso_leg_term_mu0[:NBDRF]
+        )
         mathscr_X_pos = mathscr_X_temp @ asso_leg_term_pos[:NBDRF, :]
-        
-    # Loop over NLayers (denoted L in exposition) atmospheric layers
-    # --------------------------------------------------------------------------------------------------------------------------    
+    # --------------------------------------------------------------------------------------------------------------------------
+    
+    # Loop over NLayers atmospheric layers
+    # --------------------------------------------------------------------------------------------------------------------------
     for l in range(NLayers):
-        weighted_Leg_coeffs_l = weighted_Leg_coeffs[l]
-        G_collect_l = np.empty((L, NQuad, NQuad))
-        K_collect_l = np.empty((L, NQuad))
-        B_collect_l = np.zeros((L, NQuad))
-        if not np.allclose(weighted_Leg_coeffs_l, 0):
+        # More setup
+        weighted_Leg_coeffs_l_ells = weighted_Leg_coeffs[l, :][ells]
+        scaled_omega_l = scaled_omega_arr[l]
+        
+        if mathscr_vs_callable and m == 0:
+            G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
+        G_collect_m = np.empty((NLayers, NQuad, NQuad))
+        K_collect_m = np.empty((NLayers, NQuad))
+        B_collect_m = np.zeros((NLayers, NQuad))
+        if not np.allclose(weighted_Leg_coeffs_l_ells, 0):
             # Generate mathscr_D and mathscr_X (BDRF terms)
             # --------------------------------------------------------------------------------------------------------------------------
-            weighted_asso_Leg_coeffs_l = weighted_Leg_coeffs_l[ells] / fac
-            
+            if m == 0:
+                prefactor = scaled_omega_l * I0 / (4 * pi)
+            else:
+                prefactor = scaled_omega_l * I0 / (2 * pi)
+            weighted_asso_Leg_coeffs_l = weighted_Leg_coeffs_l_ells / fac
+
             D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
-            D_pos = (omegal / 2) * D_temp @ asso_leg_term_pos
-            D_neg = (omegal / 2) * D_temp @ asso_leg_term_neg
+            D_pos = (scaled_omega_l / 2) * D_temp @ asso_leg_term_pos
+            D_neg = (scaled_omega_l / 2) * D_temp @ asso_leg_term_neg
 
             X_temp = prefactor * weighted_asso_Leg_coeffs_l * asso_leg_term_mu0
             X_pos = X_temp @ asso_leg_term_pos
             X_neg = X_temp @ asso_leg_term_neg
-
+            # --------------------------------------------------------------------------------------------------------------------------
+            
             # Assemble the coefficient matrix and additional terms
             # --------------------------------------------------------------------------------------------------------------------------
             alpha = M_inv[:, None] * (D_pos * W - np.eye(N))
             beta = M_inv[:, None] * D_neg * W
-            A = np.vstack((np.hstack((-alpha, -beta)), np.hstack((beta, alpha))))
+            A = np.vstack([np.hstack([-alpha, -beta]), np.hstack([beta, alpha])])
 
-            X_tilde = np.concatenate((-M_inv * X_pos, M_inv * X_neg))
-
+            X_tilde = np.concatenate([-M_inv * X_pos, M_inv * X_neg])
+            # --------------------------------------------------------------------------------------------------------------------------
+            
             # Diagonalization of coefficient matrix
             # --------------------------------------------------------------------------------------------------------------------------
             K_squared, eigenvecs_GpG = np.linalg.eig((alpha - beta) @ (alpha + beta))
 
             # Eigenvalues arranged negative then positive, from largest to smallest magnitude
-            K = np.concatenate((-np.sqrt(K_squared), np.sqrt(K_squared)))
-            eigenvecs_GpG = np.hstack((eigenvecs_GpG, eigenvecs_GpG))
+            K = np.concatenate([-np.sqrt(K_squared), np.sqrt(K_squared)])
+            eigenvecs_GpG = np.hstack([eigenvecs_GpG, eigenvecs_GpG])
             eigenvecs_GmG = (alpha + beta) @ eigenvecs_GpG / K
 
             # Eigenvector matrix
             G_pos = (eigenvecs_GpG - eigenvecs_GmG) / 2
             G_neg = (eigenvecs_GpG + eigenvecs_GmG) / 2
-            G = np.vstack((G_pos, G_neg))
-            G_inv = np.linalg.inv(G)
+            G = np.vstack([G_pos, G_neg])
+            # We only need G^{-1} in special cases
+            if mathscr_vs_callable and m == 0:
+                G_inv = np.linalg.inv(G)
+            # --------------------------------------------------------------------------------------------------------------------------
             
             # Particular solution for the sunbeam source
             # --------------------------------------------------------------------------------------------------------------------------
-            B_collect_l[l, :] = np.linalg.solve(-(np.eye(NQuad) / mu0 + A), X_tilde) # coefficient vector
-        
+            if mathscr_vs_callable and m == 0:
+                B = -G / (1 / mu0 + K)[None, :] @ G_inv @ X_tilde
+            else:
+                # This method is more numerically stable
+                RHS = A.copy()
+                np.fill_diagonal(RHS, 1 / mu0 + np.diag(A))
+                B = np.linalg.solve(RHS, -X_tilde)
+            # --------------------------------------------------------------------------------------------------------------------------
         else:
             K = 1 / mu_arr
-            G, G_inv = np.eye(NQuad), np.eye(NQuad)
-        
-        G_collect_l[l, :, :] = G
-        K_collect_l[l, :] = K
-    
-    # Solve for coefficients of homogeneous solution
-    # --------------------------------------------------------------------------------------------------------------------------  
-    
-            
-            
-                
-                
-        
-        
-    # Solve for the coefficients of the homogeneous solution
-    B_pos, B_neg = B[:N], B[N:]
-    K_tau0_neg = np.exp(eigenvals[:N] * tau0)
+            G = np.eye(NQuad)
+            if mathscr_vs_callable and m == 0:
+                G_inv = np.eye(NQuad)
 
-    LHS = np.vstack((G_neg, G_pos)) # LHS is a re-arranged COPY of matrix G
-    LHS[:N, N:] *= K_tau0_neg[None, :]
-    LHS[N:, :N] *= K_tau0_neg[None, :]
-    RHS = np.concatenate((b_neg[:, m] - B_neg, b_pos[:, m] - B_pos * np.exp(-tau0 / mu0)))
-    C = np.linalg.solve(LHS, RHS)
+        G_collect_m[l, :, :] = G
+        K_collect_m[l, :] = K
+        if mathscr_vs_callable and m == 0:
+            G_inv_collect_0[l, :, :] = G_inv
+    # --------------------------------------------------------------------------------------------------------------------------
 
-    if only_flux:
-        return PyDISORT.subroutines.generate_flux_functions(
-            mu0, I0, tau0,
-            G_pos * C[None, :], G_neg * C[None, :],
-            eigenvals, N,
-            B_pos, B_neg,
-            mu_arr_pos, weights_mu,
-            scale_tau,
-        )
+    ################################## Solve for coefficients of homogeneous solution ##########################################
     
-    GC_collect[:, m, :] = G * C[None, :]
-    eigenvals_collect[:, m] = eigenvals
-    B_collect[:, m] = B
-    
-    # Construct the intensity function
-    def u(tau, phi):
-        tau = scale_tau * np.atleast_1d(tau) # Delta-M scaling
-        phi = np.atleast_1d(phi)
-        exponent = np.concatenate(
-            (
-                eigenvals_collect[:N, :, None] * tau[None, None, :],
-                eigenvals_collect[N:, :, None] * (tau - tau0)[None, None, :],
+    # Assemble RHS
+    # --------------------------------------------------------------------------------------------------------------------------
+    # Ensure the BCs are of the correct shape
+    if scalar_b_pos:
+        b_pos_m = np.full(N, b_pos)
+    else:
+        b_pos_m = b_pos[:, m]
+    if scalar_b_neg:
+        b_neg_m = np.full(N, b_neg)
+    else:
+        b_neg_m = b_neg[:, m]
+
+    # If h_\ell = 0 for all \ell >= m, then there is no BDRF contribution
+    if m < NBDRF:
+        BDRF_RHS_contribution = mathscr_X_pos + weighted_mathscr_D_neg @ B_collect_m[-1, N:]
+    else:
+        BDRF_RHS_contribution = 0
+
+    if mathscr_vs_callable and m == 0:
+        mathscr_vs_contribution = mathscr_vs(
+            0,
+            scaled_tau_arr_with_0[-1],
+            NQuad,
+            G_collect_m[0, :, :],
+            K_collect_m[0, :],
+            G_inv_collect_0[0, :, :],
+        )[N:] / scale_tau[0]
+    else:
+        mathscr_vs_contribution = 0
+
+    RHS = np.concatenate(
+        [
+            b_neg_m - B_collect_m[0, N:] - mathscr_vs_contribution,
+            np.concatenate(
+                [
+                    (B_collect_m[l + 1, :] - B_collect_m[l, :])
+                    * np.exp(-mu0 * scaled_tau_arr_with_0[l + 1])
+                    for l in range(NLayers - 1)
+                ]
             ),
-            axis=0,
-        )
-        um = np.einsum(
-            "imj, jmt -> imt", GC_collect, np.exp(exponent), optimize=True
-        ) + B_collect[:, :, None] * np.exp(-tau[None, None, :] / mu0)
-        return np.squeeze(
-            np.einsum(
-                "imt, mp -> itp",
-                um,
-                np.cos(np.arange(NLoops)[:, None] * (phi0 - phi)[None, :]),
-                optimize=True,
-            )
-        )
+            b_pos_m
+            + (BDRF_RHS_contribution - B_pos) * np.exp(-scaled_tau_arr_with_0[-1] / mu0),
+        ]
+    )
+    # --------------------------------------------------------------------------------------------------------------------------
+    
+    # Assemble LHS
+    # --------------------------------------------------------------------------------------------------------------------------
+    if NLayers >= use_sparse_NLayers:
+        LHS = sc.sparse.lil_matrix((NLayers * NQuad, NLayers * NQuad))
+    else:
+        LHS = np.zeros((NLayers * NQuad, NLayers * NQuad))
 
-    return PyDISORT.subroutines.generate_flux_functions(
-        mu0, I0, tau0,
-        GC_collect[:N, 0, :], GC_collect[N:, 0, :],
-        eigenvals_collect[:, 0], N,
-        B_collect[:N, 0], B_collect[N:, 0],
-        mu_arr_pos, weights_mu,
-        scale_tau,
-    ) + (u, )
+    G_0_nn = G_collect_m[0, N:, :N]
+    G_0_np = G_collect_m[0, N:, N:]
+    G_L_pn = G_collect_m[-1, :N, :N]
+    G_L_nn = G_collect_m[-1, N:, :N]
+    G_L_pp = G_collect_m[-1, :N, N:]
+    G_L_np = G_collect_m[-1, N:, N:]
+    E_Lm1L = np.exp(
+        K_collect_m[-1, :N] * (scaled_tau_arr_with_0[-1] - scaled_tau_arr_with_0[-2])
+    )
+    if m < NBDRF:
+        BDRF_LHS_contribution_neg = weighted_mathscr_D_neg @ G_L_nn
+        BDRF_LHS_contribution_pos = weighted_mathscr_D_neg @ G_L_np
+    else:
+        BDRF_LHS_contribution_neg = 0
+        BDRF_LHS_contribution_pos = 0
+
+    # BCs for the entire atmosphere
+    LHS[:N, :N] = G_0_nn
+    LHS[:N, N : 2 * N] = (
+        G_collect_m[0, N:, N:]
+        * np.exp(K_collect_m[0, :N] * scaled_tau_arr_with_0[1])[None, :]
+    )
+    LHS[-N:, -2 * N : -N] = (G_L_pn - BDRF_LHS_contribution_neg) * E_Lm1L[None, :]
+    LHS[-N:, -N:] = G_L_pp - BDRF_LHS_contribution_pos
+
+    # Interlayer BCs / continuity BCs
+    for l in range(NLayers - 1):
+        K_l_neg = K_collect_m[l, :N]
+        K_lp1_neg = K_collect_m[l + 1, :N]
+        G_l_pn = G_collect_m[l, :N, :N]
+        G_l_nn = G_collect_m[l, N:, :N]
+        G_l_pos = G_collect_m[l, :, N:]
+        G_lp1_neg = G_collect_m[l + 1, :, :N]
+        G_lp1_pp = G_collect_m[l, :N, N:]
+        G_lp1_np = G_collect_m[l, N:, N:]
+        scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
+        scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
+        scaled_tau_arr_lp1 = scaled_tau_arr_with_0[l + 2]
+
+        E_lm2lml = np.exp(K_l_neg * (scaled_tau_arr_l - scaled_tau_arr_lm1))
+        E_lm1l = np.exp(K_lp1_neg * (scaled_tau_arr_lp1 - scaled_tau_arr_l))
+        block_row = np.hstack(
+            [
+                np.vstack([G_l_pn * E_lm2lml[None, :], G_l_nn * E_lm2lml[None, :]]),
+                G_l_pos,
+                -G_lp1_neg,
+                -np.vstack([G_lp1_pp * E_lm1l[None, :], G_lp1_np * E_lm1l[None, :]]),
+            ]
+        )
+        LHS[
+            N + l * NQuad : N + (l + 1) * NQuad, l * NQuad : l * NQuad + 2 * NQuad
+        ] = block_row
+    # --------------------------------------------------------------------------------------------------------------------------
+    
+    # Solve the system and return computations
+    # --------------------------------------------------------------------------------------------------------------------------
+    if NLayers >= use_sparse_NLayers:
+        C_m = sc.sparse.linalg.spsolve(LHS, RHS).reshape(NLayers, NQuad)
+    else:
+        C_m = np.linalg.solve(LHS, RHS).reshape(NLayers, NQuad)
+    
+    if mathscr_vs_callable and m == 0:
+        return G_collect_m, C_m, K_collect_m, B_collect_m, G_inv_collect_0
+    else:
+        GC_collect_m = G_collect_m * C_m[:, None, :]
+        return GC_collect_m, K_collect_m, B_collect_m
+    # --------------------------------------------------------------------------------------------------------------------------
