@@ -133,9 +133,9 @@ def _one_Fourier_mode(
                 B = -G / (1 / mu0 + K)[None, :] @ G_inv @ X_tilde
             else:
                 # This method is more numerically stable
-                RHS = A.copy()
-                np.fill_diagonal(RHS, 1 / mu0 + np.diag(A))
-                B = np.linalg.solve(RHS, -X_tilde)
+                LHS = A.copy()
+                np.fill_diagonal(LHS, 1 / mu0 + np.diag(A))
+                B = np.linalg.solve(LHS, -X_tilde)
             # --------------------------------------------------------------------------------------------------------------------------
         else:
             K = 1 / mu_arr
@@ -170,14 +170,22 @@ def _one_Fourier_mode(
         BDRF_RHS_contribution = 0
 
     if mathscr_vs_callable and m == 0:
-        mathscr_vs_contribution = mathscr_vs(
-            0,
-            scaled_tau_arr_with_0[-1],
-            NQuad,
-            G_collect_m[0, :, :],
-            K_collect_m[0, :],
-            G_inv_collect_0[0, :, :],
-        )[N:] / scale_tau[0]
+        mathscr_vs_contribution = np.sum(
+            [
+                mat[N:] / scale_tau[l]
+                for l, mat in enumerate(
+                    map(
+                        mathscr_vs,
+                        scaled_tau_arr_with_0[:-1],
+                        scaled_tau_arr_with_0[1:],
+                        np.full(NLayers, NQuad),
+                        iter(G_collect_m),
+                        iter(K_collect_m),
+                        iter(G_inv_collect_0),
+                    )
+                )
+            ], axis=0
+        )
     else:
         mathscr_vs_contribution = 0
 

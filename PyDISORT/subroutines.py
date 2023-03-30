@@ -277,7 +277,7 @@ def atleast_2d_append(*arys):
     """View inputs as arrays with at least two dimensions. Dimensions are added, when necessary, to the back of the shape tuple rather than to the front.
         
         This is exactly NumPy's `atleast_2d` function but altered to add dimensions to the back of the shape tuple rather than to the front.
-        Documentation for `np.atleast_2d` at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
+        See documentation for NumPy's `atleast_2d` function at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
 
     Parameters
     ----------

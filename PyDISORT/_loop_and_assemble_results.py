@@ -99,8 +99,11 @@ def _loop_and_assemble_results(
         # --------------------------------------------------------------------------------------------------------------------------
         def u(tau, phi, return_Fourier_error=False):
             tau, phi = np.atleast_1d(tau, phi)
-            # tau must be sorted, either in increasing or decreasing order.
-            assert np.all(np.diff(tau) <= 0) or np.all(np.diff(tau) >= 0)
+            # tau must be sorted in ascending order
+            assert np.all(np.diff(tau) >= 0)
+            # tau must be in the domain
+            assert tau[-1] <= tau_arr[-1]
+            assert tau[0] >= 0
 
             # Atmospheric layer indices
             l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
@@ -123,18 +126,41 @@ def _loop_and_assemble_results(
             um = np.einsum(
                 "mtij, mtj -> itm", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
             ) + B_collect[:, :, None] * np.exp(-tau[None, None, :] / mu0)
-
+            
+            # Contribution from particular solution for other internal sources
             if mathscr_vs_callable:
                 mathscr_vs_contribution = np.concatenate(
                     [
-                        mathscr_vs(
-                            scaled_tau[l == l_uni],
-                            scaled_tau_arr_with_0[-1],
-                            NQuad,
-                            G_collect_0[l_uni, :, :],
-                            K_collect_0[l_uni, :],
-                            G_inv_collect_0[l_uni, :, :],
-                        ) / scale_tau[l_uni]
+                        (   # The current layer
+                            mathscr_vs(
+                                scaled_tau[l == l_uni],
+                                scaled_tau_arr_with_0[l_uni + 1],
+                                NQuad,
+                                G_collect_0[l_uni, :, :],
+                                K_collect_0[l_uni, :],
+                                G_inv_collect_0[l_uni, :, :],
+                            )[N:]
+                            / scale_tau[l_uni]
+                            # All the layers below
+                            + np.sum(
+                                [
+                                    mat[N:] / scale_tau[l]
+                                    for l, mat in enumerate(
+                                        map(
+                                            mathscr_vs,
+                                            scaled_tau_arr_with_0[(l_uni + 1) : -1],
+                                            scaled_tau_arr_with_0[(l_uni + 2) :],
+                                            np.full((NLayers - l_uni - 1), NQuad),
+                                            iter(G_collect_0[l_uni:-1, :, :]),
+                                            iter(K_collect_0[l_uni:-1, :]),
+                                            iter(G_inv_collect_0[l_uni:-1, :, :]),
+                                        ),
+                                        start=l_uni + 1,
+                                    )
+                                ],
+                                axis=0,
+                            )
+                        )
                         for l_uni in l_unique
                     ],
                     axis=1,
@@ -183,8 +209,11 @@ def _loop_and_assemble_results(
 
     def flux_up(tau):
         tau = np.atleast_1d(tau)
-        # tau must be sorted, either in increasing or decreasing order.
-        assert np.all(np.diff(tau) <= 0) or np.all(np.diff(tau) >= 0)
+        # tau must be sorted in ascending order
+        assert np.all(np.diff(tau) >= 0)
+        # tau must be in the domain
+        assert tau[-1] <= tau_arr[-1]
+        assert tau[0] >= 0
 
         # Atmospheric layer indices
         l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
@@ -211,8 +240,11 @@ def _loop_and_assemble_results(
 
     def flux_down(tau):
         tau = np.atleast_1d(tau)
-        # tau must be sorted, either in increasing or decreasing order.
-        assert np.all(np.diff(tau) <= 0) or np.all(np.diff(tau) >= 0)
+        # tau must be sorted in ascending order
+        assert np.all(np.diff(tau) >= 0)
+        # tau must be in the domain
+        assert tau[-1] <= tau_arr[-1]
+        assert tau[0] >= 0
 
         # Atmospheric layer indices
         l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
@@ -238,14 +270,36 @@ def _loop_and_assemble_results(
         if mathscr_vs_callable:
             mathscr_vs_contribution = np.concatenate(
                 [
-                    mathscr_vs(
-                        scaled_tau[l == l_uni],
-                        scaled_tau_arr_with_0[-1],
-                        NQuad,
-                        G_collect_0[l_uni, :, :],
-                        K_collect_0[l_uni, :],
-                        G_inv_collect_0[l_uni, :, :],
-                    ) / scale_tau[l_uni]
+                    (   # The current layer
+                        mathscr_vs(
+                            scaled_tau[l == l_uni],
+                            scaled_tau_arr_with_0[l_uni + 1],
+                            NQuad,
+                            G_collect_0[l_uni, :, :],
+                            K_collect_0[l_uni, :],
+                            G_inv_collect_0[l_uni, :, :],
+                        )[N:]
+                        / scale_tau[l_uni]
+                        # All the layers below
+                        + np.sum(
+                            [
+                                mat[N:] / scale_tau[l]
+                                for l, mat in enumerate(
+                                    map(
+                                        mathscr_vs,
+                                        scaled_tau_arr_with_0[(l_uni + 1) : -1],
+                                        scaled_tau_arr_with_0[(l_uni + 2) :],
+                                        np.full((NLayers - l_uni - 1), NQuad),
+                                        iter(G_collect_0[l_uni:-1, :, :]),
+                                        iter(K_collect_0[l_uni:-1, :]),
+                                        iter(G_inv_collect_0[l_uni:-1, :, :]),
+                                    ),
+                                    start=l_uni + 1,
+                                )
+                            ],
+                            axis=0,
+                        )
+                    )
                     for l_uni in l_unique
                 ],
                 axis=1,

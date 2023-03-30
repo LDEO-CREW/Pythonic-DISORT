@@ -75,15 +75,15 @@ def pydisort(
         All mu (cosine of polar angle) quadrature nodes.
     function
         Flux function with argument tau (type: array) for positive (upward) mu values.
-        The tau inputs must be sorted, either in increasing or decreasing order.
+        The tau inputs must be sorted in ascending order.
         Returns the diffuse flux magnitudes (type: array).
     function
         Flux function with argument tau (type: array)  for negative (downward) mu values.
-        The tau inputs must be sorted, either in increasing or decreasing order.
+        The tau inputs must be sorted in ascending order.
         Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)).
     function, optional
         Intensity function with arguments (tau, phi, return_Fourier_error=False) of types (array, array, bool).
-        The tau inputs must be sorted, either in increasing or decreasing order.
+        The tau inputs must be sorted in ascending order.
         The first and primary output is an ndarray with axes corresponding to (mu, tau, phi) variation.
         The optional flag `return_Fourier_error` determines whether the function will also output
         the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
@@ -158,7 +158,7 @@ def pydisort(
         assert len(signature(mathscr_vs).parameters) == 6
         assert np.allclose(
             mathscr_vs(
-                np.array([tau_arr[-1]]),
+                tau_arr[-1],
                 tau_arr[-1],
                 NQuad,
                 np.random.random((NQuad, NQuad)),
@@ -166,7 +166,7 @@ def pydisort(
                 np.random.random((NQuad, NQuad)),
             ),
             0,
-            atol=1e-3, # atol may need to be adjusted
+            atol=1e-3, # Tolerance may need to be adjusted
         )
     # The minimum threshold is the minimum numbers of layers: 1
     assert(use_sparse_NLayers >= 1)
@@ -189,8 +189,8 @@ def pydisort(
     # --------------------------------------------------------------------------------------------------------------------------
     scale_tau = 1 - omega_arr * f_arr
     scaled_thickness_arr = scale_tau * thickness_arr
-    scaled_tau_arr_with_0 = list(
-        map(lambda l: np.sum(scaled_thickness_arr[:l]), range(NLayers + 1))
+    scaled_tau_arr_with_0 = np.array(
+        list(map(lambda l: np.sum(scaled_thickness_arr[:l]), range(NLayers + 1)))
     )
     weighted_Leg_coeffs = ((Leg_coeffs - f_arr[:, None]) / (1 - f_arr[:, None])) * (
         2 * np.arange(NLeg) + 1
@@ -231,15 +231,15 @@ def pydisort(
 
             p_true = np.concatenate(
                 [
-                    Legendre(weighted_Leg_coeffs_all[l_uni, :])(nu)[:, None, :]
-                    for l_uni in l_unique
+                    f(nu)[:, None, :]
+                    for f in map(Legendre, iter(weighted_Leg_coeffs_all[l_unique, :]))
                 ],
                 axis=1,
             )
             p_trun = np.concatenate(
                 [
-                    Legendre(weighted_Leg_coeffs[l_uni, :])(nu)[:, None, :] 
-                    for l_uni in l_unique
+                    f(nu)[:, None, :] 
+                    for f in map(Legendre, iter(weighted_Leg_coeffs[l_unique, :]))
                 ],
                 axis=1,
             )
