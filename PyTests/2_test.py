@@ -55,15 +55,10 @@ def test_2a():
         diff_ratio,
     ) = compare(results, mu_arr, flux_up, flux_down, u)
     
-    assert np.max(ratio_flux_up) <= 1e-2 or np.max(diff_flux_up) <= 1e-3
-    assert (
-        np.max(ratio_flux_down_diffuse) <= 1e-2
-        or np.max(diff_flux_down_diffuse) <= 1e-3
-    )
-    assert (
-        np.max(ratio_flux_down_direct) <= 1e-2 or np.max(diff_flux_down_direct) <= 1e-3
-    )
-    assert np.max(diff_ratio) <= 1e-1 or np.max(diff) <= 1e-2
+    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-3
+    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-3
+    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-3
+    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
     # --------------------------------------------------------------------------------------------------
     
     
@@ -119,15 +114,10 @@ def test_2b():
         diff_ratio,
     ) = compare(results, mu_arr, flux_up, flux_down, u)
     
-    assert np.max(ratio_flux_up) <= 1e-2 or np.max(diff_flux_up) <= 1e-3
-    assert (
-        np.max(ratio_flux_down_diffuse) <= 1e-2
-        or np.max(diff_flux_down_diffuse) <= 1e-3
-    )
-    assert (
-        np.max(ratio_flux_down_direct) <= 1e-2 or np.max(diff_flux_down_direct) <= 1e-3
-    )
-    assert np.max(diff_ratio) <= 1e-1 or np.max(diff) <= 1e-2
+    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-3
+    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-3
+    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-3
+    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
     # --------------------------------------------------------------------------------------------------
     
     
@@ -183,15 +173,10 @@ def test_2c():
         diff_ratio,
     ) = compare(results, mu_arr, flux_up, flux_down, u)
     
-    assert np.max(ratio_flux_up) <= 1e-2 or np.max(diff_flux_up) <= 1e-3
-    assert (
-        np.max(ratio_flux_down_diffuse) <= 1e-2
-        or np.max(diff_flux_down_diffuse) <= 1e-3
-    )
-    assert (
-        np.max(ratio_flux_down_direct) <= 1e-2 or np.max(diff_flux_down_direct) <= 1e-3
-    )
-    assert np.max(diff_ratio) <= 1e-1 or np.max(diff) <= 1e-2
+    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-3
+    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-3
+    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-3
+    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
     # --------------------------------------------------------------------------------------------------
     
 
@@ -247,13 +232,8 @@ def test_2b():
         diff_ratio,
     ) = compare(results, mu_arr, flux_up, flux_down, u)
     
-    assert np.max(ratio_flux_up) <= 1e-2 or np.max(diff_flux_up) <= 1e-3
-    assert (
-        np.max(ratio_flux_down_diffuse) <= 1e-2
-        or np.max(diff_flux_down_diffuse) <= 1e-3
-    )
-    assert (
-        np.max(ratio_flux_down_direct) <= 1e-2 or np.max(diff_flux_down_direct) <= 1e-3
-    )
-    assert np.max(diff_ratio) <= 1e-1 or np.max(diff) <= 1e-2
+    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-3
+    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-3
+    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-3
+    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
     # --------------------------------------------------------------------------------------------------

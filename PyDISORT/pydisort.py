@@ -393,12 +393,12 @@ def pydisort(
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
             NT_corrections = TMS_correction(tau, phi)
-            NT_corrections = NT_corrections + np.concatenate(
+            '''NT_corrections = NT_corrections + np.concatenate(
                 [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
-            )
+            )'''
             # The line directly below is a more computationally efficient implementation of the
             # line directly above but would prevent the use of autograd for testing
-            #NT_corrections[N:, :, :] += IMS_correction(tau, phi)
+            NT_corrections[N:, :, :] += IMS_correction(tau, phi)
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
                 return (
