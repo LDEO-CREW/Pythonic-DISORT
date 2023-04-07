@@ -86,96 +86,8 @@ def calculate_nu(mu, phi, mu_p, phi_p):
     return np.squeeze(nu)
 
 
-"""def generate_flux_functions(
-    tau_arr, 
-    I0, mu0,
-    GC_pos, GC_neg, 
-    eigenvals, N,
-    B_pos, B_neg, 
-    mu_arr_pos, weights_mu, 
-    scale_tau,
-):
-    ""Generates the flux functions with respect to the radiative transfer equation.
-
-    Parameters
-    ----------
-    tau_arr : array
-        Optical depth of the lower boundary of each atmospheric layer.
-    I0 : float
-        Intensity of the incident beam.
-    mu0 : float
-        Polar angle of the incident beam.
-    GC_pos : 2darray
-        Product of eigenvectors and coefficients that correspond to positive mu values.
-    GC_neg : 2darray
-        Product of eigenvectors and coefficients that correspond to negative mu values.
-    eigenvals : array
-        Eigenvalues arranged negative then positive, from largest to smallest magnitude.
-    N : int
-        Half the number of quadrature points.
-    B_pos : array
-        Coefficients of the incident beam inhomogeneity that correspond to positive mu values.
-    B_neg : array
-        Coefficients of the incident beam inhomogeneity that correspond to negative mu values.
-    mu_arr_pos : array
-        Positive mu quadrature nodes.
-    weights_mu : array
-        mu quadrature weights for positive mu nodes.
-    scale_tau : array
-        Delta-M scale factors for tau.
-
-    Returns
-    -------
-    function
-        Flux function with argument tau (type: array) for positive (upward) mu values.
-        Returns diffuse flux magnitudes (type: array).
-    function
-        Flux function with argument tau (type: array)  for negative (downward) mu values.
-        Returns a tuple of diffuse and direct flux magnitudes respectively (type: (array, array)).
-
-    ""
-
-    def flux_up(tau):
-        tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
-        exponent = np.vstack(
-            (
-                eigenvals[:N, None] * tau[None, :],
-                eigenvals[N:, None] * (tau - taul)[None, :],
-            )
-        )
-        u0_pos = GC_pos @ np.exp(exponent) + B_pos[:, None] * np.exp(
-            -tau[None, :] / mu0
-        )
-        return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ u0_pos)[()]
-
-    def flux_down(tau):
-        direct_beam = I0 * mu0 * np.exp(-tau / mu0)
-
-        tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
-        direct_beam_scaled = I0 * mu0 * np.exp(-tau / mu0)
-        exponent = np.vstack(
-            (
-                eigenvals[:N, None] * tau[None, :],
-                eigenvals[N:, None] * (tau - taul)[None, :],
-            )
-        )
-        u0_neg = GC_neg @ np.exp(exponent) + B_neg[:, None] * np.exp(
-            -tau[None, :] / mu0
-        )
-        return (
-            np.squeeze(
-                2 * pi * (mu_arr_pos * weights_mu) @ u0_neg
-                + direct_beam_scaled
-                - direct_beam
-            )[()],
-            direct_beam,
-        )
-
-    return flux_up, flux_down"""
-
-
 def Gauss_Legendre_quad(N, c=0, d=1):
-    """Generates Gauss-Legendre quadrature weights and points for integration from c to d.
+    """Generates Gauss-Legendre quadrature weights and zero points for integration from c to d.
 
     Parameters
     ----------
@@ -189,7 +101,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
     Returns
     -------
     array
-        Quadrature points.
+        Quadrature zero points.
     array
         Quadrature weights.
 
@@ -200,7 +112,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
 
 
 def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
-    """Generates Gauss-Legendre quadrature weights and points for integration from c to d.
+    """Generates Gauss-Legendre quadrature weights and zero points for integration from c to d.
 
     Parameters
     ----------
@@ -214,7 +126,7 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     Returns
     -------
     array
-        Quadrature points.
+        Quadrature zero points.
     array
         Quadrature weights.
 
@@ -226,8 +138,8 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     Nphi -= 1  # The extra index corresponds to the point 0 which we will add later
     Nphi_pos = Nphi // 2
     phi_arr_pos = np.cos(pi * np.arange(Nphi_pos) / Nphi)
-    phi_arr = np.hstack((-phi_arr_pos, 0, np.flip(phi_arr_pos)))
-    diff = np.hstack((2, 2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2)))
+    phi_arr = np.concatenate([-phi_arr_pos, [0], np.flip(phi_arr_pos)])
+    diff = np.concatenate([[2], 2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2)])
     weights_phi_pos = sc.fft.idct(diff, type=1)
     weights_phi_pos[0] /= 2
     full_weights_phi = np.hstack((weights_phi_pos, np.flip(weights_phi_pos[:-1])))
@@ -271,7 +183,7 @@ def generate_FD_mat(Ntau, a, b):
     first_deriv[-1, -3] = 1 / (2 * h)
 
     return tau_arr, first_deriv.asformat("csr")
-
+  
 
 def atleast_2d_append(*arys):
     """View inputs as arrays with at least two dimensions. Dimensions are added, when necessary, to the back of the shape tuple rather than to the front.
@@ -308,3 +220,79 @@ def atleast_2d_append(*arys):
         return res[0]
     else:
         return res
+
+
+def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, n, G, K, G_inv, mu_arr):
+    """Particular solution for isotropic internal sources.
+    It has many seemingly redundant arguments to maximize precomputation
+    in the `pydisort` function which calls it.
+
+    """
+
+    def mathscr_b(i):
+        j = np.arange(i + 1)
+        s_poly_coeffs_nj = s_poly_coeffs[:, n - j]
+        return np.sum(
+            (sc.special.factorial(n - j) / sc.special.factorial(n - i))[None, None, :]
+            * K[:, :, None] ** -(i - j + 1)[None, None, :]
+            * s_poly_coeffs_nj[:, None, :],
+            axis=-1,
+        )
+    
+    mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
+    return np.einsum(
+        "tik, tc, ctk, tkj, j -> it",
+        G[l, :, :],
+        tau[:, None] ** np.flip(np.arange(Nscoeffs))[None, :],
+        mathscr_v_coeffs[:, l, :],
+        G_inv[l, :, :],
+        1 / mu_arr,
+        optimize=True,
+    )
+    
+def compare(results, mu_arr, flux_up, flux_down, u):
+    """TODO
+
+    """
+    uu = results["uu"]
+    flup = results["flup"]
+    rfldn = results["rfldn"]
+    rfldir = results["rfldir"]
+
+    # Load comparison points
+    tau_test_arr = results["tau_test_arr"]
+    phi_arr = results["phi_arr"]
+
+    # Perform the comparisons
+    # --------------------------------------------------------------------------------------------------
+    # Upward (diffuse) fluxes
+    diff_flux_up = np.abs(flup - flux_up(tau_test_arr))
+    ratio_flux_up = diff_flux_up / np.clip(flup, a_min=1e-6, a_max=None)
+
+    # Downward (diffuse) fluxes
+    diff_flux_down_diffuse = np.abs((rfldn - flux_down(tau_test_arr)[0]))
+    ratio_flux_down_diffuse = diff_flux_down_diffuse / np.clip(
+        rfldn, a_min=1e-6, a_max=None
+    )
+
+    # Direct (downward) fluxes
+    diff_flux_down_direct = np.abs(rfldir - flux_down(tau_test_arr)[1])
+    ratio_flux_down_direct = diff_flux_down_direct / np.clip(
+        rfldir, a_min=1e-6, a_max=None
+    )
+
+    # Intensity
+    reorder_mu = np.argsort(mu_arr)
+    diff = np.abs(uu - u(tau_test_arr, phi_arr)[reorder_mu])
+    diff_ratio = diff / np.clip(uu, a_min=1e-6, a_max=None)
+
+    return (
+        diff_flux_up,
+        ratio_flux_up,
+        diff_flux_down_diffuse,
+        ratio_flux_down_diffuse,
+        diff_flux_down_direct,
+        ratio_flux_down_direct,
+        diff,
+        diff_ratio,
+    )

@@ -1,4 +1,4 @@
-from PyDISORT import subroutines
+from PyDISORT.subroutines import _mathscr_v
 import numpy as np
 import scipy as sc
 from math import pi
@@ -6,19 +6,20 @@ from math import pi
 
 def _one_Fourier_mode(
     m,
-    scaled_omega_arr, 
+    scaled_omega_arr,
+    tau_arr,
     scaled_tau_arr_with_0,
     mu_arr_pos, mu_arr,
     M_inv, W,
     N, NQuad, NLeg,
     NLayers, NBDRF,
-    weighted_Leg_coeffs,
+    weighted_scaled_Leg_coeffs,
     weighted_Leg_coeffs_BDRF,
     mu0, I0,
     b_pos, b_neg,
-    mathscr_vs,
-    mathscr_vs_callable,
-    scale_tau,
+    scalar_b_pos, scalar_b_neg,
+    s_poly_coeffs,
+    Nscoeffs, n,
     use_sparse_NLayers
 ):
     """This function is wrapped and looped by the `_loop_and_assemble_results` function.
@@ -31,7 +32,9 @@ def _one_Fourier_mode(
     # --------------------------------------------------------------------------------------------------------------------------
     ells = np.arange(m, NLeg)
     degree_tile = np.tile(ells, (N, 1)).T
-    fac = np.prod(ells[:, None] + np.arange(-m + 1, m + 1)[None, :], axis=-1)
+    fac = np.prod(
+        ells[:, None] + np.arange(-m + 1, m + 1)[None, :], axis=-1, dtype=np.float64
+    )
     signs = np.empty(NLeg - m)
     signs[::2] = 1
     signs[1::2] = -1
@@ -57,10 +60,9 @@ def _one_Fourier_mode(
         mathscr_D_temp = (
             weighted_asso_Leg_coeffs_BDRF[None, :]
             * asso_leg_term_pos.T[:, :NBDRF]
-            * mu_arr_pos[:, None]
         )
         mathscr_D_neg = 2 * mathscr_D_temp @ asso_leg_term_neg[:NBDRF, :]
-        weighted_mathscr_D_neg = mathscr_D_neg * W
+        R = mathscr_D_neg * (mu_arr_pos * W)[None, :]
 
         mathscr_X_temp = (
             prefactor_mathscr
@@ -72,24 +74,24 @@ def _one_Fourier_mode(
     
     # Loop over NLayers atmospheric layers
     # --------------------------------------------------------------------------------------------------------------------------
+    if Nscoeffs > 0 and m == 0:
+        G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
+    G_collect_m = np.empty((NLayers, NQuad, NQuad))
+    K_collect_m = np.empty((NLayers, NQuad))
+    B_collect_m = np.zeros((NLayers, NQuad))
+        
     for l in range(NLayers):
         # More setup
-        weighted_Leg_coeffs_l_ells = weighted_Leg_coeffs[l, :][ells]
+        weighted_scaled_Leg_coeffs_l_ells = weighted_scaled_Leg_coeffs[l, :][ells]
         scaled_omega_l = scaled_omega_arr[l]
-        
-        if mathscr_vs_callable and m == 0:
-            G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
-        G_collect_m = np.empty((NLayers, NQuad, NQuad))
-        K_collect_m = np.empty((NLayers, NQuad))
-        B_collect_m = np.zeros((NLayers, NQuad))
-        if not np.allclose(weighted_Leg_coeffs_l_ells, 0):
+        if not np.allclose(weighted_scaled_Leg_coeffs_l_ells, 0):
             # Generate mathscr_D and mathscr_X (BDRF terms)
             # --------------------------------------------------------------------------------------------------------------------------
             if m == 0:
                 prefactor = scaled_omega_l * I0 / (4 * pi)
             else:
                 prefactor = scaled_omega_l * I0 / (2 * pi)
-            weighted_asso_Leg_coeffs_l = weighted_Leg_coeffs_l_ells / fac
+            weighted_asso_Leg_coeffs_l = weighted_scaled_Leg_coeffs_l_ells / fac
 
             D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
             D_pos = (scaled_omega_l / 2) * D_temp @ asso_leg_term_pos
@@ -102,8 +104,8 @@ def _one_Fourier_mode(
             
             # Assemble the coefficient matrix and additional terms
             # --------------------------------------------------------------------------------------------------------------------------
-            alpha = M_inv[:, None] * (D_pos * W - np.eye(N))
-            beta = M_inv[:, None] * D_neg * W
+            alpha = M_inv[:, None] * (D_pos * W[None, :] - np.eye(N))
+            beta = M_inv[:, None] * D_neg * W[None, :]
             A = np.vstack([np.hstack([-alpha, -beta]), np.hstack([beta, alpha])])
 
             X_tilde = np.concatenate([-M_inv * X_pos, M_inv * X_neg])
@@ -123,29 +125,34 @@ def _one_Fourier_mode(
             G_neg = (eigenvecs_GpG + eigenvecs_GmG) / 2
             G = np.vstack([G_pos, G_neg])
             # We only need G^{-1} in special cases
-            if mathscr_vs_callable and m == 0:
+            if Nscoeffs > 0 and m == 0:
                 G_inv = np.linalg.inv(G)
             # --------------------------------------------------------------------------------------------------------------------------
             
             # Particular solution for the sunbeam source
             # --------------------------------------------------------------------------------------------------------------------------
-            if mathscr_vs_callable and m == 0:
+            if Nscoeffs > 0 and m == 0:
                 B = -G / (1 / mu0 + K)[None, :] @ G_inv @ X_tilde
             else:
                 # This method is more numerically stable
                 LHS = A.copy()
                 np.fill_diagonal(LHS, 1 / mu0 + np.diag(A))
                 B = np.linalg.solve(LHS, -X_tilde)
+            
+            B_collect_m[l, :] = B
             # --------------------------------------------------------------------------------------------------------------------------
         else:
-            K = 1 / mu_arr
-            G = np.eye(NQuad)
-            if mathscr_vs_callable and m == 0:
-                G_inv = np.eye(NQuad)
-
+            # This is a shortcut to the same results
+            K = -1 / mu_arr
+            G = np.zeros((NQuad, NQuad))
+            G[N:, :N] = np.eye(N)
+            G[:N, N:] = np.eye(N)
+            if Nscoeffs > 0 and m == 0:
+                G_inv = G
+        
         G_collect_m[l, :, :] = G
         K_collect_m[l, :] = K
-        if mathscr_vs_callable and m == 0:
+        if Nscoeffs > 0 and m == 0:
             G_inv_collect_0[l, :, :] = G_inv
     # --------------------------------------------------------------------------------------------------------------------------
 
@@ -162,55 +169,99 @@ def _one_Fourier_mode(
         b_neg_m = np.full(N, b_neg)
     else:
         b_neg_m = b_neg[:, m]
-
+    
+    # _mathscr_v_contribution
+    if Nscoeffs > 0 and m == 0:
+        _mathscr_v_contribution_middle = np.array([])
+        if NLayers > 1:
+            indices = np.arange(NLayers - 1)
+            _mathscr_v_contribution_middle = _mathscr_v(
+                tau_arr[:-1], indices,
+                s_poly_coeffs[:-1, :],
+                Nscoeffs, n,
+                G_collect_m[:-1, :, :],
+                K_collect_m[:-1, :],
+                G_inv_collect_0[:-1, :, :],
+                mu_arr,
+            ) - _mathscr_v(
+                tau_arr[:-1], indices,
+                s_poly_coeffs[1:, :],
+                Nscoeffs, n,
+                G_collect_m[1:, :, :],
+                K_collect_m[1:, :],
+                G_inv_collect_0[1:, :, :],
+                mu_arr,
+            )
+        
+        _mathscr_v_contribution_bottom = _mathscr_v(
+                tau_arr[-1:], np.array([0]),
+                s_poly_coeffs[-1:, :],
+                Nscoeffs, n,
+                G_collect_m[-1:, N:, :],
+                K_collect_m[-1:, :],
+                G_inv_collect_0[-1:, :, :],
+                mu_arr)
+        if NBDRF > 0:
+            _mathscr_v_contribution_bottom = (
+                R + np.eye(N)
+            ) @ _mathscr_v_contribution_bottom
+                
+        _mathscr_v_contribution = np.concatenate(
+            [
+                _mathscr_v(
+                    np.array([0]), np.array([0]),
+                    s_poly_coeffs[0:1, :],
+                    Nscoeffs, n,
+                    G_collect_m[0:1, N:, :],
+                    K_collect_m[0:1, :],
+                    G_inv_collect_0[0:1, :, :],
+                    mu_arr,
+                ).flatten(),
+                _mathscr_v_contribution_middle.flatten(),
+                _mathscr_v_contribution_bottom.flatten(),
+            ]
+        )   
+    else:
+        _mathscr_v_contribution = 0
+    
     # If h_\ell = 0 for all \ell >= m, then there is no BDRF contribution
     if m < NBDRF:
-        BDRF_RHS_contribution = mathscr_X_pos + weighted_mathscr_D_neg @ B_collect_m[-1, N:]
+        BDRF_RHS_contribution = mathscr_X_pos + R @ B_collect_m[-1, N:]
     else:
         BDRF_RHS_contribution = 0
-
-    if mathscr_vs_callable and m == 0:
-        mathscr_vs_contribution = np.sum(
+    
+    RHS_middle = np.array([])
+    if NLayers > 1:
+        RHS_middle = np.array(
             [
-                mat[N:] / scale_tau[l]
-                for l, mat in enumerate(
-                    map(
-                        mathscr_vs,
-                        scaled_tau_arr_with_0[:-1],
-                        scaled_tau_arr_with_0[1:],
-                        np.full(NLayers, NQuad),
-                        iter(G_collect_m),
-                        iter(K_collect_m),
-                        iter(G_inv_collect_0),
-                    )
-                )
-            ], axis=0
+                (B_collect_m[l + 1, :] - B_collect_m[l, :])
+                * np.exp(-mu0 * scaled_tau_arr_with_0[l + 1])
+                for l in range(NLayers - 1)
+            ]
+        ).flatten()
+    
+    RHS = (
+        np.concatenate(
+            [
+                b_neg_m - B_collect_m[0, N:],
+                RHS_middle,
+                b_pos_m
+                + (BDRF_RHS_contribution - B_collect_m[-1, :N])
+                * np.exp(-scaled_tau_arr_with_0[-1] / mu0),
+            ]
         )
-    else:
-        mathscr_vs_contribution = 0
-
-    RHS = np.concatenate(
-        [
-            b_neg_m - B_collect_m[0, N:] - mathscr_vs_contribution,
-            np.concatenate(
-                [
-                    (B_collect_m[l + 1, :] - B_collect_m[l, :])
-                    * np.exp(-mu0 * scaled_tau_arr_with_0[l + 1])
-                    for l in range(NLayers - 1)
-                ]
-            ),
-            b_pos_m
-            + (BDRF_RHS_contribution - B_pos) * np.exp(-scaled_tau_arr_with_0[-1] / mu0),
-        ]
+        + _mathscr_v_contribution
     )
+    
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Assemble LHS
     # --------------------------------------------------------------------------------------------------------------------------
+    dim = NLayers * NQuad
     if NLayers >= use_sparse_NLayers:
-        LHS = sc.sparse.lil_matrix((NLayers * NQuad, NLayers * NQuad))
+        LHS = sc.sparse.lil_matrix((dim, dim))
     else:
-        LHS = np.zeros((NLayers * NQuad, NLayers * NQuad))
+        LHS = np.zeros((dim, dim))
 
     G_0_nn = G_collect_m[0, N:, :N]
     G_0_np = G_collect_m[0, N:, N:]
@@ -222,8 +273,8 @@ def _one_Fourier_mode(
         K_collect_m[-1, :N] * (scaled_tau_arr_with_0[-1] - scaled_tau_arr_with_0[-2])
     )
     if m < NBDRF:
-        BDRF_LHS_contribution_neg = weighted_mathscr_D_neg @ G_L_nn
-        BDRF_LHS_contribution_pos = weighted_mathscr_D_neg @ G_L_np
+        BDRF_LHS_contribution_neg = R @ G_L_nn
+        BDRF_LHS_contribution_pos = R @ G_L_np
     else:
         BDRF_LHS_contribution_neg = 0
         BDRF_LHS_contribution_pos = 0
@@ -231,7 +282,7 @@ def _one_Fourier_mode(
     # BCs for the entire atmosphere
     LHS[:N, :N] = G_0_nn
     LHS[:N, N : 2 * N] = (
-        G_collect_m[0, N:, N:]
+        G_0_np
         * np.exp(K_collect_m[0, :N] * scaled_tau_arr_with_0[1])[None, :]
     )
     LHS[-N:, -2 * N : -N] = (G_L_pn - BDRF_LHS_contribution_neg) * E_Lm1L[None, :]
@@ -273,7 +324,7 @@ def _one_Fourier_mode(
     else:
         C_m = np.linalg.solve(LHS, RHS).reshape(NLayers, NQuad)
     
-    if mathscr_vs_callable and m == 0:
+    if Nscoeffs > 0 and m == 0:
         return G_collect_m, C_m, K_collect_m, B_collect_m, G_inv_collect_0
     else:
         GC_collect_m = G_collect_m * C_m[:, None, :]
