@@ -1,6 +1,6 @@
 # Introduction
 The PyDISORT package is a Discrete Ordinates Solver for the (1D) Radiative Transfer Equation in a single or multi-layer atmosphere.
-It is coded entirely in Python and in as "Pythonic" a manner as possible: we vectorize as well as use list comprehension and `map` as much as possible. 
+It is coded entirely in Python 3 and in as "Pythonic" a manner as possible: we vectorize as well as use list comprehension and `map` as much as possible. 
 
 It is based on Stamnes' FORTRAN DISORT (see references in the Jupyter Notebook) and has its main features: 
 delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, isotropic internal sources (thermal source),
