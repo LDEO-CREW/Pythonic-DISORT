@@ -26,6 +26,7 @@ notebook_dependencies = [
 	'autograd>=1.5',
 	'jupyter>1.0.0',
 	'notebook>6.5.2',
+	'ipympl>=0.8.8',
 ]
 
 [project.urls]
