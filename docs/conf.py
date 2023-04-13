@@ -16,7 +16,7 @@ release = '0.0.0'
 
 import sys, os
 
-sys.path.append(os.path.abspath('../PyDISORT'))
+sys.path.append(os.path.abspath('../'))
 
 extensions = [
     'sphinx.ext.napoleon',
