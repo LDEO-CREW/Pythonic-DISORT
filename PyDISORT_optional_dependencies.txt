@@ -1,0 +1,2 @@
+# Optional dependencies for the PyDISORT package
+pytest
