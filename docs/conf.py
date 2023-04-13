@@ -8,7 +8,7 @@
 
 project = 'Pythonic-DISORT'
 copyright = '2023, HO Jia Xu Dion'
-author = 'Dion Ho'
+author = 'Dion Ho JX'
 release = '0.0.0'
 
 # -- General configuration ---------------------------------------------------
@@ -16,7 +16,7 @@ release = '0.0.0'
 
 import sys, os
 
-sys.path.append(os.path.abspath('.'))
+sys.path.append(os.path.abspath('../PyDISORT'))
 
 extensions = [
     'sphinx.ext.napoleon',
