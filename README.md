@@ -4,7 +4,7 @@ It is coded entirely in Python 3 and in as "Pythonic" a manner as possible: we v
 
 It is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]) and has its main features: 
 delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, isotropic internal sources (thermal source),
-Bi-Direction Reflectance Function (BDRF) and more.
+Bi-Directional Reflectance Function (BDRF) and more.
 
 This repository also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) in the `disort4.0.99_f2py` directory.
 The original was downloaded from http://www.rtatmocn.com/disort/. The wrapper was inspired by https://github.com/kconnour/pyRT_DISORT.
@@ -29,8 +29,9 @@ With PyTest installed, execute the console command `pytest` in the `pydisotest` 
 * By cloning repository: `pip install .` in the `Pythonic-DISORT` directory; `pip install -r optional_dependencies.txt` to install all optional dependencies
 
 ## Requirements to run PyDISORT
-* `numpy >= 1.12`
-* `scipy >= 1.2.1`
+* Python 3.8+
+* `numpy >= 1.17.3`
+* `scipy >= 1.8.0`
 * (OPTIONAL) `pytest >= 6.2.5`
 
 ## Additional requirements to run the Jupyter Notebook
