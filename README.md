@@ -48,26 +48,26 @@ We are not sure if the Jupyter Notebook or our F2PY-wrapped Stamnes' DISORT will
 Everything was built and tested on Windows 11 and not yet tested on other systems.
 
 # References
-1) S. Chandrasekhar. 1960. Radiative Transfer.
+1) S. Chandrasekhar. 1960. *Radiative Transfer.*
 
-2) Knut Stamnes and S-Chee Tsay and Warren Wiscombe and Kolf Jayaweera. 1988. Numerically stable algorithm for discrete-ordinate-method radiative transfer in multiple scattering and emitting layered media. http://opg.optica.org/ao/abstract.cfm?URI=ao-27-12-2502.
+2) Knut Stamnes and S-Chee Tsay and Warren Wiscombe and Kolf Jayaweera. 1988. *Numerically stable algorithm for discrete-ordinate-method radiative transfer in multiple scattering and emitting layered media.* http://opg.optica.org/ao/abstract.cfm?URI=ao-27-12-2502.
 
-3) Stamnes, S.. 1999. LLLab disort website. http://www.rtatmocn.com/disort/.
+3) Stamnes, S.. 1999. *LLLab disort website.* http://www.rtatmocn.com/disort/.
 
-4) Knut Stamnes and Paul Conklin. 1984. A new multi-layer discrete ordinate approach to radiative transfer in vertically inhomogeneous atmospheres. https://www.sciencedirect.com/science/article/pii/0022407384900311.
+4) Knut Stamnes and Paul Conklin. 1984. *A new multi-layer discrete ordinate approach to radiative transfer in vertically inhomogeneous atmospheres.* https://www.sciencedirect.com/science/article/pii/0022407384900311.
 
-5) W. J. Wiscombe. 1977. The Delta–M Method: Rapid Yet Accurate Radiative Flux Calculations for Strongly Asymmetric Phase Functions. https://journals.ametsoc.org/view/journals/atsc/34/9/1520-0469_1977_034_1408_tdmrya_2_0_co_2.xml.
+5) W. J. Wiscombe. 1977. *The Delta–M Method: Rapid Yet Accurate Radiative Flux Calculations for Strongly Asymmetric Phase Functions.* https://journals.ametsoc.org/view/journals/atsc/34/9/1520-0469_1977_034_1408_tdmrya_2_0_co_2.xml.
 
-6) J. H. Joseph and W. J. Wiscombe and J. A. Weinman. 1976. The Delta-Eddington Approximation for Radiative Flux Transfer. https://journals.ametsoc.org/view/journals/atsc/33/12/1520-0469_1976_033_2452_tdeafr_2_0_co_2.xml.
+6) J. H. Joseph and W. J. Wiscombe and J. A. Weinman. 1976. *The Delta-Eddington Approximation for Radiative Flux Transfer.* https://journals.ametsoc.org/view/journals/atsc/33/12/1520-0469_1976_033_2452_tdeafr_2_0_co_2.xml.
 
-7) Sykes, J. B.. 1951. Approximate Integration of the Equation of Transfer. https://doi.org/10.1093/mnras/111.4.377.
+7) Sykes, J. B.. 1951. *Approximate Integration of the Equation of Transfer.* https://doi.org/10.1093/mnras/111.4.377.
 
-8) Stamnes, Knut and Tsay, Si-Chee and Wiscombe, Warren and Laszlo, Istvan and Einaudi, Franco. 2000. General Purpose Fortran Program for Discrete-Ordinate-Method Radiative Transfer in Scattering and Emitting Layered Media: An Update of DISORT.
+8) Stamnes, Knut and Tsay, Si-Chee and Wiscombe, Warren and Laszlo, Istvan and Einaudi, Franco. 2000. *General Purpose Fortran Program for Discrete-Ordinate-Method Radiative Transfer in Scattering and Emitting Layered Media: An Update of DISORT.*
 
-9) Z. Lin and S. Stamnes and Z. Jin and I. Laszlo and S.-C. Tsay and W.J. Wiscombe and K. Stamnes. 2015. Improved discrete ordinate solutions in the presence of an anisotropically reflecting lower boundary: Upgrades of the DISORT computational tool. https://www.sciencedirect.com/science/article/pii/S0022407315000679.
+9) Z. Lin and S. Stamnes and Z. Jin and I. Laszlo and S.-C. Tsay and W.J. Wiscombe and K. Stamnes. 2015. *Improved discrete ordinate solutions in the presence of an anisotropically reflecting lower boundary: Upgrades of the DISORT computational tool.* https://www.sciencedirect.com/science/article/pii/S0022407315000679.
 
-10) Trefethen, L. N.. 1996. Finite difference and spectral methods for ordinary and partial differential equations. https://people.maths.ox.ac.uk/trefethen/pdetext.html.
+10) Trefethen, L. N.. 1996. *Finite difference and spectral methods for ordinary and partial differential equations.* https://people.maths.ox.ac.uk/trefethen/pdetext.html.
 
-11) T. Nakajima and M. Tanaka. 1988. Algorithms for radiative intensity calculations in moderately thick atmospheres using a truncation approximation. https://www.sciencedirect.com/science/article/pii/0022407388900313.
+11) T. Nakajima and M. Tanaka. 1988. *Algorithms for radiative intensity calculations in moderately thick atmospheres using a truncation approximation.* https://www.sciencedirect.com/science/article/pii/0022407388900313.
 
-12) K. Connour and A. Stcherbinine. 2022. pyRT_DISORT. https://github.com/kconnour/pyRT_DISORT.
+12) K. Connour and A. Stcherbinine. 2022. *pyRT_DISORT.* https://github.com/kconnour/pyRT_DISORT.
