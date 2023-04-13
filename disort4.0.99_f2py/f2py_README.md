@@ -1,4 +1,4 @@
-# Installation instructions for Windows with Conda
+# Installation instructions for F2PY-wrapped Stamnes' DISORT
 
 ## DISCLAIMER
 This setup is meant for personal use and
@@ -6,7 +6,7 @@ as such we provide no alternatives. Apologies in advance if they
 do not work on your system. We added this readme, the makefile,
 and a few lines of code (`Cf2py intent(in, out) [...]`) to `BDREF.f` and `DISORT.f`
 which are required by F2PY but have no impact on the FORTRAN code. 
-Everything else is this directory is exactly Stamnes' DISORT 4.0.99
+Everything else in this directory is exactly Stamnes' DISORT 4.0.99
 as downloaded from http://www.rtatmocn.com/disort/.
 
 
@@ -24,5 +24,5 @@ into the `site-packages` directory in the desired conda environment.
 --------------------------------------------------------------------------------------------------
 
 
-Thank you to K. Connour and A. Stcherbinine for providing inspiration for our wrapper
+Thank you to K. Connour and A. Stcherbinine for providing inspiration for this wrapper
 through their `pyRT_DISORT` project: https://github.com/kconnour/pyRT_DISORT.
