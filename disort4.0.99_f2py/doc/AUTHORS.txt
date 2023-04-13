@@ -1,0 +1,15 @@
+# $Rev: 90 $ $Date: 2017-11-30 20:01:24 -0500 (Thu, 30 Nov 2017) $
+
+Modifications/enhancements of the original DISORT2.0 BETA program by:
+Snorre Stamnes
+Knut Stamnes
+Zhonghai Jin
+Zhenyi Lin
+Nan Chen
+Yongzhen Fan
+
+Original authors of DISORT:
+Warren Wiscombe
+Si-Chee Tsay
+Istvan Laszlo
+Knut Stamnes

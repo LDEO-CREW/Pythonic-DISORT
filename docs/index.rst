@@ -18,7 +18,7 @@ Jupyter Notebook (Comprehensive Documentation)
 We highly recommend reading the non-optional parts of sections 1 and 2 before use.
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 4
    
    Pythonic-DISORT
   

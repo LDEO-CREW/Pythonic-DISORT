@@ -11,7 +11,7 @@ def _loop_and_assemble_results(
     scaled_omega_arr,
     tau_arr,
     scaled_tau_arr_with_0,
-    mu_arr_pos, mu_arr, weights_mu,
+    mu_arr_pos, mu_arr,
     M_inv, W,
     N, NQuad, NLeg, NLoops,
     NLayers, NBDRF,
@@ -21,7 +21,7 @@ def _loop_and_assemble_results(
     b_pos, b_neg,
     scalar_b_pos, scalar_b_neg,
     s_poly_coeffs,
-    Nscoeffs, n,
+    Nscoeffs,
     scale_tau,
     only_flux,
     use_sparse_NLayers
@@ -51,14 +51,21 @@ def _loop_and_assemble_results(
         b_pos, b_neg,
         scalar_b_pos, scalar_b_neg,
         s_poly_coeffs,
-        Nscoeffs, n,
+        Nscoeffs,
         use_sparse_NLayers
     )
-    if Nscoeffs > 0:
-        G_collect_0, C_0, K_collect_0, B_collect_0, G_inv_collect_0 = outputs
-        GC_collect_0 = G_collect_0 * C_0[:, None, :]
+    if I0 > 0:
+        if Nscoeffs > 0:
+            G_collect_0, C_0, K_collect_0, B_collect_0, G_inv_collect_0 = outputs
+            GC_collect_0 = G_collect_0 * C_0[:, None, :]
+        else:
+            GC_collect_0, K_collect_0, B_collect_0 = outputs
     else:
-        GC_collect_0, K_collect_0, B_collect_0 = outputs
+        if Nscoeffs > 0:
+            G_collect_0, C_0, K_collect_0, G_inv_collect_0 = outputs
+            GC_collect_0 = G_collect_0 * C_0[:, None, :]
+        else:
+            GC_collect_0, K_collect_0 = outputs    
     # -------------------------------------------------------------------------------------------------------------------------- 
     
     if not only_flux:
@@ -66,18 +73,14 @@ def _loop_and_assemble_results(
         # --------------------------------------------------------------------------------------------------------------------------
         GC_collect = np.empty((NLoops, NLayers, NQuad, NQuad))
         K_collect = np.empty((NLoops, NLayers, NQuad))
-        B_collect = np.empty((NLoops, NLayers, NQuad))
-        
         GC_collect[0, :, :, :] = GC_collect_0
         K_collect[0, :, :] = K_collect_0
-        B_collect[0, :, :] = B_collect_0
+        if I0 > 0:
+            B_collect = np.empty((NLoops, NLayers, NQuad))
+            B_collect[0, :, :] = B_collect_0
         # These loops are relatively easy to PARALLELIZE, but we have not implemented the parallelization (TODO)
         for m in range(1, NLoops):
-            (
-                GC_collect[m, :, :, :],
-                K_collect[m, :, :],
-                B_collect[m, :, :],
-            ) = _one_Fourier_mode(
+            outputs = _one_Fourier_mode(
                 m,
                 scaled_omega_arr,
                 tau_arr,
@@ -92,9 +95,14 @@ def _loop_and_assemble_results(
                 b_pos, b_neg,
                 scalar_b_pos, scalar_b_neg,
                 s_poly_coeffs,
-                Nscoeffs, n,
+                Nscoeffs,
                 use_sparse_NLayers
             )
+            if I0 > 0:
+                GC_collect[m, :, :, :], K_collect[m, :, :], B_collect[m, :, :] = outputs
+            else:
+                GC_collect[m, :, :, :], K_collect[m, :, :] = outputs
+                
         # --------------------------------------------------------------------------------------------------------------------------
         
         # Construct the intensity function
@@ -117,22 +125,27 @@ def _loop_and_assemble_results(
                 scaled_tau = tau
 
             exponent = np.concatenate(
-                (
+                [
                     K_collect[:, l, :N] * (scaled_tau - scaled_tau_arr_lm1)[None, :, None],
                     K_collect[:, l, N:] * (scaled_tau - scaled_tau_arr_l)[None, :, None],
-                ),
+                ],
                 axis=-1,
             )
-            um = np.einsum(
-                "mtij, mtj -> mti", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
-            ) + B_collect[:, l, :] * np.exp(-scaled_tau[None, :, None] / mu0)
+            if I0 > 0:
+                um = np.einsum(
+                    "mtij, mtj -> mti", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
+                ) + B_collect[:, l, :] * np.exp(-scaled_tau[None, :, None] / mu0)
+            else:
+                um = np.einsum(
+                    "mtij, mtj -> mti", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
+                )
             
             # Contribution from particular solution for isotropic internal sources
             if Nscoeffs > 0:
                 _mathscr_v_contribution = _mathscr_v(
                     tau, l,
                     s_poly_coeffs,
-                    Nscoeffs, n,
+                    Nscoeffs,
                     G_collect_0,
                     K_collect_0,
                     G_inv_collect_0,
@@ -152,20 +165,25 @@ def _loop_and_assemble_results(
 
             if return_Fourier_error:
                 exponent = np.concatenate(
-                    (
+                    [
                         K_collect[-1, l, :N] * (scaled_tau - scaled_tau_arr_lm1)[:, None],
                         K_collect[-1, l, N:] * (scaled_tau - scaled_tau_arr_l)[:, None],
-                    ),
+                    ],
                     axis=-1,
                 )
-                ulast = np.einsum(
-                    "tij, tj -> it", GC_collect[-1, l, :, :], np.exp(exponent), optimize=True
-                ) + B_collect[-1, l, :].T * np.exp(-scaled_tau[None, :] / mu0)
+                if I0 > 0:
+                    ulast = np.einsum(
+                        "tij, tj -> it", GC_collect[-1, l, :, :], np.exp(exponent), optimize=True
+                    ) + B_collect[-1, l, :].T * np.exp(-scaled_tau[None, :] / mu0)
+                else:
+                    ulast = np.einsum(
+                        "tij, tj -> it", GC_collect[-1, l, :, :], np.exp(exponent), optimize=True
+                    )
                 Fourier_error = np.max(
                     np.abs(
-                        ulast[:, :, None]
-                        * np.cos((NLoops - 1) * (phi0 - phi))[None, None, :]
-                        / intensities
+                        (ulast[:, :, None]
+                        * np.cos((NLoops - 1) * (phi0 - phi))[None, None, :])
+                        / np.clip(intensities, a_min = 1e-15, a_max = None)
                     )
                 )
                 return intensities, Fourier_error
@@ -176,9 +194,10 @@ def _loop_and_assemble_results(
     # Construct the flux functions
     # --------------------------------------------------------------------------------------------------------------------------
     GC_pos = GC_collect_0[:, :N, :]
-    B_pos = B_collect_0[:, :N].T
     GC_neg = GC_collect_0[:, N:, :]
-    B_neg = B_collect_0[:, N:].T
+    if I0 > 0:
+        B_pos = B_collect_0[:, :N].T
+        B_neg = B_collect_0[:, N:].T
 
 
     def flux_up(tau):
@@ -197,35 +216,38 @@ def _loop_and_assemble_results(
         else:
             scaled_tau = tau
 
-        exponent = np.concatenate(
-            (
-                K_collect_0[l, :N] * (scaled_tau - scaled_tau_arr_lm1)[:, None],
-                K_collect_0[l, N:] * (scaled_tau - scaled_tau_arr_l)[:, None],
-            ),
-            axis=-1,
-        )
-        
         if Nscoeffs > 0:
             _mathscr_v_contribution = _mathscr_v(
                 tau, l,
                 s_poly_coeffs,
-                Nscoeffs, n,
+                Nscoeffs,
                 G_collect_0,
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
             )[:N, :]
-            u0_pos = (
-                np.einsum("tij, tj -> it", GC_pos[l, :, :], np.exp(exponent)) 
-                + B_pos[:, l] * np.exp(-scaled_tau[None, :] / mu0)
-                + _mathscr_v_contribution
-            )
         else:
-            u0_pos = (
-                np.einsum("tij, tj -> it", GC_pos[l, :, :], np.exp(exponent)) 
-                + B_pos[:, l] * np.exp(-scaled_tau[None, :] / mu0)
-            )
-        return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ u0_pos)[()]
+            _mathscr_v_contribution = 0
+
+        if I0 > 0:
+            direct_beam_contribution = B_pos[:, l] * np.exp(-scaled_tau[None, :] / mu0)
+        else:
+            direct_beam_contribution = 0
+
+        exponent = np.concatenate(
+            [
+                K_collect_0[l, :N] * (scaled_tau - scaled_tau_arr_lm1)[:, None],
+                K_collect_0[l, N:] * (scaled_tau - scaled_tau_arr_l)[:, None],
+            ],
+            axis=-1,
+        )
+        u0_pos = (
+            np.einsum("tij, tj -> it", GC_pos[l, :, :], np.exp(exponent))
+            + direct_beam_contribution
+            + _mathscr_v_contribution
+        )
+                  
+        return np.squeeze(2 * pi * (mu_arr_pos * W) @ u0_pos)[()]
 
 
     def flux_down(tau):
@@ -243,40 +265,45 @@ def _loop_and_assemble_results(
             scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
         else:
             scaled_tau = tau
-        
-        direct_beam = I0 * mu0 * np.exp(-tau / mu0)
-        direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0)
-        exponent = np.concatenate(
-            (
-                K_collect_0[l, :N] * (scaled_tau - scaled_tau_arr_lm1)[:, None],
-                K_collect_0[l, N:] * (scaled_tau - scaled_tau_arr_l)[:, None],
-            ),
-            axis=-1,
-        )
 
         if Nscoeffs > 0:
             _mathscr_v_contribution = _mathscr_v(
                 tau, l,
                 s_poly_coeffs,
-                Nscoeffs, n,
+                Nscoeffs,
                 G_collect_0,
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
             )[N:, :]
-            u0_neg = (
-                np.einsum("tij, tj -> it", GC_neg[l, :, :], np.exp(exponent))
-                + B_neg[:, l] * np.exp(-scaled_tau[None, :] / mu0)
-                + _mathscr_v_contribution
-            )
         else:
-            u0_neg = (
-                np.einsum("tij, tj -> it", GC_neg[l, :, :], np.exp(exponent))
-                + B_neg[:, l] * np.exp(-scaled_tau[None, :] / mu0)
-            )
+            _mathscr_v_contribution = 0
+        
+        if I0 > 0:
+            direct_beam_contribution = B_neg[:, l] * np.exp(-scaled_tau[None, :] / mu0)
+            direct_beam = I0 * mu0 * np.exp(-tau / mu0)
+            direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0)
+        else:
+            direct_beam_contribution = 0
+            direct_beam = 0
+            direct_beam_scaled = 0
+        
+        exponent = np.concatenate(
+            [
+                K_collect_0[l, :N] * (scaled_tau - scaled_tau_arr_lm1)[:, None],
+                K_collect_0[l, N:] * (scaled_tau - scaled_tau_arr_l)[:, None],
+            ],
+            axis=-1,
+        )
+        u0_neg = (
+            np.einsum("tij, tj -> it", GC_neg[l, :, :], np.exp(exponent))
+            + direct_beam_contribution
+            + _mathscr_v_contribution
+        )
+        
         return (
             np.squeeze(
-                2 * pi * (mu_arr_pos * weights_mu) @ u0_neg
+                2 * pi * (mu_arr_pos * W) @ u0_neg
                 + direct_beam_scaled
                 - direct_beam
             )[()],

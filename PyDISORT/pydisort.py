@@ -142,8 +142,10 @@ def pydisort(
     assert NQuad >= NLeg
     N = NQuad // 2
     # We require principal angles and a downward incident beam
-    assert 0 < mu0 and mu0 <= 1
-    assert 0 <= phi0 and phi0 < 2 * pi
+    assert I0 >= 0
+    if I0 > 0:
+        assert 0 < mu0 and mu0 <= 1
+        assert 0 <= phi0 and phi0 < 2 * pi
     # Ensure that the BC inputs are of the correct shape
     if len(np.atleast_1d(b_pos)) == 1:
         scalar_b_pos = True
@@ -165,21 +167,17 @@ def pydisort(
     weighted_Leg_coeffs_BDRF = (2 * np.arange(NBDRF) + 1) * Leg_coeffs_BDRF
     weighted_Leg_coeffs_all = (2 * np.arange(NLeg_all) + 1) * Leg_coeffs_all
     Leg_coeffs = Leg_coeffs_all[:, :NLeg]
-    n = Nscoeffs - 1
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Generation of Double Gauss-Legendre quadrature weights and points
     # --------------------------------------------------------------------------------------------------------------------------
     # For positive mu values (the weights are identical for both domains)
-    mu_arr_pos, weights_mu = subroutines.Gauss_Legendre_quad(N)  # mu_arr_neg = -mu_arr_pos
+    mu_arr_pos, W = subroutines.Gauss_Legendre_quad(N)  # mu_arr_neg = -mu_arr_pos
     mu_arr = np.concatenate([mu_arr_pos, -mu_arr_pos])
-    full_weights_mu = np.concatenate([weights_mu, weights_mu])
+    M_inv = 1 / mu_arr_pos
     
     # We do not allow mu0 to equal a quadrature / computational angle
     assert not np.any(np.isclose(mu_arr_pos, mu0))
-
-    M_inv = 1 / mu_arr_pos
-    W = weights_mu
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Delta-M scaling; there is no scaling if f = 0
@@ -202,8 +200,8 @@ def pydisort(
         scaled_omega_arr = omega_arr
     # --------------------------------------------------------------------------------------------------------------------------
     
-    if NT_cor and not only_flux and I0 != 0 and np.any(f_arr > 0) and NLeg < NLeg_all:
-    
+    if NT_cor and not only_flux and I0 > 0 and np.any(f_arr > 0) and NLeg < NLeg_all:
+        
         ############################### Perform NT corrections on the intensity but not the flux ###################################
         
         # Delta-M scaled solution; no further corrections to the flux
@@ -211,7 +209,7 @@ def pydisort(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
-            mu_arr_pos, mu_arr, weights_mu,
+            mu_arr_pos, mu_arr,
             M_inv, W,
             N, NQuad, NLeg, NLoops,
             NLayers, NBDRF,
@@ -221,7 +219,7 @@ def pydisort(
             b_pos, b_neg,
             scalar_b_pos, scalar_b_neg,
             s_poly_coeffs,
-            Nscoeffs, n,
+            Nscoeffs,
             scale_tau,
             False,
             use_sparse_NLayers
@@ -340,7 +338,7 @@ def pydisort(
                 )
                 return (
                     mathscr_B[:, l, :]
-                    * np.concatenate([TMS_correction_pos, TMS_correction_neg], axis=0)[:, :, None]
+                    * np.vstack([TMS_correction_pos, TMS_correction_neg])[:, :, None]
                     + Contribution_from_other_layers
                 )
             # --------------------------------------------------------------------------------------------------------------------------
@@ -348,7 +346,7 @@ def pydisort(
             else:
                 return (
                     mathscr_B[:, l, :]
-                    * np.concatenate([TMS_correction_pos, TMS_correction_neg], axis=0)[:, :, None]
+                    * np.vstack([TMS_correction_pos, TMS_correction_neg])[:, :, None]
                 )
         # --------------------------------------------------------------------------------------------------------------------------
 
@@ -393,12 +391,14 @@ def pydisort(
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
             NT_corrections = TMS_correction(tau, phi)
-            '''NT_corrections = NT_corrections + np.concatenate(
+            
+            NT_corrections = NT_corrections + np.concatenate(
                 [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
-            )'''
-            # The line directly below is a more computationally efficient implementation of the
-            # line directly above but would prevent the use of autograd for testing
-            NT_corrections[N:, :, :] += IMS_correction(tau, phi)
+            )
+            ## The line below is a more computationally efficient implementation of the
+            ## line above but would prevent the use of autograd for testing.
+            #NT_corrections[N:, :, :] += IMS_correction(tau, phi)
+            
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
                 return (
@@ -416,7 +416,7 @@ def pydisort(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
-            mu_arr_pos, mu_arr, weights_mu,
+            mu_arr_pos, mu_arr,
             M_inv, W,
             N, NQuad, NLeg, NLoops,
             NLayers, NBDRF,
@@ -426,7 +426,7 @@ def pydisort(
             b_pos, b_neg,
             scalar_b_pos, scalar_b_neg,
             s_poly_coeffs,
-            Nscoeffs, n,
+            Nscoeffs,
             scale_tau,
             only_flux,
             use_sparse_NLayers

@@ -106,9 +106,9 @@ def Gauss_Legendre_quad(N, c=0, d=1):
         Quadrature weights.
 
     """
-    mu_arr_pos, weights_mu = leggauss(N)
+    mu_arr_pos, W = leggauss(N)
 
-    return transform_interval(mu_arr_pos, c, d), transform_weights(weights_mu, c, d)
+    return transform_interval(mu_arr_pos, c, d), transform_weights(W, c, d)
 
 
 def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
@@ -222,12 +222,13 @@ def atleast_2d_append(*arys):
         return res
 
 
-def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, n, G, K, G_inv, mu_arr):
+def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr):
     """Particular solution for isotropic internal sources.
     It has many seemingly redundant arguments to maximize precomputation
     in the `pydisort` function which calls it.
 
     """
+    n = Nscoeffs - 1
 
     def mathscr_b(i):
         j = np.arange(i + 1)
@@ -238,7 +239,7 @@ def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, n, G, K, G_inv, mu_arr):
             * s_poly_coeffs_nj[:, None, :],
             axis=-1,
         )
-    
+
     mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
     return np.einsum(
         "tik, tc, ctk, tkj, j -> it",
@@ -250,8 +251,10 @@ def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, n, G, K, G_inv, mu_arr):
         optimize=True,
     )
     
-def compare(results, mu_arr, flux_up, flux_down, u):
-    """TODO
+    
+def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
+    """Performs the pointwise comparisons between results from Stamnes' DISORT
+    which are stored in .npz files against results from PyDISORT. Used in our PyTests.
 
     """
     uu = results["uu"]
@@ -263,28 +266,57 @@ def compare(results, mu_arr, flux_up, flux_down, u):
     tau_test_arr = results["tau_test_arr"]
     phi_arr = results["phi_arr"]
 
-    # Perform the comparisons
+    # Perform and print the comparisons
     # --------------------------------------------------------------------------------------------------
+    print("Max pointwise differences")
+    print()
+    
     # Upward (diffuse) fluxes
+    print("Upward (diffuse) fluxes")
     diff_flux_up = np.abs(flup - flux_up(tau_test_arr))
     ratio_flux_up = diff_flux_up / np.clip(flup, a_min=1e-6, a_max=None)
-
+    print("Difference =", np.max(diff_flux_up))
+    print("Difference ratio =", np.max(ratio_flux_up))
+    print()
+    
     # Downward (diffuse) fluxes
-    diff_flux_down_diffuse = np.abs((rfldn - flux_down(tau_test_arr)[0]))
+    print("Downward (diffuse) fluxes")
+    diff_flux_down_diffuse = np.abs(rfldn - flux_down(tau_test_arr)[0])
     ratio_flux_down_diffuse = diff_flux_down_diffuse / np.clip(
         rfldn, a_min=1e-6, a_max=None
     )
-
-    # Direct (downward) fluxes
-    diff_flux_down_direct = np.abs(rfldir - flux_down(tau_test_arr)[1])
-    ratio_flux_down_direct = diff_flux_down_direct / np.clip(
-        rfldir, a_min=1e-6, a_max=None
+    print("Difference =", np.max(diff_flux_down_diffuse))
+    print(
+        "Difference ratio =",
+        np.max(ratio_flux_down_diffuse),
     )
+    print()
+    
+    # Direct (downward) fluxes
+    print("Direct (downward) fluxes")
+    diff_flux_down_direct = np.abs(rfldir - flux_down(tau_test_arr)[1])
+    ratio_flux_down_direct = diff_flux_down_direct / np.clip(rfldir, a_min=1e-6, a_max=None)
+    print("Difference =", np.max(diff_flux_down_direct))
+    print(
+        "Difference ratio =",
+        np.max(ratio_flux_down_direct),
+)
+    print()
 
     # Intensity
-    reorder_mu = np.argsort(mu_arr)
-    diff = np.abs(uu - u(tau_test_arr, phi_arr)[reorder_mu])
-    diff_ratio = diff / np.clip(uu, a_min=1e-6, a_max=None)
+    diff = np.abs(uu - u(tau_test_arr, phi_arr)[reorder_mu])[mu_to_compare]
+    diff_ratio = diff / np.clip(uu[mu_to_compare], a_min=1e-6, a_max=None)
+    max_diff_tau_index = np.argmax(np.max(np.max(diff, axis=0), axis=1))
+    max_ratio_tau_index = np.argmax(np.max(np.max(diff_ratio, axis=0), axis=1))
+    
+    diff_tau_pt = tau_test_arr[max_diff_tau_index]
+    ratio_tau_pt = tau_test_arr[max_ratio_tau_index]
+    print("Intensities")
+    print("At tau = " + str(diff_tau_pt))
+    print("Max pointwise difference =", np.max(diff[:, max_diff_tau_index, :]))
+    print("At tau = " + str(ratio_tau_pt))
+    print("Max pointwise difference ratio =", np.max(diff_ratio[:, max_ratio_tau_index, :]))
+    print()
 
     return (
         diff_flux_up,
