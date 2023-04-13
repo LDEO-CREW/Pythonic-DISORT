@@ -17,8 +17,10 @@ The Jupyter Notebook provides comprehensive documentation, suggested inputs, exp
 mathematical derivations and verification tests.
 We highly recommend reading the non-optional parts of sections 1 and 2 before use.
 
+## PyTest
+
 Separate from the verification tests in the notebook, we used PyTest to recreate most of the test problems from Stamnes et. al.'s `disotest.f90`.
-Execute the console command `pytest` in the `PyTests` directory to run these tests.
+With PyTest installed, execute the console command `pytest` in the `pydisotest` directory to run these tests.
 
 # Installation
 
@@ -29,6 +31,7 @@ Execute the console command `pytest` in the `PyTests` directory to run these tes
 ## Requirements to run PyDISORT
 * `numpy >= 1.12`
 * `scipy >= 1.2.1`
+* (OPTIONAL) `pytest >= 6.2.5`
 
 ## Additional requirements to run the Jupyter Notebook
 * `autograd >= 1.5`

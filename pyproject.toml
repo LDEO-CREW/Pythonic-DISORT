@@ -8,11 +8,11 @@ dependencies = [
   'scipy>=1.2.1',
 ]
 name = "PyDISORT"
-version = "0.0.0"
+version = "0.0.1"
 authors = [
   { name="Dion Ho", email="dh3065@columbia.edu" },
 ]
-description = "Solves the (1D) Radiative Transfer Equation for a multilayer atmospheric layer using the Discrete Ordinates Method."
+description = "Discrete Ordinates Solver for the (1D) Radiative Transfer Equation in a single or multi-layer atmosphere."
 readme = "README.md"
 requires-python = ">=3.7"
 classifiers = [
@@ -22,6 +22,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+pytest = ['pytest >= 6.2.5']
 notebook_dependencies = [
 	'autograd>=1.5',
 	'jupyter>1.0.0',

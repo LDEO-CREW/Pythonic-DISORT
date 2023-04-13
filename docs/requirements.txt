@@ -1,4 +1,4 @@
-# Requirements for ReadTheDocs
+# Requirements for ReadTheDocs, not the PyDISORT package
 PyDISORT
 numpy
 scipy
