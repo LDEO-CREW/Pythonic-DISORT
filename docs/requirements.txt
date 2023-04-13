@@ -1,3 +1,5 @@
+# Requirements for ReadTheDocs
+PyDISORT
 numpy
 scipy
 autograd
@@ -6,5 +8,4 @@ matplotlib
 sphinx
 nbsphinx
 python_docs_theme
-PyDISORT
 
