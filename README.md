@@ -10,7 +10,7 @@ This repository also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) i
 The original was downloaded from http://www.rtatmocn.com/disort/.
 
 # Documentation
-https://pythonic-disort.readthedocs.io/en/latest/.
+https://pythonic-disort.readthedocs.io/en/latest/
 
 Also see the accompanying Jupyter Notebook: `Pythonic-DISORT.ipynb` in the `docs` directory.
 The Jupyter Notebook provides comprehensive documentation, suggested inputs, explanations, 
@@ -26,7 +26,7 @@ Installation instructions: TODO (we need to first publish PyDISORT on PyPI).
 
 ## Requirements to run PyDISORT
 * `numpy >= 1.12`
-* `scipy >= 1.2.1`.
+* `scipy >= 1.2.1`
 
 ## Additional requirements to run the Jupyter Notebook
 * `autograd >= 1.5`
