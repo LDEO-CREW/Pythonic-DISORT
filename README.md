@@ -22,7 +22,9 @@ Execute the console command `pytest` in the `PyTests` directory to run these tes
 
 # Installation
 
-Installation instructions: TODO (we need to first publish PyDISORT on PyPI).
+* From PyPI: (TODO: need to first publish on PyPI)
+* From Conda-forge: (TODO: need to first publish on Conda-forge)
+* By cloning repository: `pip install PyDISORT` in the `Pythonic-DISORT` directory
 
 ## Requirements to run PyDISORT
 * `numpy >= 1.12`
