@@ -1,0 +1,6 @@
+# All optional dependencies for the Pythonic-DISORT project
+pytest
+autograd
+jupyter
+notebook
+ipympl
