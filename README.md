@@ -34,6 +34,7 @@ Execute the console command `pytest` in the `PyTests` directory to run these tes
 * `autograd >= 1.5`
 * `jupyter > 1.0.0`
 * `notebook > 6.5.2`
+* (OPTIONAL) `ipympl >= 0.8.8`
 
 Our F2PY-wrapped Stamnes' DISORT (in the `disort4.0.99_f2py` directory) must also be set up to run the last section (section 6).
 
