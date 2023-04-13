@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 dependencies = [
-  'numpy>=1.12',
-  'scipy>=1.2.1',
+  "numpy>=1.12",
+  "scipy>=1.2.1",
 ]
 name = "PyDISORT"
 version = "0.0.1"
@@ -22,13 +22,13 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-pytest = ['pytest >= 6.2.5']
+pytest = ["pytest >= 6.2.5"]
 notebook_dependencies = [
-	'autograd>=1.5',
-	'jupyter>1.0.0',
-	'notebook>6.5.2',
-	'ipympl>=0.8.8',
+	"autograd>=1.5",
+	"jupyter>1.0.0",
+	"notebook>6.5.2",
+	"ipympl>=0.8.8",
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/Maths2209/Pythonic-DISORT"
+"Homepage" = "https://github.com/LDEO-CREW/Pythonic-DISORT"
