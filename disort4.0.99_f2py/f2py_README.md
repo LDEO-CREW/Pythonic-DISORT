@@ -24,5 +24,5 @@ into the `site-packages` directory in the desired conda environment.
 --------------------------------------------------------------------------------------------------
 
 
-Thank you to K. Connour and A. Stcherbinine for providing inspiration for this setup
+Thank you to K. Connour and A. Stcherbinine for providing inspiration for our wrapper
 through their `pyRT_DISORT` project: https://github.com/kconnour/pyRT_DISORT.
