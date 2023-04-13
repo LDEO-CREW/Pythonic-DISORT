@@ -58,7 +58,8 @@ def transform_weights(weights, c, d, a=-1, b=1):
 
 
 def calculate_nu(mu, phi, mu_p, phi_p):
-    """Calculates the scattering angle nu between incident angle (mu_p, phi_p) and scattering angle (mu, phi).
+    """Calculates the cosine of the scattering angle nu 
+    between incident angle (mu_p, phi_p) and scattering angle (mu, phi).
 
     Parameters
     ----------
@@ -148,8 +149,9 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
 
 
 def generate_FD_mat(Ntau, a, b):
-    """Generates diagonal storage sparse first derivative matrix with second-order accuracy
-    on [a,b] with Ntau grid points. We use second order forward and backward differences at the edges.
+    """Generates a sparse first derivative matrix in `csr` format with second-order accuracy
+    on [a,b] with Ntau grid points.
+    We use second order forward and backward differences at the boundaries.
 
     Parameters
     ----------
@@ -189,7 +191,7 @@ def atleast_2d_append(*arys):
     """View inputs as arrays with at least two dimensions. Dimensions are added, when necessary, to the back of the shape tuple rather than to the front.
         
         This is exactly NumPy's `atleast_2d` function but altered to add dimensions to the back of the shape tuple rather than to the front.
-        See documentation for NumPy's `atleast_2d` function at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
+        View the documentation for NumPy's `atleast_2d` function at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
 
     Parameters
     ----------
