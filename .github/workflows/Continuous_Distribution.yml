@@ -43,7 +43,6 @@ jobs:
           name: releases
           path: dist
   upload-to-pypi:
-    needs: upload-to-testpypi
     if: "!github.event.release.prerelease"
     runs-on: ubuntu-latest
     steps:

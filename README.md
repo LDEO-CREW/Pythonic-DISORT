@@ -24,7 +24,7 @@ With PyTest installed, execute the console command `pytest` in the `pydisotest` 
 
 # Installation
 
-* From PyPI: (TODO: need to first publish on PyPI)
+* From PyPI: `pip install PyDISORT`
 * From Conda-forge: (TODO: need to first publish on Conda-forge)
 * By cloning repository: `pip install .` in the `Pythonic-DISORT` directory; `pip install -r all_optional_dependencies.txt` to install all optional dependencies
 
