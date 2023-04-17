@@ -26,7 +26,7 @@ jobs:
         run: |
           git clean -xdf
           git restore -SW .
-          python pyproject.toml sdist bdist_wheel
+          python -m build
       - name: Check built artifacts
         run: |
           python -m twine check dist/*
