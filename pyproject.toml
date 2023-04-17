@@ -10,7 +10,7 @@ dependencies = [
 name = "PyDISORT"
 version = "0.0.1"
 authors = [
-	"Dion Ho <dh3065@columbia.edu>",
+  { name="Dion Ho", email="dh3065@columbia.edu" },
 ]
 description = "Discrete Ordinates Solver for the (1D) Radiative Transfer Equation in a single or multi-layer atmosphere."
 readme = "README.md"
