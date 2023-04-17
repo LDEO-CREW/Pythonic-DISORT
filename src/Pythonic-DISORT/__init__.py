@@ -1,2 +1,2 @@
-from PyDISORT import subroutines
-from PyDISORT.pydisort import pydisort
+from Pythonic-DISORT import subroutines
+from Pythonic-DISORT.pydisort import pydisort

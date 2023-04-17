@@ -1,4 +1,4 @@
-name: Build and Upload PyDISORT to PyPI
+name: Build and Upload Pythonic-DISORT to PyPI
 on:
   release:
     types:
@@ -31,7 +31,7 @@ jobs:
         run: |
           python -m twine check dist/*
           pwd
-          if [ -f dist/PyDISORT-0.0.0.tar.gz ]; then
+          if [ -f dist/Pythonic-DISORT-0.0.0.tar.gz ]; then
             echo "❌ INVALID VERSION NUMBER"
             exit 1
           else

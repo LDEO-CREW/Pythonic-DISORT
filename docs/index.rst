@@ -11,7 +11,7 @@ Modules (Basic Documentation)
 .. toctree::
    :maxdepth: 4
    
-   source/PyDISORT
+   source/Pythonic-DISORT
    
 Jupyter Notebook (Comprehensive Documentation)
 ==============================================

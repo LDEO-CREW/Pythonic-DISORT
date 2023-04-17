@@ -1,5 +1,5 @@
-from PyDISORT import subroutines
-from PyDISORT._loop_and_assemble_results import _loop_and_assemble_results
+from Pythonic-DISORT import subroutines
+from Pythonic-DISORT._loop_and_assemble_results import _loop_and_assemble_results
 import scipy as sc
 from math import pi
 from numpy.polynomial.legendre import Legendre

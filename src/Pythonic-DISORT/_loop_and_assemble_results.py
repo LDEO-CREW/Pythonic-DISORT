@@ -1,6 +1,6 @@
-from PyDISORT import subroutines
-from PyDISORT.subroutines import _mathscr_v
-from PyDISORT._one_Fourier_mode import _one_Fourier_mode 
+from Pythonic-DISORT import subroutines
+from Pythonic-DISORT.subroutines import _mathscr_v
+from Pythonic-DISORT._one_Fourier_mode import _one_Fourier_mode 
 from math import pi
 try:
     import autograd.numpy as np

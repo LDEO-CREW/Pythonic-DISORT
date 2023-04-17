@@ -1,3 +1,3 @@
-# Optional dependencies for the PyDISORT package
-# Install through "pip install -r PyDISORT_optional_dependencies.txt"
+# Optional dependencies for the Pythonic-DISORT package
+# Install through "pip install -r Pythonic-DISORT_optional_dependencies.txt"
 pytest
