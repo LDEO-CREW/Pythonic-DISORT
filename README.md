@@ -1,5 +1,5 @@
 # Introduction
-The Pythonic-DISORT package is a Discrete Ordinates Solver for the (1D) Radiative Transfer Equation in a single or multi-layer atmosphere.
+The PythonicDISORT package is a Discrete Ordinates Solver for the (1D) Radiative Transfer Equation in a single or multi-layer atmosphere.
 It is coded entirely in Python 3 and in as "Pythonic" a manner as possible: we vectorize as well as use list comprehension and `map` as much as possible. 
 
 It is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]) and has its main features: 
@@ -24,11 +24,11 @@ With PyTest installed, execute the console command `pytest` in the `pydisotest` 
 
 # Installation
 
-* From PyPI: `pip install Pythonic-DISORT`
+* From PyPI: `pip install PythonicDISORT`
 * From Conda-forge: (TODO: need to first publish on Conda-forge)
-* By cloning repository: `pip install .` in the `Pythonic-DISORT` directory; `pip install -r all_optional_dependencies.txt` to install all optional dependencies
+* By cloning repository: `pip install .` in the `PythonicDISORT` directory; `pip install -r all_optional_dependencies.txt` to install all optional dependencies
 
-## Requirements to run Pythonic-DISORT
+## Requirements to run PythonicDISORT
 * Python 3.8+
 * `numpy >= 1.17.3`
 * `scipy >= 1.8.0`
@@ -44,7 +44,7 @@ Our F2PY-wrapped Stamnes' DISORT (in the `disort4.0.99_f2py` directory) must als
 
 ## Compatibility
 
-The Pythonic-DISORT package should be system agnostic given its minimal dependencies and pure Python code.
+The PythonicDISORT package should be system agnostic given its minimal dependencies and pure Python code.
 We are not sure if the Jupyter Notebook or our F2PY-wrapped Stamnes' DISORT will run without issues on non-Windows systems.
 Everything was built and tested on Windows 11 and not yet tested on other systems.
 

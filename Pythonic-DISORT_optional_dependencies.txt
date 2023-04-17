@@ -1,3 +1,0 @@
-# Optional dependencies for the Pythonic-DISORT package
-# Install through "pip install -r Pythonic-DISORT_optional_dependencies.txt"
-pytest

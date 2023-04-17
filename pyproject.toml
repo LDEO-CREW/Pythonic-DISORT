@@ -7,7 +7,7 @@ dependencies = [
   "numpy>=1.17.3",
   "scipy>=1.8.0",
 ]
-name = "Pythonic-DISORT"
+name = "PythonicDISORT"
 version = "0.0.1"
 authors = [
   { name="Dion Ho", email="dh3065@columbia.edu" },
@@ -31,4 +31,4 @@ notebook_dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/LDEO-CREW/Pythonic-DISORT"
+"Homepage" = "https://github.com/LDEO-CREW/PythonicDISORT"
