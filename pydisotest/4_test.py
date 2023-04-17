@@ -1,6 +1,6 @@
 import numpy as np
-import PyDISORT
-from PyDISORT.subroutines import _compare
+import PythonicDISORT
+from PythonicDISORT.subroutines import _compare
 from math import pi
 
 # ======================================================================================================
@@ -56,8 +56,8 @@ def test_4b():
 
     ####################################################################################################
 
-    # Call PyDISORT
-    mu_arr, flux_up, flux_down, u = PyDISORT.pydisort(
+    # Call pydisort function
+    mu_arr, flux_up, flux_down, u = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,
@@ -153,8 +153,8 @@ def test_4c():
 
     ####################################################################################################
 
-    # Call PyDISORT
-    mu_arr, flux_up, flux_down, u = PyDISORT.pydisort(
+    # Call pydisort function
+    mu_arr, flux_up, flux_down, u = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,

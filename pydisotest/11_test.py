@@ -1,6 +1,6 @@
 import numpy as np
-import PyDISORT
-from PyDISORT.subroutines import _compare
+import PythonicDISORT
+from PythonicDISORT.subroutines import _compare
 from math import pi
 
 # ======================================================================================================
@@ -39,12 +39,12 @@ def test_11a():
     
     # Test points
     Nphi = int((NQuad * pi) // 2) * 2 + 1  
-    phi_arr, full_weights_phi = PyDISORT.subroutines.Clenshaw_Curtis_quad(Nphi)
+    phi_arr, full_weights_phi = PythonicDISORT.subroutines.Clenshaw_Curtis_quad(Nphi)
     Ntau = 1000
     tau_test_arr = np.sort(np.random.random(Ntau) * tau_arr[-1])
     
-    # Call PyDISORT
-    flux_up_1layer, flux_down_1layer, u_1layer = PyDISORT.pydisort(
+    # Call pydisort function
+    flux_up_1layer, flux_down_1layer, u_1layer = PythonicDISORT.pydisort(
         tau_arr[-1], omega_arr[0],
         NQuad,
         Leg_coeffs_all[0, :],
@@ -56,7 +56,7 @@ def test_11a():
         NT_cor=True,
     )[1:4]
 
-    flux_up_4layers, flux_down_4layers, u_4layers = PyDISORT.pydisort(
+    flux_up_4layers, flux_down_4layers, u_4layers = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,
