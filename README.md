@@ -26,7 +26,7 @@ With PyTest installed, execute the console command `pytest` in the `pydisotest` 
 
 * From PyPI: `pip install PythonicDISORT`
 * From Conda-forge: (TODO: need to first publish on Conda-forge)
-* By cloning repository: `pip install .` in the `PythonicDISORT` directory; `pip install -r all_optional_dependencies.txt` to install all optional dependencies
+* By cloning repository: `pip install .` in the `Pythonic-DISORT` directory; `pip install -r all_optional_dependencies.txt` to install all optional dependencies
 
 ## Requirements to run PythonicDISORT
 * Python 3.8+
