@@ -29,9 +29,12 @@ def pydisort(
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
     and sources. Optionally performs delta-M scaling and NT corrections. 
+    
     See https://pythonic-disort.readthedocs.io/en/latest/PythonicDISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters 
     for a more detailed explanation of each parameter.
-
+    See https://pythonic-disort.readthedocs.io/en/latest/PythonicDISORT.html#3.7-The-full-solution
+    for a more detailed explanation of each output.
+    
 
     Parameters
     ----------
@@ -100,9 +103,9 @@ def pydisort(
     # Setup
     # --------------------------------------------------------------------------------------------------------------------------
     NLayers = len(tau_arr)
-    if NLeg == None:
+    if NLeg is None:
         NLeg = NQuad
-    if NLoops == None:
+    if NLoops is None:
         NLoops = NQuad
     scalar_b_pos = False
     scalar_b_neg = False

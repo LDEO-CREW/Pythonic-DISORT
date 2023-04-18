@@ -55,7 +55,7 @@ def test_1a():
     # The size of the region can be changed using the parameter below
     mu_around_beam_to_not_compare = 0.1
     mu_to_compare = np.abs(np.abs(mu_arr_RO) - mu0) > mu_around_beam_to_not_compare
-    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
     results = np.load("Stamnes_results/1a_test.npz")
@@ -127,7 +127,7 @@ def test_1c():
     # The size of the region can be changed using the parameter below
     mu_around_beam_to_not_compare = 0.1
     mu_to_compare = np.abs(np.abs(mu_arr_RO) - mu0) > mu_around_beam_to_not_compare
-    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
     results = np.load("Stamnes_results/1c_test.npz")
@@ -199,7 +199,7 @@ def test_1d():
     # The size of the region can be changed using the parameter below
     mu_around_beam_to_not_compare = 0.1
     mu_to_compare = np.abs(np.abs(mu_arr_RO) - mu0) > mu_around_beam_to_not_compare
-    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
     results = np.load("Stamnes_results/1d_test.npz")
@@ -271,7 +271,7 @@ def test_1f():
     # The size of the region can be changed using the parameter below
     mu_around_beam_to_not_compare = 0.1
     mu_to_compare = np.abs(np.abs(mu_arr_RO) - mu0) > mu_around_beam_to_not_compare
-    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
     results = np.load("Stamnes_results/1f_test.npz")
