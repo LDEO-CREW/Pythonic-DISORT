@@ -10,7 +10,7 @@ This repository also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) i
 The original was downloaded from http://www.rtatmocn.com/disort/. The wrapper was inspired by https://github.com/kconnour/pyRT_DISORT.
 
 # Documentation
-https://pythonic-disort.readthedocs.io/en/latest/
+https://pythonic-disort.readthedocs.io/
 
 Also see the accompanying Jupyter Notebook: `Pythonic-DISORT.ipynb` in the `docs` directory 
 at https://github.com/LDEO-CREW/Pythonic-DISORT.

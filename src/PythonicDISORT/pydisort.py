@@ -30,9 +30,9 @@ def pydisort(
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
     and sources. Optionally performs delta-M scaling and NT corrections. 
     
-        See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters
+        See https://pythonic-disort.readthedocs.io/Pythonic-DISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters
         for a more detailed explanation of each parameter.
-        See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#3.7-The-full-solution
+        See https://pythonic-disort.readthedocs.io/Pythonic-DISORT.html#2.-PythonicDISORT-modules-and-outputs
         for a more detailed explanation of each output.
 
     Parameters
