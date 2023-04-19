@@ -1,6 +1,7 @@
 # Requirements for ReadTheDocs, not the PythonicDISORT package
 
-PythonicDISORT
+numpy
+scipy
 autograd
 ipython
 matplotlib

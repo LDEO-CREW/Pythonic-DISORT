@@ -150,8 +150,8 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
 
 def generate_FD_mat(Ntau, a, b):
     """Generates a sparse first derivative matrix in `csr` format with second-order accuracy
-    on [a,b] with Ntau grid points.
-    We use second order forward and backward differences at the boundaries.
+    on [a,b] with `Ntau` grid points.
+    We use second order forward or backward differences at the boundaries.
 
     Parameters
     ----------
