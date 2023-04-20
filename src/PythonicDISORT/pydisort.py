@@ -34,6 +34,9 @@ def pydisort(
         for a more detailed explanation of each parameter.
         See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#2.-PythonicDISORT-modules-and-outputs
         for a more detailed explanation of each output.
+        See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#3.7.3-Verification-of-NT-corrected-full-solution
+        and https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#3.7.1-Verification-of-full-solution-without-corrections
+        for examples of calls to this function.
 
     Parameters
     ----------
@@ -396,11 +399,11 @@ def pydisort(
             # We provide two options below, comment and uncomment as desired.
             # Option 1 is more computationally efficient but would prevent the use of autograd for testing.
 
-            NT_corrections = NT_corrections + np.concatenate(
-                [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
-            )  # Option 1
+            #NT_corrections = NT_corrections + np.concatenate(
+            #    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
+            #)  # Option 1
 
-            #NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
+            NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
 
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
