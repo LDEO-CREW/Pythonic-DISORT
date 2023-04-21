@@ -34,9 +34,7 @@ def pydisort(
         for a more detailed explanation of each parameter.
         See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#2.-PythonicDISORT-modules-and-outputs
         for a more detailed explanation of each output.
-        See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#3.7.3-Verification-of-NT-corrected-full-solution
-        and https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#3.7.1-Verification-of-full-solution-without-corrections
-        for examples of calls to this function.
+        The notebook also has numerous examples of this function being called.
 
     Parameters
     ----------
