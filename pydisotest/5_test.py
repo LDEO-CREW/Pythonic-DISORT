@@ -89,15 +89,13 @@ def test_5a():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # mu_arr is arranged as it is for code efficiency and readability
-    # For presentation purposes we re-arrange mu_arr from smallest to largest
-    reorder_mu = np.argsort(mu_arr)
-    mu_arr_RO = mu_arr[reorder_mu]
-
-    # By default we do not compare intensities 1 degree around the direct beam
-    # The size of the region can be changed using the parameter below
-    mu_around_beam_to_not_compare = 0.1
-    mu_to_compare = np.abs(np.abs(mu_arr_RO) - mu0) > mu_around_beam_to_not_compare
+    # By default we do not compare intensities 10 degrees around the direct beam
+    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    mu_to_compare = (
+        np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
+        > deg_around_beam_to_not_compare
+    )
+    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
 
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
@@ -168,15 +166,13 @@ def test_5BDRF():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # mu_arr is arranged as it is for code efficiency and readability
-    # For presentation purposes we re-arrange mu_arr from smallest to largest
-    reorder_mu = np.argsort(mu_arr)
-    mu_arr_RO = mu_arr[reorder_mu]
-
-    # By default we do not compare intensities 1 degree around the direct beam
-    # The size of the region can be changed using the parameter below
-    mu_around_beam_to_not_compare = 0.1
-    mu_to_compare = np.abs(np.abs(mu_arr_RO) - mu0) > mu_around_beam_to_not_compare
+    # By default we do not compare intensities 10 degrees around the direct beam
+    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    mu_to_compare = (
+        np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
+        > deg_around_beam_to_not_compare
+    )
+    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
 
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison

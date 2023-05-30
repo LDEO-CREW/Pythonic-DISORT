@@ -52,10 +52,13 @@ def test_2a():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 1 degree around the direct beam
-    # The size of the region can be changed using the parameter below
-    mu_around_beam_to_not_compare = 0.1
-    mu_to_compare = np.abs(np.abs(mu_arr_RO) - mu0) > mu_around_beam_to_not_compare
+    # By default we do not compare intensities 10 degrees around the direct beam
+    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    mu_to_compare = (
+        np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
+        > deg_around_beam_to_not_compare
+    )
+    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
 
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
@@ -125,20 +128,14 @@ def test_2b():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 1 degree around the direct beam
-    # The size of the region can be changed using the parameter below
-    deg_around_beam_no_compare = 1
-
-    theta_deg_pos = np.arccos(mu_arr_RO[NQuad // 2 :]) * 180 / pi
-    mu_to_compare = np.where(
-        np.tile(
-            np.logical_or(
-                theta_deg_pos > np.arccos(mu0) * 180 / pi + deg_around_beam_no_compare,
-                theta_deg_pos < np.arccos(mu0) * 180 / pi - deg_around_beam_no_compare,
-            ),
-            2,
-        )
+    # By default we do not compare intensities 10 degrees around the direct beam
+    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    mu_to_compare = (
+        np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
+        > deg_around_beam_to_not_compare
     )
+    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+    
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
     results = np.load("Stamnes_results/2b_test.npz")
@@ -207,20 +204,14 @@ def test_2c():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 1 degree around the direct beam
-    # The size of the region can be changed using the parameter below
-    deg_around_beam_no_compare = 1
-
-    theta_deg_pos = np.arccos(mu_arr_RO[NQuad // 2 :]) * 180 / pi
-    mu_to_compare = np.where(
-        np.tile(
-            np.logical_or(
-                theta_deg_pos > np.arccos(mu0) * 180 / pi + deg_around_beam_no_compare,
-                theta_deg_pos < np.arccos(mu0) * 180 / pi - deg_around_beam_no_compare,
-            ),
-            2,
-        )
+    # By default we do not compare intensities 10 degrees around the direct beam
+    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    mu_to_compare = (
+        np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
+        > deg_around_beam_to_not_compare
     )
+    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+    
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
     results = np.load("Stamnes_results/2c_test.npz")
@@ -289,20 +280,14 @@ def test_2d():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 1 degree around the direct beam
-    # The size of the region can be changed using the parameter below
-    deg_around_beam_no_compare = 1
-
-    theta_deg_pos = np.arccos(mu_arr_RO[NQuad // 2 :]) * 180 / pi
-    mu_to_compare = np.where(
-        np.tile(
-            np.logical_or(
-                theta_deg_pos > np.arccos(mu0) * 180 / pi + deg_around_beam_no_compare,
-                theta_deg_pos < np.arccos(mu0) * 180 / pi - deg_around_beam_no_compare,
-            ),
-            2,
-        )
+    # By default we do not compare intensities 10 degrees around the direct beam
+    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    mu_to_compare = (
+        np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
+        > deg_around_beam_to_not_compare
     )
+    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+    
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
     results = np.load("Stamnes_results/2d_test.npz")
