@@ -32,9 +32,7 @@ def _one_Fourier_mode(
     # --------------------------------------------------------------------------------------------------------------------------
     ells = np.arange(m, NLeg)
     degree_tile = np.tile(ells, (N, 1)).T
-    fac = np.prod(
-        ells[:, None] + np.arange(-m + 1, m + 1)[None, :], axis=-1, dtype=np.float64
-    )
+    fac = sc.special.poch(ells + m + 1, -2 * m)
     signs = np.empty(NLeg - m)
     signs[::2] = 1
     signs[1::2] = -1
@@ -47,16 +45,16 @@ def _one_Fourier_mode(
     # Generate mathscr_D and mathscr_X (BDRF terms)
     # --------------------------------------------------------------------------------------------------------------------------
     # If h_\ell = 0 for all \ell \geq m, then there is no BDRF contribution
-    if m < NBDRF:
+    if m < NBDRF and np.all(np.isfinite(asso_leg_term_pos[:NBDRF, :])):
         weighted_asso_Leg_coeffs_BDRF = (
-            weighted_Leg_coeffs_BDRF[ells[: (NBDRF - m)]] / fac[: (NBDRF - m)]
+            weighted_Leg_coeffs_BDRF[ells[: (NBDRF - m)]] * fac[: (NBDRF - m)]
         )
-
         mathscr_D_temp = (
             weighted_asso_Leg_coeffs_BDRF[None, :] * asso_leg_term_pos.T[:, :NBDRF]
         )
         mathscr_D_neg = 2 * mathscr_D_temp @ asso_leg_term_neg[:NBDRF, :]
         R = mathscr_D_neg * (mu_arr_pos * W)[None, :]
+
         if I0 > 0:
             mathscr_X_temp = (
                 (mu0 * I0 * (2 - (m == 0)) / pi)
@@ -65,7 +63,7 @@ def _one_Fourier_mode(
             )
             mathscr_X_pos = mathscr_X_temp @ asso_leg_term_pos[:NBDRF, :]
     # --------------------------------------------------------------------------------------------------------------------------
-    
+
     # Loop over NLayers atmospheric layers
     # --------------------------------------------------------------------------------------------------------------------------
     if Nscoeffs > 0 and m == 0:
@@ -74,16 +72,17 @@ def _one_Fourier_mode(
     K_collect_m = np.empty((NLayers, NQuad))
     if I0 > 0:
         B_collect_m = np.zeros((NLayers, NQuad))
-        
+
     for l in range(NLayers):
         # More setup
-        weighted_scaled_Leg_coeffs_l_ells = weighted_scaled_Leg_coeffs[l, :][ells]
+        weighted_asso_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, :][ells] * fac
         scaled_omega_l = scaled_omega_arr[l]
-        if not np.allclose(weighted_scaled_Leg_coeffs_l_ells, 0):
+        
+        if np.any(weighted_asso_Leg_coeffs_l > 0) and np.all(
+            np.isfinite(asso_leg_term_pos)
+        ):
             # Generate mathscr_D and mathscr_X (BDRF terms)
             # --------------------------------------------------------------------------------------------------------------------------
-            weighted_asso_Leg_coeffs_l = weighted_scaled_Leg_coeffs_l_ells / fac
-
             D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
             D_pos = (scaled_omega_l / 2) * D_temp @ asso_leg_term_pos
             D_neg = (scaled_omega_l / 2) * D_temp @ asso_leg_term_neg
@@ -97,7 +96,7 @@ def _one_Fourier_mode(
                 X_pos = X_temp @ asso_leg_term_pos
                 X_neg = X_temp @ asso_leg_term_neg
             # --------------------------------------------------------------------------------------------------------------------------
-            
+
             # Assemble the coefficient matrix and additional terms
             # --------------------------------------------------------------------------------------------------------------------------
             alpha = M_inv[:, None] * (D_pos * W[None, :] - np.eye(N))
@@ -106,7 +105,7 @@ def _one_Fourier_mode(
             if I0 > 0:
                 X_tilde = np.concatenate([-M_inv * X_pos, M_inv * X_neg])
             # --------------------------------------------------------------------------------------------------------------------------
-            
+
             # Diagonalization of coefficient matrix
             # --------------------------------------------------------------------------------------------------------------------------
             K_squared, eigenvecs_GpG = np.linalg.eig((alpha - beta) @ (alpha + beta))
@@ -124,10 +123,10 @@ def _one_Fourier_mode(
             if Nscoeffs > 0 and m == 0:
                 G_inv = np.linalg.inv(G)
             # --------------------------------------------------------------------------------------------------------------------------
-            
+
             # Particular solution for the sunbeam source
             # --------------------------------------------------------------------------------------------------------------------------
-            if I0 > 0:    
+            if I0 > 0:
                 if Nscoeffs > 0 and m == 0:
                     B = -G / (1 / mu0 + K)[None, :] @ G_inv @ X_tilde
                 else:
@@ -135,7 +134,7 @@ def _one_Fourier_mode(
                     LHS = A.copy()
                     np.fill_diagonal(LHS, 1 / mu0 + np.diag(A))
                     B = np.linalg.solve(LHS, -X_tilde)
-                
+
                 B_collect_m[l, :] = B
             # --------------------------------------------------------------------------------------------------------------------------
         else:
@@ -146,7 +145,7 @@ def _one_Fourier_mode(
             G[:N, N:] = np.eye(N)
             if Nscoeffs > 0 and m == 0:
                 G_inv = G
-        
+
         G_collect_m[l, :, :] = G
         K_collect_m[l, :] = K
         if Nscoeffs > 0 and m == 0:

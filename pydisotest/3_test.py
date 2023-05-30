@@ -4,7 +4,7 @@ from PythonicDISORT.subroutines import _compare
 from math import pi
 
 # ======================================================================================================
-# Test Problem 1:  Isotropic Scattering
+# Test Problem 3:  Henyey-Greenstein Scattering
 # ======================================================================================================
 
 def test_3a():
