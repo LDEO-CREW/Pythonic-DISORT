@@ -5,4 +5,3 @@ pytest
 autograd
 jupyter
 notebook
-ipympl
