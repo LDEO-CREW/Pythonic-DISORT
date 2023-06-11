@@ -2,6 +2,7 @@
 
 numpy
 scipy
+joblib
 autograd
 ipython
 matplotlib
