@@ -14,7 +14,7 @@ def test_3a():
     ######################################### PYDISORT ARGUMENTS #######################################
 
     tau_arr = 1
-    omega_arr = 0.99  # Reduced from 1 because we have not implemented that special case
+    omega_arr = 1 - 1e-4  # Reduced from 1 because we have not implemented that special case
     NQuad = 16
     Leg_coeffs_all = 0.75 ** np.arange(32)
     mu0 = 1
@@ -90,7 +90,7 @@ def test_3b():
     ######################################### PYDISORT ARGUMENTS #######################################
 
     tau_arr = 8
-    omega_arr = 0.99  # Reduced from 1 because we have not implemented that special case
+    omega_arr = 1 - 1e-4  # Reduced from 1 because we have not implemented that special case
     NQuad = 16
     Leg_coeffs_all = 0.75 ** np.arange(32)
     mu0 = 1

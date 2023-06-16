@@ -50,8 +50,8 @@ def test_5a():
     print()
     ######################################### PYDISORT ARGUMENTS #######################################
 
-    tau_arr = 1
-    omega_arr = 0.99 # Reduced from 1 because we have not implemented that special case
+    tau_arr = 64
+    omega_arr = 1 - 1e-4 # Reduced from 1 because we have not implemented that special case
     NQuad = 48
     Leg_coeffs_all = Leg_coeffs_ALL / (2 * np.arange(300) + 1)
     mu0 = 1
@@ -120,14 +120,90 @@ def test_5a():
     # --------------------------------------------------------------------------------------------------
     
     
+def test_5b():
+    print()
+    print("################################################ Test 5b ##################################################")
+    print()
+    ######################################### PYDISORT ARGUMENTS #######################################
+
+    tau_arr = 64
+    omega_arr = 0.9
+    NQuad = 48
+    Leg_coeffs_all = Leg_coeffs_ALL / (2 * np.arange(300) + 1)
+    mu0 = 1
+    I0 = pi
+    phi0 = 0
+
+    # Optional (used)
+    f_arr = Leg_coeffs_all[NQuad]
+    NT_cor = True
+
+    # Optional (unused)
+    NLeg=None
+    NLoops=None
+    b_pos=0
+    b_neg=0
+    only_flux=False
+    Leg_coeffs_BDRF=np.array([])
+    s_poly_coeffs=np.array([[]])
+    use_sparse_NLayers=6
+
+    ####################################################################################################
+
+    # Call pydisort function
+    mu_arr, flux_up, flux_down, u = PythonicDISORT.pydisort(
+        tau_arr, omega_arr,
+        NQuad,
+        Leg_coeffs_all,
+        mu0, I0, phi0,
+        f_arr=f_arr,
+        NT_cor=NT_cor,
+    )
+    
+    # mu_arr is arranged as it is for code efficiency and readability
+    # For presentation purposes we re-arrange mu_arr from smallest to largest
+    reorder_mu = np.argsort(mu_arr)
+    mu_arr_RO = mu_arr[reorder_mu]
+
+    # By default we do not compare intensities 10 degrees around the direct beam
+    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    mu_to_compare = (
+        np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
+        > deg_around_beam_to_not_compare
+    )
+    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+
+    
+    # Load results from version 4.0.99 of Stamnes' DISORT for comparison
+    results = np.load("Stamnes_results/5b_test.npz")
+    
+    # Perform the comparisons
+    (
+        diff_flux_up,
+        ratio_flux_up,
+        diff_flux_down_diffuse,
+        ratio_flux_down_diffuse,
+        diff_flux_down_direct,
+        ratio_flux_down_direct,
+        diff,
+        diff_ratio,
+    ) = _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u)
+    
+    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-2 / pi
+    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-2 / pi
+    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-2 / pi
+    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
+    # --------------------------------------------------------------------------------------------------    
+    
+    
 def test_5BDRF():
     print()
     print("################################################ Test 5BDRF ##################################################")
     print()
     ######################################### PYDISORT ARGUMENTS #######################################
 
-    tau_arr = 1
-    omega_arr = 0.99 # Reduced from 1 because we have not implemented that special case
+    tau_arr = 64
+    omega_arr = 1 - 1e-4 # Reduced from 1 because we have not implemented that special case
     NQuad = 48
     Leg_coeffs_all = Leg_coeffs_ALL / (2 * np.arange(300) + 1)
     mu0 = 1

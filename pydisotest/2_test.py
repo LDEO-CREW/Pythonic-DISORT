@@ -90,7 +90,7 @@ def test_2b():
     ######################################### PYDISORT ARGUMENTS #######################################
 
     tau_arr = 0.2
-    omega_arr = 0.99 # Reduced from 1 because we have not implemented that special case
+    omega_arr = 1 - 1e-4 # Reduced from 1 because we have not implemented that special case
     NQuad = 16
     Leg_coeffs_all = np.zeros(17)
     Leg_coeffs_all[0] = 1
@@ -242,7 +242,7 @@ def test_2d():
     ######################################### PYDISORT ARGUMENTS #######################################
 
     tau_arr = 5
-    omega_arr = 0.99 # Reduced from 1 because we have not implemented that special case
+    omega_arr = 1 - 1e-4 # Reduced from 1 because we have not implemented that special case
     NQuad = 16
     Leg_coeffs_all = np.zeros(17)
     Leg_coeffs_all[0] = 1

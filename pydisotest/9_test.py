@@ -12,8 +12,10 @@ def test_9a():
     print()
     ######################################### PYDISORT ARGUMENTS #######################################
 
-    tau_arr = np.arange(1, 7)
-    omega_arr = 0.6 + tau_arr * 0.05
+    tau_arr = np.empty(6)
+    for i in range(6):
+        tau_arr[i] = np.sum(np.arange(i + 2))
+    omega_arr = 0.6 + np.arange(1, 7) * 0.05
     NQuad = 8
     Leg_coeffs_all = np.zeros((6, 9))
     Leg_coeffs_all[:, 0] = 1
@@ -88,8 +90,10 @@ def test_9b():
     print()
     ######################################### PYDISORT ARGUMENTS #######################################
 
-    tau_arr = np.arange(1, 7)
-    omega_arr = 0.6 + tau_arr * 0.05
+    tau_arr = np.empty(6)
+    for i in range(6):
+        tau_arr[i] = np.sum(np.arange(i + 2))
+    omega_arr = 0.6 + np.arange(1, 7) * 0.05
     NQuad = 8
     Leg_coeffs_all = np.tile(
         np.array(
