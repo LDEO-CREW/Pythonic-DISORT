@@ -44,7 +44,7 @@ def test_11a():
     tau_test_arr = np.sort(np.random.random(Ntau) * tau_arr[-1])
     
     # Call pydisort function
-    flux_up_1layer, flux_down_1layer, u_1layer = PythonicDISORT.pydisort(
+    flux_up_1layer, flux_down_1layer, u0, u_1layer = PythonicDISORT.pydisort(
         tau_arr[-1], omega_arr[0],
         NQuad,
         Leg_coeffs_all[0, :],
@@ -54,9 +54,9 @@ def test_11a():
         f_arr=f_arr[0],
         s_poly_coeffs=s_poly_coeffs[0, :],
         NT_cor=True,
-    )[1:4]
+    )[1:]
 
-    flux_up_4layers, flux_down_4layers, u_4layers = PythonicDISORT.pydisort(
+    flux_up_4layers, flux_down_4layers, u0, u_4layers = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,
@@ -66,7 +66,7 @@ def test_11a():
         f_arr=f_arr,
         s_poly_coeffs=s_poly_coeffs,
         NT_cor=True,
-    )[1:4]
+    )[1:]
     
     assert np.allclose(flux_up_1layer(tau_test_arr), flux_up_4layers(tau_test_arr))
     assert np.allclose(flux_down_1layer(tau_test_arr), flux_down_4layers(tau_test_arr))
