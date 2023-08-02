@@ -40,7 +40,7 @@ def test_2a():
     ####################################################################################################
 
     # Call pydisort function
-    mu_arr, flux_up, flux_down, u = PythonicDISORT.pydisort(
+    mu_arr, flux_up, flux_down, u0, u = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,
@@ -58,7 +58,7 @@ def test_2a():
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
         > deg_around_beam_to_not_compare
     )
-    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+    
 
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
@@ -76,10 +76,10 @@ def test_2a():
         diff_ratio,
     ) = _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u)
     
-    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-2 / pi
-    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-2 / pi
-    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-2 / pi
-    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
+    assert np.max(ratio_flux_up[diff_flux_up > 1e-3], initial=0) < 1e-3
+    assert np.max(ratio_flux_down_diffuse[diff_flux_down_diffuse > 1e-3], initial=0) < 1e-3
+    assert np.max(ratio_flux_down_direct[diff_flux_down_direct > 1e-3], initial=0) < 1e-3
+    assert np.max(diff_ratio[diff > 1e-3], initial=0) < 1e-2
     # --------------------------------------------------------------------------------------------------
     
     
@@ -90,7 +90,7 @@ def test_2b():
     ######################################### PYDISORT ARGUMENTS #######################################
 
     tau_arr = 0.2
-    omega_arr = 1 - 1e-4 # Reduced from 1 because we have not implemented that special case
+    omega_arr = 1 - 1e-6 # Reduced from 1 because we have not implemented that special case
     NQuad = 16
     Leg_coeffs_all = np.zeros(17)
     Leg_coeffs_all[0] = 1
@@ -116,7 +116,7 @@ def test_2b():
     ####################################################################################################
 
     # Call pydisort function
-    mu_arr, flux_up, flux_down, u = PythonicDISORT.pydisort(
+    mu_arr, flux_up, flux_down, u0, u = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,
@@ -134,7 +134,7 @@ def test_2b():
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
         > deg_around_beam_to_not_compare
     )
-    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+    
     
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
@@ -152,10 +152,10 @@ def test_2b():
         diff_ratio,
     ) = _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u)
     
-    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-2 / pi
-    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-2 / pi
-    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-2 / pi
-    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
+    assert np.max(ratio_flux_up[diff_flux_up > 1e-3], initial=0) < 1e-3
+    assert np.max(ratio_flux_down_diffuse[diff_flux_down_diffuse > 1e-3], initial=0) < 1e-3
+    assert np.max(ratio_flux_down_direct[diff_flux_down_direct > 1e-3], initial=0) < 1e-3
+    assert np.max(diff_ratio[diff > 1e-3], initial=0) < 1e-2
     # --------------------------------------------------------------------------------------------------
     
 
@@ -192,7 +192,7 @@ def test_2c():
     ####################################################################################################
 
     # Call pydisort function
-    mu_arr, flux_up, flux_down, u = PythonicDISORT.pydisort(
+    mu_arr, flux_up, flux_down, u0, u = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,
@@ -210,7 +210,7 @@ def test_2c():
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
         > deg_around_beam_to_not_compare
     )
-    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+    
     
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
@@ -228,10 +228,10 @@ def test_2c():
         diff_ratio,
     ) = _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u)
     
-    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-2 / pi
-    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-2 / pi
-    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-2 / pi
-    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
+    assert np.max(ratio_flux_up[diff_flux_up > 1e-3], initial=0) < 1e-3
+    assert np.max(ratio_flux_down_diffuse[diff_flux_down_diffuse > 1e-3], initial=0) < 1e-3
+    assert np.max(ratio_flux_down_direct[diff_flux_down_direct > 1e-3], initial=0) < 1e-3
+    assert np.max(diff_ratio[diff > 1e-3], initial=0) < 1e-2
     # --------------------------------------------------------------------------------------------------
     
     
@@ -242,7 +242,7 @@ def test_2d():
     ######################################### PYDISORT ARGUMENTS #######################################
 
     tau_arr = 5
-    omega_arr = 1 - 1e-4 # Reduced from 1 because we have not implemented that special case
+    omega_arr = 1 - 1e-6 # Reduced from 1 because we have not implemented that special case
     NQuad = 16
     Leg_coeffs_all = np.zeros(17)
     Leg_coeffs_all[0] = 1
@@ -268,7 +268,7 @@ def test_2d():
     ####################################################################################################
 
     # Call pydisort function
-    mu_arr, flux_up, flux_down, u = PythonicDISORT.pydisort(
+    mu_arr, flux_up, flux_down, u0, u = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,
@@ -286,7 +286,7 @@ def test_2d():
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
         > deg_around_beam_to_not_compare
     )
-    mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+    
     
     
     # Load results from version 4.0.99 of Stamnes' DISORT for comparison
@@ -304,8 +304,8 @@ def test_2d():
         diff_ratio,
     ) = _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u)
     
-    assert np.max(ratio_flux_up) <= 1e-3 or np.max(diff_flux_up) <= 1e-2 / pi
-    assert np.max(ratio_flux_down_diffuse) <= 1e-3 or np.max(diff_flux_down_diffuse) <= 1e-2 / pi
-    assert np.max(ratio_flux_down_direct) <= 1e-3 or np.max(diff_flux_down_direct) <= 1e-2 / pi
-    assert np.max(diff_ratio) <= 1e-2 or np.max(diff) <= 1e-2
+    assert np.max(ratio_flux_up[diff_flux_up > 1e-3], initial=0) < 1e-3
+    assert np.max(ratio_flux_down_diffuse[diff_flux_down_diffuse > 1e-3], initial=0) < 1e-3
+    assert np.max(ratio_flux_down_direct[diff_flux_down_direct > 1e-3], initial=0) < 1e-3
+    assert np.max(diff_ratio[diff > 1e-3], initial=0) < 1e-2
     # --------------------------------------------------------------------------------------------------

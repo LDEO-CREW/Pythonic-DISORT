@@ -142,6 +142,8 @@ def _loop_and_assemble_results(
         def u(tau, phi, return_Fourier_error=False):
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
+            assert np.all(tau >= 0)
+            assert np.all(tau <= tau_arr[-1])
             
             # Atmospheric layer indices
             l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
@@ -222,6 +224,58 @@ def _loop_and_assemble_results(
                 return intensities
         # --------------------------------------------------------------------------------------------------------------------------
     
+    # Construct u0
+    # --------------------------------------------------------------------------------------------------------------------------
+    def u0(tau):
+        tau = np.atleast_1d(tau)
+        assert np.all(tau >= 0)
+        assert np.all(tau <= tau_arr[-1])
+        
+        # Atmospheric layer indices
+        l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
+        scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
+        scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
+
+        # Delta-M scaling
+        if np.any(scale_tau != np.ones(NLayers)):
+            tau_dist_from_top = tau_arr[l] - tau
+            scaled_tau_dist_from_top = tau_dist_from_top * scale_tau[l]
+            scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
+        else:
+            scaled_tau = tau
+
+        exponent = np.concatenate(
+            [
+                K_collect_0[l, :N] * (scaled_tau - scaled_tau_arr_lm1)[:, None],
+                K_collect_0[l, N:] * (scaled_tau - scaled_tau_arr_l)[:, None],
+            ],
+            axis=-1,
+        )
+        if I0 > 0:
+            u0 = np.einsum(
+                "tij, tj -> it", GC_collect_0[l, :, :], np.exp(exponent), optimize=True
+            ) + B_collect_0[l, :].T * np.exp(-scaled_tau[None, :] / mu0)
+        else:
+            u0 = np.einsum(
+                "tij, tj -> it", GC_collect_0[l, :, :], np.exp(exponent), optimize=True
+            )
+        
+        # Contribution from particular solution for isotropic internal sources
+        if Nscoeffs > 0:
+            _mathscr_v_contribution = _mathscr_v(
+                tau, l,
+                s_poly_coeffs,
+                Nscoeffs,
+                G_collect_0,
+                K_collect_0,
+                G_inv_collect_0,
+                mu_arr,
+            )
+            u0 += _mathscr_v_contribution
+            
+        return np.squeeze(u0)
+    # --------------------------------------------------------------------------------------------------------------------------
+    
     # Construct the flux functions
     # --------------------------------------------------------------------------------------------------------------------------
     GC_pos = GC_collect_0[:, :N, :]
@@ -233,6 +287,8 @@ def _loop_and_assemble_results(
 
     def flux_up(tau):
         tau = np.atleast_1d(tau)
+        assert np.all(tau >= 0)
+        assert np.all(tau <= tau_arr[-1])
         
         # Atmospheric layer indices
         l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
@@ -283,6 +339,8 @@ def _loop_and_assemble_results(
 
     def flux_down(tau):
         tau = np.atleast_1d(tau)
+        assert np.all(tau >= 0)
+        assert np.all(tau <= tau_arr[-1])
 
         # Atmospheric layer indices
         l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
@@ -343,6 +401,6 @@ def _loop_and_assemble_results(
         # --------------------------------------------------------------------------------------------------------------------------
 
     if only_flux:
-        return flux_up, flux_down
+        return flux_up, flux_down, u0
     else:
-        return flux_up, flux_down, u
+        return flux_up, flux_down, u0, u
