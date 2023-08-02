@@ -112,8 +112,13 @@ def _one_Fourier_mode(
             # Diagonalization of coefficient matrix
             # --------------------------------------------------------------------------------------------------------------------------
             K_squared, eigenvecs_GpG = np.linalg.eig((alpha - beta) @ (alpha + beta))
-            if np.any(np.isclose(K_squared, 0)):
-                warn("Some single-scattering albedos are too close to 1. Results may be inaccurate.")
+            if m == 0:
+                if np.any(np.isclose(K_squared, 0)):
+                    warn(
+                        "Single-scattering albedo for layer "
+                        + str(l)
+                        + " (counting from 0) is too close to 1. Results may be inaccurate."
+                    )
 
             # Eigenvalues arranged negative then positive, from largest to smallest magnitude
             K = np.concatenate([-np.sqrt(K_squared), np.sqrt(K_squared)])

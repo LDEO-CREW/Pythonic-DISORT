@@ -123,6 +123,7 @@ def pydisort(
     thickness_arr = np.concatenate([[tau_arr[0]], np.diff(tau_arr)])
     Nscoeffs = np.shape(s_poly_coeffs)[1]
     NLeg_all = np.shape(Leg_coeffs_all)[1]
+    N = NQuad // 2
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Input checks
@@ -154,7 +155,6 @@ def pydisort(
     assert NLoops <= NLeg
     # Not strictly necessary but there will be tremendous inaccuracies if this is violated
     assert NQuad >= NLeg
-    N = NQuad // 2
     # We require principal angles and a downward incident beam
     assert I0 >= 0
     if I0 > 0:
