@@ -93,7 +93,7 @@ def pydisort(
     function
         Zeroth Fourier mode of the intensity with argument tau (type: array).
         Returns an ndarray with axes corresponding to (mu, tau) variation.
-        This function is useful for calculating actinic flux or other intensity moments
+        This function is useful for calculating actinic flux and other quantities of interest
         but reclassification of delta-scaled flux and other corrections must be done manually.
     function, optional
         Intensity function with arguments (tau, phi, return_Fourier_error=False) of types (array, array, bool).
