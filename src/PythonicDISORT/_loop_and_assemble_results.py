@@ -16,7 +16,7 @@ def _loop_and_assemble_results(
     NLayers, NBDRF,
     weighted_scaled_Leg_coeffs,
     weighted_Leg_coeffs_BDRF,
-    mu0, I0, phi0,
+    mu0, I0, I0_orig, phi0,
     b_pos, b_neg,
     scalar_b_pos, scalar_b_neg,
     s_poly_coeffs,
@@ -196,6 +196,7 @@ def _loop_and_assemble_results(
                     optimize=True,
                 )
             )
+            intensities[np.isclose(intensities, 0)] = 0
 
             if return_Fourier_error:
                 exponent = np.concatenate(
@@ -219,9 +220,9 @@ def _loop_and_assemble_results(
                         / np.clip(intensities, a_min=1e-15, a_max=None)
                     )
                 )
-                return intensities, Fourier_error
+                return I0_orig * intensities, Fourier_error
             else:
-                return intensities
+                return I0_orig * intensities
         # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct u0
@@ -272,8 +273,9 @@ def _loop_and_assemble_results(
                 mu_arr,
             )
             u0 += _mathscr_v_contribution
-            
-        return np.squeeze(u0)
+        
+        u0[np.isclose(u0, 0)] = 0
+        return I0_orig * np.squeeze(u0)
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct the flux functions
@@ -333,8 +335,10 @@ def _loop_and_assemble_results(
             + direct_beam_contribution
             + _mathscr_v_contribution
         )
-                  
-        return np.squeeze(2 * pi * (mu_arr_pos * W) @ u0_pos)[()]
+        
+        flux = np.squeeze(2 * pi * (mu_arr_pos * W) @ u0_pos)[()]
+        flux[np.isclose(flux, 0)] = 0
+        return I0_orig * flux
 
 
     def flux_down(tau):
@@ -372,10 +376,13 @@ def _loop_and_assemble_results(
             direct_beam_contribution = B_neg[:, l] * np.exp(-scaled_tau[None, :] / mu0)
             direct_beam = I0 * mu0 * np.exp(-tau / mu0)
             direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0)
+            direct_beam_ignoreI0 = mu0 * np.exp(-tau / mu0)
+            direct_beam_ignoreI0[np.isclose(direct_beam_ignoreI0, 0)] = 0
         else:
             direct_beam_contribution = 0
             direct_beam = 0
             direct_beam_scaled = 0
+            direct_beam_ignoreI0 = np.empty_like(tau)
         
         exponent = np.concatenate(
             [
@@ -390,13 +397,13 @@ def _loop_and_assemble_results(
             + _mathscr_v_contribution
         )
         
+        diffuse_flux = np.squeeze(
+            2 * pi * (mu_arr_pos * W) @ u0_neg + direct_beam_scaled - direct_beam
+        )[()]
+        diffuse_flux[np.isclose(diffuse_flux, 0)] = 0
         return (
-            np.squeeze(
-                2 * pi * (mu_arr_pos * W) @ u0_neg
-                + direct_beam_scaled
-                - direct_beam
-            )[()],
-            np.squeeze(direct_beam)[()],
+            I0_orig * diffuse_flux,
+            I0_orig * I0 * np.squeeze(direct_beam_ignoreI0)[()],
         )
         # --------------------------------------------------------------------------------------------------------------------------
 
