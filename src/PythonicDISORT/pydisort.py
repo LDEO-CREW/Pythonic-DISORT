@@ -431,7 +431,7 @@ def pydisort(
 
             NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
                
-            NT_corrections[np.isclose(NT_corrections, 0)] = 0
+            NT_corrections = np.where(np.isclose(NT_corrections, 0), 0, NT_corrections)
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
                 return (
