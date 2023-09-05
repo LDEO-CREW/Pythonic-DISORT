@@ -281,7 +281,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
         diff_flux_up,
         flup,
         out=np.zeros_like(diff_flux_up),
-        where=~np.isclose(flup, 0),
+        where=flup > 1e-8,
     )
     print("Difference =", np.max(diff_flux_up))
     print("Difference ratio =", np.max(ratio_flux_up))
@@ -294,7 +294,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
         diff_flux_down_diffuse,
         rfldn,
         out=np.zeros_like(diff_flux_down_diffuse),
-        where=~np.isclose(rfldn, 0),
+        where=rfldn > 1e-8,
     )
     print("Difference =", np.max(diff_flux_down_diffuse))
     print(
@@ -310,7 +310,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
         diff_flux_down_direct,
         rfldir,
         out=np.zeros_like(diff_flux_down_direct),
-        where=~np.isclose(rfldir, 0),
+        where=rfldir > 1e-8,
     )
     print("Difference =", np.max(diff_flux_down_direct))
     print(
@@ -325,7 +325,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
         diff,
         uu[mu_to_compare],
         out=np.zeros_like(diff),
-        where=~np.isclose(uu[mu_to_compare], 0),
+        where=uu[mu_to_compare] > 1e-8,
     )
     max_diff_tau_index = np.argmax(np.max(np.max(diff, axis=0), axis=1))
     max_ratio_tau_index = np.argmax(np.max(np.max(diff_ratio, axis=0), axis=1))

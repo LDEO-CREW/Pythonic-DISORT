@@ -206,7 +206,7 @@ def pydisort(
     M_inv = 1 / mu_arr_pos
     
     # We do not allow mu0 to equal a quadrature / computational angle
-    assert not np.any(np.isclose(mu_arr_pos, mu0))
+    assert not np.any(np.abs(mu_arr_pos - mu0) < 1e-8)
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Delta-M scaling; there is no scaling if f = 0
@@ -431,7 +431,6 @@ def pydisort(
 
             NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
                
-            NT_corrections = np.where(np.isclose(NT_corrections, 0), 0, NT_corrections)
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
                 return (

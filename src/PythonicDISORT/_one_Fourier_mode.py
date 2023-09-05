@@ -113,7 +113,7 @@ def _one_Fourier_mode(
             # --------------------------------------------------------------------------------------------------------------------------
             K_squared, eigenvecs_GpG = np.linalg.eig((alpha - beta) @ (alpha + beta))
             if m == 0:
-                if np.any(np.isclose(K_squared, 0)):
+                if np.any(K_squared < 1e-9): # Then |K| < 1e-3
                     warn(
                         "Single-scattering albedo for layer "
                         + str(l)
