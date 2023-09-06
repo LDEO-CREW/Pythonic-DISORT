@@ -85,19 +85,19 @@ def pydisort(
     array
         All mu (cosine of polar angle) quadrature nodes.
     function
-        Flux function with argument tau (type: array) for positive (upward) mu values.
+        (Energetic) Flux function with argument tau (type: array) for positive (upward) mu values.
         Returns the diffuse flux magnitudes (type: array).
     function
-        Flux function with argument tau (type: array)  for negative (downward) mu values.
+        (Energetic) Flux function with argument tau (type: array) for negative (downward) mu values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)).
     function
         Zeroth Fourier mode of the intensity with argument tau (type: array).
-        Returns an ndarray with axes corresponding to (mu, tau) variation.
+        Returns an ndarray with axes corresponding to variation with mu and tau respectively.
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually.
     function, optional
         Intensity function with arguments (tau, phi, return_Fourier_error=False) of types (array, array, bool).
-        Returns an ndarray with axes corresponding to (mu, tau, phi) variation.
+        Returns an ndarray with axes corresponding to variation with mu, tau, phi respectively.
         The optional flag `return_Fourier_error` determines whether the function will also return
         the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
 

@@ -223,6 +223,37 @@ def atleast_2d_append(*arys):
         return res[0]
     else:
         return res
+        
+        
+def generate_diff_act_flux_funcs(u0):
+    """Generates respectively the up and down diffuse actinic flux functions.
+    This a use case of the u0 function that is an output of pydisort.
+    Reclassification of delta-scaled flux is not performed and must be done manually.
+
+    Parameters
+    ----------
+    u0 : func
+        Zeroth Fourier mode of the intensity.
+        See the fourth "return" of the `pydisort` function.
+
+    Returns
+    -------
+    function
+        Actinic flux function with argument tau (type: array) for positive (upward) mu values.
+        Returns the diffuse flux magnitudes (type: array).
+    function
+        Actinic flux function with argument tau (type: array) for negative (downward) mu values.
+        Returns the diffuse flux magnitudes (type: array).
+
+    """
+    N = np.shape(u0(0))[0] // 2
+    GL_weights = Gauss_Legendre_quad(N, 0, 1)[1]
+
+    # Note that the zeroth axis of the array u0(tau) captures variation with mu
+    flux_act_up = lambda tau: 2 * pi * GL_weights @ u0(tau)[:N]
+    flux_act_down_diffuse = lambda tau: 2 * pi * GL_weights @ u0(tau)[N:]
+    
+    return flux_act_up, flux_act_down_diffuse
 
 
 def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr):
