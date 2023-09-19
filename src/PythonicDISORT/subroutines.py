@@ -88,7 +88,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
 
 
 def Gauss_Legendre_quad(N, c=0, d=1):
-    """Generates Gauss-Legendre quadrature weights and zero points for integration from c to d.
+    """Generates Gauss-Legendre quadrature zero points and weights for integration from c to d.
 
     Parameters
     ----------
