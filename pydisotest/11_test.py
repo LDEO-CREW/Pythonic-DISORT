@@ -23,7 +23,7 @@ def test_11a():
     NT_cor = True
     b_neg=1
     b_pos=1
-    Leg_coeffs_BDRF=np.array([0.1])
+    BDRF_Fourier_modes=[lambda mu, neg_mup: np.full((len(mu), len(neg_mup)), 0.1)]
     s_poly_coeffs=np.array([[ 172311.79936609, -102511.44170512],
                            [ 172311.79936609, -102511.44170512],
                            [ 172311.79936609, -102511.44170512],

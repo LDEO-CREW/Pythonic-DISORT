@@ -32,7 +32,7 @@ def test_1a():
     only_flux=False
     f_arr=0
     NT_cor=False
-    Leg_coeffs_BDRF=np.array([])
+    BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_sparse_NLayers=6
 
@@ -107,7 +107,7 @@ def test_1b():
     only_flux=False
     f_arr=0
     NT_cor=False
-    Leg_coeffs_BDRF=np.array([])
+    BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_sparse_NLayers=6
 
@@ -182,7 +182,7 @@ def test_1c():
     only_flux=False
     f_arr=0
     NT_cor=False
-    Leg_coeffs_BDRF=np.array([])
+    BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_sparse_NLayers=6
 
@@ -257,7 +257,7 @@ def test_1d():
     only_flux=False
     f_arr=0
     NT_cor=False
-    Leg_coeffs_BDRF=np.array([])
+    BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_sparse_NLayers=6
 
@@ -331,7 +331,7 @@ def test_1e():
     only_flux=False
     f_arr=0
     NT_cor=False
-    Leg_coeffs_BDRF=np.array([])
+    BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_sparse_NLayers=6
 
@@ -406,7 +406,7 @@ def test_1f():
     only_flux=False
     f_arr=0
     NT_cor=False
-    Leg_coeffs_BDRF=np.array([])
+    BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_sparse_NLayers=6
 

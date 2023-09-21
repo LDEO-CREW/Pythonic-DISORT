@@ -75,7 +75,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
     Returns
     -------
     ndarray
-        Cosine of scattering angles.
+        Cosine of scattering angles which axes capture variation with mu, phi, mu_p, phi_p respectively.
 
     """
     mu, phi, mu_p, phi_p = np.atleast_1d(mu, phi, mu_p, phi_p)

@@ -15,7 +15,7 @@ def _one_Fourier_mode(
     N, NQuad, NLeg,
     NLayers, NBDRF,
     weighted_scaled_Leg_coeffs,
-    weighted_Leg_coeffs_BDRF,
+    BDRF_Fourier_modes,
     mu0, I0,
     b_pos, b_neg,
     scalar_b_pos, scalar_b_neg,
@@ -45,25 +45,14 @@ def _one_Fourier_mode(
     
     # Generate mathscr_D and mathscr_X (BDRF terms)
     # --------------------------------------------------------------------------------------------------------------------------
-    # If h_\ell = 0 for all \ell \geq m, then there is no BDRF contribution
-    # We take precautions against overflow and underflow
-    if m < NBDRF and np.all(np.isfinite(asso_leg_term_pos[:NBDRF, :])):
-        weighted_asso_Leg_coeffs_BDRF = (
-            weighted_Leg_coeffs_BDRF[ells[: (NBDRF - m)]] * fac[: (NBDRF - m)]
-        )
-        mathscr_D_temp = (
-            weighted_asso_Leg_coeffs_BDRF[None, :] * asso_leg_term_pos.T[:, :NBDRF]
-        )
-        mathscr_D_neg = 2 * mathscr_D_temp @ asso_leg_term_neg[:NBDRF, :]
+    if m < NBDRF:
+        mathscr_D_neg = (1 + (m == 0) * 1) * BDRF_Fourier_modes[m](mu_arr_pos, -mu_arr_pos)
         R = mathscr_D_neg * (mu_arr_pos * W)[None, :]
 
         if I0 > 0:
-            mathscr_X_temp = (
-                (mu0 * I0 * (2 - (m == 0)) / pi)
-                * weighted_asso_Leg_coeffs_BDRF
-                * asso_leg_term_mu0[:NBDRF]
-            )
-            mathscr_X_pos = mathscr_X_temp @ asso_leg_term_pos[:NBDRF, :]
+            mathscr_X_pos = (mu0 * I0 / pi) * BDRF_Fourier_modes[m](
+                mu_arr_pos, -np.array([mu0])
+            )[:, 0]
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Loop over NLayers atmospheric layers
@@ -243,7 +232,6 @@ def _one_Fourier_mode(
     else:
         _mathscr_v_contribution = 0
     
-    # If h_\ell = 0 for all \ell >= m, then there is no BDRF contribution
     if I0 > 0:
         if m < NBDRF:
             BDRF_RHS_contribution = mathscr_X_pos + R @ B_collect_m[-1, N:]

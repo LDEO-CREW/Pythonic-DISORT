@@ -22,7 +22,7 @@ def pydisort(
     only_flux=False,
     f_arr=0, 
     NT_cor=False,
-    Leg_coeffs_BDRF=np.array([]),
+    BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
     use_sparse_NLayers=6,
     n_jobs=1
@@ -67,8 +67,9 @@ def pydisort(
         Fractional scattering into peak for each atmospheric layer.
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
-    Leg_coeffs_BDRF : optional, array
-        Unweighted BDRF Legendre coefficients.
+    BDRF_Fourier_modes : optional, list
+        BDRF Fourier modes, each a function with arguments mu, -mup of type array
+        and which output has the same dimensions as the outer product of the two arrays.
     s_poly_coeffs : optional, array
         Polynomial coefficients of isotropic internal sources.
         Arrange coefficients from lowest order term to highest.
@@ -125,10 +126,6 @@ def pydisort(
         Nscoeffs = 0
     else:
         Nscoeffs = np.shape(s_poly_coeffs)[1]
-    if np.all(Leg_coeffs_BDRF == 0):
-        NBDRF = 0
-    else:
-        NBDRF = len(Leg_coeffs_BDRF)
     NLayers = len(tau_arr)
     scalar_b_pos = False
     scalar_b_neg = False
@@ -150,7 +147,7 @@ def pydisort(
     assert NLeg > 0
     assert np.all(Leg_coeffs_all[:, 0] == 1)
     assert np.all(np.abs(Leg_coeffs_all) <= 1)
-    assert np.all(np.abs(Leg_coeffs_BDRF) <= 1)
+    assert np.all(np.array([f.__code__.co_argcount for f in BDRF_Fourier_modes]) == 2)
     assert NLeg <= NLeg_all
     # Ensure that the first dimension of the following inputs corresponds to the number of layers
     assert np.shape(Leg_coeffs_all)[0] == NLayers
@@ -188,7 +185,7 @@ def pydisort(
     
     # Some more setup
     # --------------------------------------------------------------------------------------------------------------------------
-    weighted_Leg_coeffs_BDRF = (2 * np.arange(NBDRF) + 1) * Leg_coeffs_BDRF
+    NBDRF = len(BDRF_Fourier_modes)
     weighted_Leg_coeffs_all = (2 * np.arange(NLeg_all) + 1) * Leg_coeffs_all
     Leg_coeffs = Leg_coeffs_all[:, :NLeg]
     if (scalar_b_pos and b_pos == 0) and (scalar_b_neg and b_neg == 0) and Nscoeffs == 0 and I0 > 0:
@@ -243,7 +240,7 @@ def pydisort(
             N, NQuad, NLeg, NLoops,
             NLayers, NBDRF,
             weighted_scaled_Leg_coeffs,
-            weighted_Leg_coeffs_BDRF,
+            BDRF_Fourier_modes,
             mu0, I0, I0_orig, phi0,
             b_pos, b_neg,
             scalar_b_pos, scalar_b_neg,
@@ -425,11 +422,11 @@ def pydisort(
             # We provide two options below, comment and uncomment as desired.
             # Option 2 is more computationally efficient but would prevent the use of autograd for testing.
 
-            #NT_corrections = NT_corrections + np.concatenate(
-            #    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
-            #)  # Option 1
+            NT_corrections = NT_corrections + np.concatenate(
+                [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
+            )  # Option 1
 
-            NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
+            #NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
                
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
@@ -453,7 +450,7 @@ def pydisort(
             N, NQuad, NLeg, NLoops,
             NLayers, NBDRF,
             weighted_scaled_Leg_coeffs,
-            weighted_Leg_coeffs_BDRF,
+            BDRF_Fourier_modes,
             mu0, I0, I0_orig, phi0,
             b_pos, b_neg,
             scalar_b_pos, scalar_b_neg,

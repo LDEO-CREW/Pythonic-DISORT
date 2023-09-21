@@ -68,7 +68,7 @@ def test_5a():
     b_pos=0
     b_neg=0
     only_flux=False
-    Leg_coeffs_BDRF=np.array([])
+    BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_sparse_NLayers=6
 
@@ -144,7 +144,7 @@ def test_5b():
     b_pos=0
     b_neg=0
     only_flux=False
-    Leg_coeffs_BDRF=np.array([])
+    BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_sparse_NLayers=6
 
@@ -213,7 +213,7 @@ def test_5BDRF():
     # Optional (used)
     f_arr = Leg_coeffs_all[NQuad]
     NT_cor = True
-    Leg_coeffs_BDRF=np.array([1])
+    BDRF_Fourier_modes=[lambda mu, neg_mup: np.full((len(mu), len(neg_mup)), 1)]
 
     # Optional (unused)
     NLeg=None
@@ -234,7 +234,7 @@ def test_5BDRF():
         mu0, I0, phi0,
         f_arr=f_arr,
         NT_cor=NT_cor,
-        Leg_coeffs_BDRF=Leg_coeffs_BDRF,
+        BDRF_Fourier_modes=BDRF_Fourier_modes,
     )
     
     # mu_arr is arranged as it is for code efficiency and readability
