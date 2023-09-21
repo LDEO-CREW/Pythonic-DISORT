@@ -24,7 +24,7 @@ def pydisort(
     NT_cor=False,
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
-    use_sparse_NLayers=6,
+    use_sparse_NLayers=13,
     n_jobs=1
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
@@ -365,7 +365,7 @@ def pydisort(
                 )
                 return (
                     mathscr_B[:, l, :]
-                    * np.vstack([TMS_correction_pos, TMS_correction_neg])[:, :, None]
+                    * np.vstack((TMS_correction_pos, TMS_correction_neg))[:, :, None]
                     + Contribution_from_other_layers
                 )
             # --------------------------------------------------------------------------------------------------------------------------
@@ -373,7 +373,7 @@ def pydisort(
             else:
                 return (
                     mathscr_B[:, l, :]
-                    * np.vstack([TMS_correction_pos, TMS_correction_neg])[:, :, None]
+                    * np.vstack((TMS_correction_pos, TMS_correction_neg))[:, :, None]
                 )
         # --------------------------------------------------------------------------------------------------------------------------
 
@@ -422,11 +422,11 @@ def pydisort(
             # We provide two options below, comment and uncomment as desired.
             # Option 2 is more computationally efficient but would prevent the use of autograd for testing.
 
-            NT_corrections = NT_corrections + np.concatenate(
-                [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
-            )  # Option 1
+            #NT_corrections = NT_corrections + np.concatenate(
+            #    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
+            #)  # Option 1
 
-            #NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
+            NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
                
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)

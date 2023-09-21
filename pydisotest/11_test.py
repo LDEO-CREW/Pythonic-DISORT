@@ -9,31 +9,28 @@ from math import pi
 
 def test_11a():
     ######################################### PYDISORT ARGUMENTS #######################################
-
-    tau_arr = np.array([2, 4, 6, 8])
-    omega_arr = np.array([0.9, 0.9, 0.9, 0.9])
+    tau_arr = np.arange(16) / 2 + 0.5
+    NLayers = len(tau_arr)
+    omega_arr = np.full(NLayers, 1 - 1e-6)
     NQuad = 16
-    Leg_coeffs_all = np.tile(0.75 ** np.arange(32), (4, 1))
+    Leg_coeffs_all = np.tile(0.75 ** np.arange(32), (NLayers, 1))
     mu0 = 0.6
     I0 = pi / mu0
     phi0 = 0.9 * pi
 
     # Optional (used)
-    f_arr = np.tile(Leg_coeffs_all[0, NQuad], 4)
+    f_arr = np.repeat(Leg_coeffs_all[0, NQuad], NLayers)
     NT_cor = True
     b_neg=1
     b_pos=1
     BDRF_Fourier_modes=[lambda mu, neg_mup: np.full((len(mu), len(neg_mup)), 0.1)]
-    s_poly_coeffs=np.array([[ 172311.79936609, -102511.44170512],
-                           [ 172311.79936609, -102511.44170512],
-                           [ 172311.79936609, -102511.44170512],
-                           [ 172311.79936609, -102511.44170512]])
+    s_poly_coeffs=np.tile(np.array([ 172311.79936609, -102511.44170512]), (NLayers, 1))
 
     # Optional (unused)
     NLeg=None
     NLoops=None
     only_flux=False
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
     
@@ -56,7 +53,7 @@ def test_11a():
         NT_cor=True,
     )[1:]
 
-    flux_up_4layers, flux_down_4layers, u0, u_4layers = PythonicDISORT.pydisort(
+    flux_up_16layers, flux_down_16layers, u0, u_16layers = PythonicDISORT.pydisort(
         tau_arr, omega_arr,
         NQuad,
         Leg_coeffs_all,
@@ -68,7 +65,7 @@ def test_11a():
         NT_cor=True,
     )[1:]
     
-    assert np.allclose(flux_up_1layer(tau_test_arr), flux_up_4layers(tau_test_arr))
-    assert np.allclose(flux_down_1layer(tau_test_arr), flux_down_4layers(tau_test_arr))
-    assert np.allclose(u_1layer(tau_test_arr, phi_arr), u_4layers(tau_test_arr, phi_arr))
+    assert np.allclose(flux_up_1layer(tau_test_arr), flux_up_16layers(tau_test_arr))
+    assert np.allclose(flux_down_1layer(tau_test_arr), flux_down_16layers(tau_test_arr))
+    assert np.allclose(u_1layer(tau_test_arr, phi_arr), u_16layers(tau_test_arr, phi_arr))
     # --------------------------------------------------------------------------------------------------

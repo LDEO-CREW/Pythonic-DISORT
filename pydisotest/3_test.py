@@ -33,7 +33,7 @@ def test_3a():
     only_flux=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
 
@@ -109,7 +109,7 @@ def test_3b():
     only_flux=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
 

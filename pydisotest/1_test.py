@@ -34,7 +34,7 @@ def test_1a():
     NT_cor=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
 
@@ -109,7 +109,7 @@ def test_1b():
     NT_cor=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
 
@@ -184,7 +184,7 @@ def test_1c():
     NT_cor=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
 
@@ -259,7 +259,7 @@ def test_1d():
     NT_cor=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
 
@@ -333,7 +333,7 @@ def test_1e():
     NT_cor=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
 
@@ -408,7 +408,7 @@ def test_1f():
     NT_cor=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=6
+    use_sparse_NLayers=13
 
     ####################################################################################################
 
