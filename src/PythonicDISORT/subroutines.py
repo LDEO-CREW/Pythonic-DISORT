@@ -113,7 +113,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
 
 
 def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
-    """Generates Gauss-Legendre quadrature weights and zero points for integration from c to d.
+    """Generates Clenshaw_Curtis quadrature weights and zero points for integration from c to d.
 
     Parameters
     ----------
