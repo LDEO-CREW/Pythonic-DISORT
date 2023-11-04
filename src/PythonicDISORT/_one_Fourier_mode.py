@@ -26,7 +26,7 @@ def _one_Fourier_mode(
     """This function is wrapped and looped by the `_loop_and_assemble_results` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
-    The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 5.
+    The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 4.
 
     """
     # Setup
