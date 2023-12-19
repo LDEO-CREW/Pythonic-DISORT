@@ -1,9 +1,9 @@
 # Introduction
-The PythonicDISORT package is a Discrete Ordinates Solver for the (1D) Radiative Transfer Equation in a single or multi-layer atmosphere.
+The PythonicDISORT package is a Discrete Ordinates Solver for the (1D) Radiative Transfer Equation in a single or multi-layer plane-parallel atmosphere.
 It is coded entirely in Python 3 and in as "Pythonic" a manner as possible: we vectorize as well as use list comprehension and `map` as much as possible. 
 
 PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]) and has its main features: 
-delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, isotropic internal sources (thermal source), 
+delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, isotropic internal sources (thermal sources), 
 Dirichlet boundary conditions (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) for surface reflection, and more.
 In addition, we added a subroutine to calculate actinic fluxes, and we are open to further feature requests.
 
