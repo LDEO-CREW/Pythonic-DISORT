@@ -43,8 +43,8 @@ for surface reflection, and more. In addition, `PythonicDISORT` has been
 tested against `DISORT` on `DISORT`'s own test problems.
 
 `PythonicDISORT` is not meant to replace `DISORT`. Due to fundamental 
-differences between the Python and FORTRAN languages, `PythonicDISORT` 
-is about an order of magnitude slower than `DISORT`. Thus, projects which
+differences between Python and FORTRAN, `PythonicDISORT`, though optimized,
+remains about an order of magnitude slower than `DISORT`. Thus, projects which
 prioritize computational speed should still use `DISORT`. Moreover, `PythonicDISORT`
 lacks `DISORT`'s latest features, most notably spherical correction.
 
