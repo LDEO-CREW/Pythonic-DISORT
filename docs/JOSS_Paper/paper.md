@@ -6,7 +6,7 @@ tags:
   - Discrete Ordinates Method
   - DISORT
 authors:
-  - name: Ho J. X. Dion
+  - name: Dion J. X. Ho
 	orcid: 0009-0000-5829-5081
     equal-contrib: true # (This is how you can denote equal contributions between multiple authors)
     affiliation: 1
@@ -20,33 +20,60 @@ bibliography: PythonicDISORT.bib
 
 # Summary
 
-The Radiative Transfer Equation (RTE) describes the propagation of electromagnetic 
-radiation through a medium. It models the processes of absorption, scattering and emission.
-As the sun is the main driver of planetary climates, the 1D RTE is central to climate models
-both of Earth and of exoplanets. The gold standard for numerically solving 
-the 1D RTE is the Discrete Ordinate Radiative Transfer FORTRAN package `DISORT` that was first released in 
-1988 [@STWJ1988] and has been widely used, for example by `MODTRAN`
-[@Ber2014], `Streamer` [@Key1998], and `SBDART` [@Ric1998]. Our package `PythonicDISORT`
-is a Python reimplementation of `DISORT` that replicates most of its functionality while 
-being easier to install, use and modify, though at the cost of computational speed.
+\begin{align}
+\begin{split}
+\mu \frac{\partial u(\tau, \mu, \phi)}{\partial \tau} = u(\tau, \mu, \phi) &-\frac{\omega}{4 \pi} \int_{-1}^{1} \int_{0}^{2 \pi} p\left(\mu, \phi ; \mu', \phi'\right) u\left(\tau, \mu', \phi'\right) \mathrm{d} \phi' \mathrm{d} \mu' \\
+&-\frac{\omega I_0}{4 \pi} p\left(\mu, \phi ;-\mu_{0}, \phi_{0}\right) \exp\left(-\mu_{0}^{-1} \tau\right) - s(\tau)
+\end{split} \label{RTE}
+\end{align}
 
-# Statement of need
+The Radiative Transfer Equation (RTE) models the processes of absorption, scattering and emission 
+as electromagnetic radiation propagates through a medium. We address the 1D RTE (\ref{RTE}) 
+in a plane-parallel atmosphere and consider three sources: 
+blackbody emission from the atmosphere $s(\tau)$, scattering from sunlight
+$\frac{\omega I_0}{4 \pi} p\left(\mu, \phi ;-\mu_{0}, \phi_{0}\right) \exp\left(-\mu_{0}^{-1} \tau\right)$,
+and incoming radiation from other atmospheric layers or the Earth's surface, which is modeled by
+Dirichlet boundary conditions.
 
-`PythonicDISORT` is a Discrete Ordinates Solver for the 1D RTE 
-in a single or multi-layer plane-parallel atmosphere and it is 
-coded entirely in Python 3. It is based on `DISORT` [@STWJ1988], 
-which was written in FORTRAN 77, and has `DISORT`'s main features: 
-delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, 
+The RTE is central to climate models both of Earth and of exoplanets. 
+The gold standard for numerically solving the 1D RTE is the Discrete Ordinate Radiative Transfer 
+FORTRAN 77 package `DISORT` that was first released in 1988 [@STWJ1988] and has been widely used, 
+for example by `MODTRAN` [@Ber2014], `Streamer` [@Key1998], and `SBDART` [@Ric1998].
+`DISORT` implements the Discrete Ordinates Method which has two key steps.
+First, the diffuse intensity function $u$ is expanded as the Fourier cosine series:
+
+$$
+u\left(\tau, \mu, \phi\right) = \sum_{n=0} u^n\left(\tau, \mu\right)\cos\left(n\left(\phi_0 - \phi\right)\right)
+$$
+
+which addresses the $\phi'$ integral in the RTE (\ref{RTE}) and decomposes the problem into solving
+
+$$
+\mu \frac{d u^m(\tau, \mu)}{d \tau}=u^m(\tau, \mu)-\int_{-1}^1 D^m\left(\mu, \mu'\right) u^m\left(\tau, \mu'\right) \mathrm{d} \mu' - Q^m(\tau, \mu) - \delta_{0m}s(\tau)
+$$
+
+for each Fourier mode of $u$. The second key step is to discretize the $\mu'$ integral using 
+some quadrature scheme; `DISORT` uses the double-Gauss quadrature scheme from @Syk1951.
+This results in a system of ODEs that can be solved using standard methods.
+
+Our package `PythonicDISORT` is a Python 3 reimplementation of `DISORT` that replicates 
+most of its functionality while being easier to install, use, and modify, 
+though at the cost of computational speed. It has `DISORT`'s main features: 
+multi-layer solving, delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, 
 isotropic internal sources (thermal sources), Dirichlet boundary conditions 
 (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) 
 for surface reflection, and more. In addition, `PythonicDISORT` has been 
-tested against `DISORT` on `DISORT`'s own test problems.
+tested against `DISORT` on `DISORT`'s own test problems. As far as we know, all
+prior attempts at creating a Python interface for `DISORT` have focused
+on the creating wrappers and `PythonicDISORT` is the first true Python reimplementation.
 
-`PythonicDISORT` is not meant to replace `DISORT`. Due to fundamental 
+# Statement of need
+
+We clarify that `PythonicDISORT` is not meant to replace `DISORT`. Due to fundamental 
 differences between Python and FORTRAN, `PythonicDISORT`, though optimized,
 remains about an order of magnitude slower than `DISORT`. Thus, projects which
 prioritize computational speed should still use `DISORT`. Moreover, `PythonicDISORT`
-lacks `DISORT`'s latest features, most notably spherical correction.
+lacks `DISORT`'s latest features, most notably its pseudo-spherical correction.
 
 `PythonicDISORT` is instead designed with three goals in mind.
 First, it is meant to be a pedagogical and exploratory tool. 
@@ -77,15 +104,15 @@ This should expedite research and development for `DISORT` and similar algorithm
 
 `PythonicDISORT` was first released on PyPI and GitHub on May 30, 2023.
 We know of its use in at least three ongoing projects: 
-on the Two-Stream Equations, on atmospheric photolysis, 
+on the Two-Stream Approximations, on atmospheric photolysis, 
 and on the topographic mapping of Mars through photoclinometry.
 We will continue to maintain and upgrade `PythonicDISORT`. Our latest version: 
 `PythonicDISORT v0.4.2` was released on Nov 28, 2023.
 
 # Acknowledgements
 
-I am grateful to my PhD advisor Robert Pincus and my co-advisor Kui Ren for their advice
-and contributions. I am also grateful to Learning the Earth with Artificial Intelligence and Physics (LEAP)
-for its generous funding.
+I acknowledge funding from NSF through the Learning the Earth with Artificial intelligence and Physics (LEAP) 
+Science and Technology Center (STC) (Award #2019625). I am also grateful to my Columbia University PhD advisor 
+Dr. Robert Pincus and co-advisor Dr. Kui Ren for their advice and contributions.
 
 # References
