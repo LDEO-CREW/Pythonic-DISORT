@@ -4,15 +4,17 @@ tags:
   - Python
   - Radiative Transfer
   - Discrete Ordinates Method
+  - Atmospheric Science
+  - Climate Science
   - DISORT
 authors:
   - name: Dion J. X. Ho
 	orcid: 0009-0000-5829-5081
     affiliation: 1
 affiliations:
- - name: Department of Applied Physics and Applied Mathematics (APAM), Columbia University, USA
+ - name: Department of Applied Physics and Applied Mathematics, Columbia University, USA
    index: 1
-date: 30 January 2023
+date: 11 February 2023
 bibliography: PythonicDISORT.bib
 
 ---
