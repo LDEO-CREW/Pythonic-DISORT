@@ -23,7 +23,7 @@ as electromagnetic radiation propagates through a medium. We address the 1D RTE 
 in a plane-parallel atmosphere and consider three sources: 
 blackbody emission from the atmosphere $s(\tau)$, scattering from sunlight
 $\frac{\omega I_0}{4 \pi} p\left(\mu, \phi ;-\mu_{0}, \phi_{0}\right) \exp\left(-\mu_{0}^{-1} \tau\right)$,
-and incoming radiation from other atmospheric layers or the Earth's surface, which is modeled by
+and incoming radiation from other atmospheric layers or the Earth's surface modeled by
 Dirichlet boundary conditions.
 
 \begin{align}
@@ -35,17 +35,17 @@ Dirichlet boundary conditions.
 
 The RTE is important in many fields of science and engineering.
 The gold standard for numerically solving the 1D RTE is the Discrete Ordinate Radiative Transfer 
-FORTRAN 77 package `DISORT` that was first released in 1988 [@STWJ1988] and has been widely used, 
-for example by `MODTRAN` [@Ber2014], `Streamer` [@Key1998], and `SBDART` [@Ric1998],
-all of which are comprehensive radiative transfer models that are used in atmospheric science.
+package `DISORT` which was coded in FORTRAN 77 and first released in 1988 [@STWJ1988].
+It has been widely used, for example by `MODTRAN` [@Ber2014], `Streamer` [@Key1998], and `SBDART` [@Ric1998],
+all of which are comprehensive radiative transfer models that are themselves widely used in atmospheric science.
 `DISORT` implements the Discrete Ordinates Method which has two key steps.
 First, the diffuse intensity function $u$ is expanded as the Fourier cosine series:
 
 $$
-u\left(\tau, \mu, \phi\right) = \sum_{n=0} u^n\left(\tau, \mu\right)\cos\left(n\left(\phi_0 - \phi\right)\right)
+u\left(\tau, \mu, \phi\right) = \sum_{m=0} u^m\left(\tau, \mu\right)\cos\left(m\left(\phi_0 - \phi\right)\right)
 $$
 
-which addresses the $\phi'$ integral in the RTE (\ref{RTE}) and decomposes the problem into solving
+This addresses the $\phi'$ integral in (\ref{RTE}) and decomposes the problem into solving
 
 $$
 \mu \frac{d u^m(\tau, \mu)}{d \tau}=u^m(\tau, \mu)-\int_{-1}^1 D^m\left(\mu, \mu'\right) u^m\left(\tau, \mu'\right) \mathrm{d} \mu' - Q^m(\tau, \mu) - \delta_{0m}s(\tau)
