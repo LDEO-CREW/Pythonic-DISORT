@@ -15,12 +15,11 @@ authors:
     orcid: 'https://orcid.org/0009-0000-5829-5081'
 repository-code: 'https://github.com/LDEO-CREW/Pythonic-DISORT'
 abstract: >-
-  Discrete Ordinates Solver for the (1D) Radiative Transfer
-  Equation in a single or multi-layer plane-parallel
-  atmosphere. Coded entirely in Python 3. Based on Stamnes'
+  PythonicDISORT is a Discrete Ordinates Solver for the (1D) Radiative Transfer
+  Equation in a single or multi-layer plane-parallel atmosphere. 
+  It is coded entirely in Python 3 and is based on Stamnes'
   FORTRAN DISORT (see references in the Jupyter Notebook)
-  and has its main features. This repository also includes
-  our F2PY-wrapped Stamnes' DISORT (version 4.0.99).
+  and has its main features.
 keywords:
   - Python
   - Radiative Transfer
