@@ -12,7 +12,7 @@ authors:
 	orcid: 0009-0000-5829-5081
     affiliation: 1
 affiliations:
- - name: Department of Applied Physics and Applied Mathematics, Columbia University, USA
+ - name: Columbia University, Department of Applied Physics and Applied Mathematics, USA
    index: 1
 date: 11 February 2023
 bibliography: PythonicDISORT.bib
