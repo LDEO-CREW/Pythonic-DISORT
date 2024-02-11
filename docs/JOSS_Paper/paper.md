@@ -63,8 +63,8 @@ isotropic internal sources (thermal sources), Dirichlet boundary conditions
 (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) 
 for surface reflection, and more. In addition, `PythonicDISORT` has been 
 tested against `DISORT` on `DISORT`'s own test problems. As far as we know, all
-prior attempts at creating a Python interface for `DISORT` have focused
-on the creating wrappers and `PythonicDISORT` is the first true Python reimplementation.
+prior attempts at creating Python interfaces for `DISORT` have focused
+on creating wrappers and `PythonicDISORT` is the first true Python reimplementation.
 
 # Statement of need
 
