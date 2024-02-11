@@ -8,7 +8,6 @@ tags:
 authors:
   - name: Dion J. X. Ho
 	orcid: 0009-0000-5829-5081
-    equal-contrib: true # (This is how you can denote equal contributions between multiple authors)
     affiliation: 1
 affiliations:
  - name: Department of Applied Physics and Applied Mathematics (APAM), Columbia University, USA
@@ -19,14 +18,6 @@ bibliography: PythonicDISORT.bib
 ---
 
 # Summary
-
-\begin{align}
-\begin{split}
-\mu \frac{\partial u(\tau, \mu, \phi)}{\partial \tau} = u(\tau, \mu, \phi) &-\frac{\omega}{4 \pi} \int_{-1}^{1} \int_{0}^{2 \pi} p\left(\mu, \phi ; \mu', \phi'\right) u\left(\tau, \mu', \phi'\right) \mathrm{d} \phi' \mathrm{d} \mu' \\
-&-\frac{\omega I_0}{4 \pi} p\left(\mu, \phi ;-\mu_{0}, \phi_{0}\right) \exp\left(-\mu_{0}^{-1} \tau\right) - s(\tau)
-\end{split} \label{RTE}
-\end{align}
-
 The Radiative Transfer Equation (RTE) models the processes of absorption, scattering and emission 
 as electromagnetic radiation propagates through a medium. We address the 1D RTE (\ref{RTE}) 
 in a plane-parallel atmosphere and consider three sources: 
@@ -35,10 +26,18 @@ $\frac{\omega I_0}{4 \pi} p\left(\mu, \phi ;-\mu_{0}, \phi_{0}\right) \exp\left(
 and incoming radiation from other atmospheric layers or the Earth's surface, which is modeled by
 Dirichlet boundary conditions.
 
-The RTE is central to climate models both of Earth and of exoplanets. 
+\begin{align}
+\begin{split}
+\mu \frac{\partial u(\tau, \mu, \phi)}{\partial \tau} = u(\tau, \mu, \phi) &-\frac{\omega}{4 \pi} \int_{-1}^{1} \int_{0}^{2 \pi} p\left(\mu, \phi ; \mu', \phi'\right) u\left(\tau, \mu', \phi'\right) \mathrm{d} \phi' \mathrm{d} \mu' \\
+&-\frac{\omega I_0}{4 \pi} p\left(\mu, \phi ;-\mu_{0}, \phi_{0}\right) \exp\left(-\mu_{0}^{-1} \tau\right) - s(\tau)
+\end{split} \label{RTE}
+\end{align}
+
+The RTE is important in many fields of science and engineering.
 The gold standard for numerically solving the 1D RTE is the Discrete Ordinate Radiative Transfer 
 FORTRAN 77 package `DISORT` that was first released in 1988 [@STWJ1988] and has been widely used, 
-for example by `MODTRAN` [@Ber2014], `Streamer` [@Key1998], and `SBDART` [@Ric1998].
+for example by `MODTRAN` [@Ber2014], `Streamer` [@Key1998], and `SBDART` [@Ric1998],
+all of which are comprehensive radiative transfer models that are used in atmospheric science.
 `DISORT` implements the Discrete Ordinates Method which has two key steps.
 First, the diffuse intensity function $u$ is expanded as the Fourier cosine series:
 
