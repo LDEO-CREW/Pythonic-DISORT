@@ -1,3 +1,5 @@
+name: Generate JOSS paper PDF
+
 on: [push]
 
 jobs:

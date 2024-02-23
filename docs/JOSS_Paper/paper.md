@@ -10,7 +10,6 @@ tags:
 authors:
   - name: Dion J. X. Ho
     orcid: 0009-0000-5829-5081
-    equal-contrib: true
     affiliation: "1"
 affiliations:
  - name: Columbia University, Department of Applied Physics and Applied Mathematics, USA
