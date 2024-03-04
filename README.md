@@ -5,7 +5,8 @@ It is coded entirely in Python 3 and in as "Pythonic" a manner as possible: we v
 PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]) and has its main features: 
 delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, isotropic internal sources (thermal sources), 
 Dirichlet boundary conditions (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) for surface reflection, and more.
-In addition, we added a subroutine to calculate actinic fluxes, and we are open to further feature requests.
+In addition, we added a subroutine to calculate actinic fluxes upon the request of a user, and we are open to further feature requests as well as feedback. 
+You may contact me, Dion, through dh3065@columbia.edu.
 
 This repository also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) in the `disort4.0.99_f2py` directory.
 The original was downloaded from http://www.rtatmocn.com/disort/. The wrapper was inspired by https://github.com/kconnour/pyRT_DISORT.
@@ -19,10 +20,11 @@ The Jupyter Notebook provides comprehensive documentation, suggested inputs, exp
 mathematical derivations and verification tests.
 We highly recommend reading the non-optional parts of sections 1 and 2 before use.
 
-## PyTest
+## PyTest and examples of how to use PythonicDISORT
 
 Separate from the verification tests in the Jupyter Notebook, we used PyTest to recreate most of the test problems from Stamnes et. al.'s `disotest.f90`.
-With PyTest installed, execute the console command `pytest` in the `pydisotest` directory to run these tests.
+With PyTest installed, execute the console command `pytest` in the `pydisotest` directory to run these tests. The `pydisotest` directory also contains
+Jupyter Notebooks, one for each test, to show how the test was implemented. These notebooks double up as examples of how to use PythonicDISORT.
 
 # Installation
 
