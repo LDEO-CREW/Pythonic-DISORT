@@ -1,5 +1,5 @@
 from PythonicDISORT import subroutines
-from PythonicDISORT._loop_and_assemble_results import _loop_and_assemble_results
+from PythonicDISORT._assemble_results import _assemble_results
 import scipy as sc
 from math import pi
 from numpy.polynomial.legendre import Legendre
@@ -231,7 +231,7 @@ def pydisort(
         ############################### Perform NT corrections on the intensity but not the flux ###################################
         
         # Delta-M scaled solution; no further corrections to the flux
-        flux_up, flux_down, u0, u_star = _loop_and_assemble_results(
+        flux_up, flux_down, u0, u_star = _assemble_results(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
@@ -247,9 +247,8 @@ def pydisort(
             s_poly_coeffs,
             Nscoeffs,
             scale_tau,
-            False,
+            only_flux,
             use_sparse_NLayers,
-            n_jobs
         )
         
         # TMS correction
@@ -360,9 +359,7 @@ def pydisort(
                         )
                     return contribution
 
-                Contribution_from_other_layers = np.sum(
-                    list(map(Contribution_from_layer, range(NLayers))), axis=0
-                )
+                Contribution_from_other_layers = sum(map(Contribution_from_layer, range(NLayers)))
                 return (
                     mathscr_B[:, l, :]
                     * np.vstack((TMS_correction_pos, TMS_correction_neg))[:, :, None]
@@ -441,7 +438,9 @@ def pydisort(
         return mu_arr, flux_up, flux_down, u0, u_corrected
         
     else:
-        return (mu_arr,) + _loop_and_assemble_results(
+        if only_flux:
+            NLoops = 1 # We only need to solve for the 0th Fourier mode to determine the flux
+        return (mu_arr,) + _assemble_results(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
@@ -459,5 +458,4 @@ def pydisort(
             scale_tau,
             only_flux,
             use_sparse_NLayers,
-            n_jobs
         )
