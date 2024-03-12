@@ -25,7 +25,6 @@ def pydisort(
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
     use_sparse_NLayers=13,
-    n_jobs=1
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -56,7 +55,7 @@ def pydisort(
     NLeg : optional, int
         Number of phase function Legendre coefficients.
     NLoops : optional, int
-        Number of outermost loops to perform, also number of Fourier modes in the numerical solution.
+        Number of Fourier modes to use in the intensity function.
     b_pos : optional, 2darray or float
         Dirichlet boundary condition for the upward direction.
     b_neg : optional, 2darray or float
@@ -75,11 +74,6 @@ def pydisort(
         Arrange coefficients from lowest order term to highest.
     use_sparse_NLayers : optional, int
         At or above how many atmospheric layers should SciPy's sparse matrix framework be used?
-    n_jobs: optional, int
-        Maximum number of concurrently running jobs during parallelization.
-        This is exactly the `n_jobs` argument in `joblib.Parallel`, see 
-        https://joblib.readthedocs.io/en/stable/generated/joblib.Parallel.html
-        and https://joblib.readthedocs.io/en/stable/parallel.html.
 
     Returns
     -------
@@ -315,7 +309,7 @@ def pydisort(
                 )
             )
             
-            # Contribution from other layers
+            # Contribution from other layers (TODO: Further optimize this block of code)
             # --------------------------------------------------------------------------------------------------------------------------
             if NLayers > 1:
 
@@ -419,11 +413,11 @@ def pydisort(
             # We provide two options below, comment and uncomment as desired.
             # Option 2 is more computationally efficient but would prevent the use of autograd for testing.
 
-            NT_corrections = NT_corrections + np.concatenate(
-                [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
-            )  # Option 1
+            #NT_corrections = NT_corrections + np.concatenate(
+            #    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
+            #)  # Option 1
 
-            #NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
+            NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
                
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
@@ -439,7 +433,7 @@ def pydisort(
         
     else:
         if only_flux:
-            NLoops = 1 # We only need to solve for the 0th Fourier mode to determine the flux
+            NLoops = 1 # We only need to solve for the 0th Fourier mode to compute the flux
         return (mu_arr,) + _assemble_results(
             scaled_omega_arr,
             tau_arr,

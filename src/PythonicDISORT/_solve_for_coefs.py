@@ -23,7 +23,7 @@ def _solve_for_coefs(
     Nscoeffs,
     use_sparse_NLayers,
 ):
-    """This function is wrapped and looped by the `_assemble_results` function.
+    """This function is wrapped by the `_assemble_results` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
     The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 4.
@@ -32,6 +32,7 @@ def _solve_for_coefs(
     ################################## Solve for coefficients of homogeneous solution ##########################################
     GC_collect = np.empty((NLoops, NLayers, NQuad, NQuad))
     
+    # The following loops can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     for m in range(NLoops):
         G_collect_m = G_collect[m, :, :, :]
         K_collect_m = K_collect[m, :, :]

@@ -29,11 +29,12 @@ def _assemble_results(
     """This function is wrapped by the `pydisort` function.
     It should be called through `pydisort` and never directly.
     It has many seemingly redundant arguments to maximize precomputation in `pydisort`.
-    Most of the arguments are passed to the `_diagonalize` function which this function wraps and loops.
-    These loops are relatively easy to parallelize especially since we packaged a loop as a function,
-    but we have not implemented the parallelization (TODO).
+    These arguments are passed on to the `_diagonalize` and `_solve_for_coefs` functions 
+    which this function wraps.
     
     """
+    # Compute all the necessary quantities
+    # --------------------------------------------------------------------------------------------------------------------------
     outputs = _diagonalize(
         NLoops,
         scaled_omega_arr,
@@ -53,12 +54,12 @@ def _assemble_results(
             G_inv_collect_0 = None
         B_collect_0 = B_collect[0, :, :]
     else:
-        B_collect = None
         if Nscoeffs > 0:
             G_collect, K_collect, G_inv_collect_0 = outputs
         else:
             G_collect, K_collect = outputs
-            G_inv_collect_0 = None            
+            G_inv_collect_0 = None
+        B_collect = None
             
     GC_collect = _solve_for_coefs(
         NLoops,
@@ -79,6 +80,7 @@ def _assemble_results(
         Nscoeffs,
         use_sparse_NLayers,
     )
+    
     G_collect_0 = G_collect[0, :, :, :]
     K_collect_0 = K_collect[0, :, :]
     GC_collect_0 = GC_collect[0, :, :, :]

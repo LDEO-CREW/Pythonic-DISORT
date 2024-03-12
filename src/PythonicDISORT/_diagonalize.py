@@ -14,7 +14,7 @@ def _diagonalize(
     mu0, I0,
     Nscoeffs,
 ):
-    """This function is wrapped and looped by the `_assemble_results` function.
+    """This function is wrapped by the `_assemble_results` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
     The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 4.
@@ -31,10 +31,11 @@ def _diagonalize(
     alpha_list = []
     beta_list = []
     X_tilde_list=[]
-    if_indices = []
-    if_indices_0 = []
+    no_shortcut_indices = []
+    no_shortcut_indices_0 = []
 
     # Loop over NLoops Fourier modes
+    # These can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     # --------------------------------------------------------------------------------------------------------------------------  
     for m in range(NLoops): 
         # Setup
@@ -85,11 +86,11 @@ def _diagonalize(
                     X_tilde_list.append(np.concatenate([-M_inv * X_pos, M_inv * X_neg]))
                 # --------------------------------------------------------------------------------------------------------------------------
                 
-                if_indices.append(ind)
+                no_shortcut_indices.append(ind)
                 alpha_list.append(alpha)
                 beta_list.append(beta)
                 if Nscoeffs > 0 and m == 0:
-                    if_indices_0.append(l)
+                    no_shortcut_indices_0.append(l)
                 
             else:
                 # This is a shortcut to the diagonalization results
@@ -103,7 +104,7 @@ def _diagonalize(
                     G_inv_collect_0[l, :, :] = G
             ind += 1
                 
-    if len(if_indices) > 0:
+    if len(no_shortcut_indices) > 0:
     
         # Diagonalization of coefficient matrix
         # --------------------------------------------------------------------------------------------------------------------------
@@ -136,17 +137,17 @@ def _diagonalize(
         )
         G_inv_arr = np.linalg.inv(G_arr)
         
-        G_collect[if_indices, :, :] = G_arr
-        K_collect[if_indices, :] = K_arr
-        if len(if_indices_0) > 0:
-            G_inv_collect_0[if_indices_0, :, :] = G_inv_arr[: len(if_indices_0), :, :]
+        G_collect[no_shortcut_indices, :, :] = G_arr
+        K_collect[no_shortcut_indices, :] = K_arr
+        if len(no_shortcut_indices_0) > 0:
+            G_inv_collect_0[no_shortcut_indices_0, :, :] = G_inv_arr[: len(no_shortcut_indices_0), :, :]
         # --------------------------------------------------------------------------------------------------------------------------
 
         # Particular solution for the sunbeam source
         # --------------------------------------------------------------------------------------------------------------------------
         if I0 > 0:
             X_tilde_list = np.atleast_2d(np.array(X_tilde_list))
-            B_collect[if_indices, :] = np.einsum(
+            B_collect[no_shortcut_indices, :] = np.einsum(
                 "lij, ljk, lk -> li",
                 -G_arr / (1 / mu0 + K_arr)[:, None, :],
                 G_inv_arr,
