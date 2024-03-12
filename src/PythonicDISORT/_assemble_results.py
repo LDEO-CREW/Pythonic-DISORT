@@ -58,7 +58,6 @@ def _assemble_results(
             G_collect, K_collect, G_inv_collect_0 = outputs
         else:
             G_collect, K_collect = outputs
-            G_collect, K_collect = outputs
             G_inv_collect_0 = None            
             
     GC_collect = _solve_for_coefs(

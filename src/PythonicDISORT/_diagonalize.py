@@ -32,6 +32,7 @@ def _diagonalize(
     beta_list = []
     X_tilde_list=[]
     if_indices = []
+    if_indices_0 = []
 
     # Loop over NLoops Fourier modes
     # --------------------------------------------------------------------------------------------------------------------------  
@@ -87,6 +88,8 @@ def _diagonalize(
                 if_indices.append(ind)
                 alpha_list.append(alpha)
                 beta_list.append(beta)
+                if Nscoeffs > 0 and m == 0:
+                    if_indices_0.append(l)
                 
             else:
                 # This is a shortcut to the diagonalization results
@@ -100,7 +103,8 @@ def _diagonalize(
                     G_inv_collect_0[l, :, :] = G
             ind += 1
                 
-    if len(if_indices) > 0:       
+    if len(if_indices) > 0:
+    
         # Diagonalization of coefficient matrix
         # --------------------------------------------------------------------------------------------------------------------------
         alpha_list = np.atleast_3d(np.array(alpha_list))
@@ -134,8 +138,8 @@ def _diagonalize(
         
         G_collect[if_indices, :, :] = G_arr
         K_collect[if_indices, :] = K_arr
-        if Nscoeffs > 0 and m == 0:
-            G_inv_collect_0[if_indices[if_indices < NLayers], :, :] = G_inv_arr
+        if len(if_indices_0) > 0:
+            G_inv_collect_0[if_indices_0, :, :] = G_inv_arr[: len(if_indices_0), :, :]
         # --------------------------------------------------------------------------------------------------------------------------
 
         # Particular solution for the sunbeam source
