@@ -15,37 +15,45 @@ def _solve_for_coefs(
     mu_arr_pos, mu_arr_pos_times_W, mu_arr,
     N, NQuad,
     NLayers, NBDRF,
+    multilayer_bool,
     BDRF_Fourier_modes,
     mu0, I0,
+    beam_source_bool,
     b_pos, b_neg,
     scalar_b_pos, scalar_b_neg,
     s_poly_coeffs,
     Nscoeffs,
+    iso_source_bool,
     use_sparse_NLayers,
 ):
-    """This function is wrapped by the `_assemble_results` function.
+    """This function is wrapped by the `_assemble_solution_functions` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
     The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 4.
 
     """
     ################################## Solve for coefficients of homogeneous solution ##########################################
+    
     GC_collect = np.empty((NLoops, NLayers, NQuad, NQuad))
+    use_sparse_bool = NLayers >= use_sparse_NLayers
     
     # The following loops can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     for m in range(NLoops):
+        m_equals_0_bool = (m == 0)
+        BDRF_bool = m < NBDRF
+        
         G_collect_m = G_collect[m, :, :, :]
         K_collect_m = K_collect[m, :, :]
-        if I0 > 0:
+        if beam_source_bool:
             B_collect_m = B_collect[m, :, :]
             
         # Generate mathscr_D and mathscr_X (BDRF terms)
         # --------------------------------------------------------------------------------------------------------------------------
-        if m < NBDRF:
-            mathscr_D_neg = (1 + (m == 0) * 1) * BDRF_Fourier_modes[m](mu_arr_pos, -mu_arr_pos)
+        if BDRF_bool:
+            mathscr_D_neg = (1 + m_equals_0_bool * 1) * BDRF_Fourier_modes[m](mu_arr_pos, -mu_arr_pos)
             R = mathscr_D_neg * mu_arr_pos_times_W[None, :]
 
-            if I0 > 0:
+            if beam_source_bool:
                 mathscr_X_pos = (mu0 * I0 / pi) * BDRF_Fourier_modes[m](
                     mu_arr_pos, -np.array([mu0])
                 )[:, 0]
@@ -55,14 +63,14 @@ def _solve_for_coefs(
         # --------------------------------------------------------------------------------------------------------------------------
         # Ensure the BCs are of the correct shape
         if scalar_b_pos:
-            if m == 0:
+            if m_equals_0_bool:
                 b_pos_m = np.full(N, b_pos)
             else:
                 b_pos_m = np.zeros(N)
         else:
             b_pos_m = b_pos[:, m]
         if scalar_b_neg:
-            if m == 0:
+            if m_equals_0_bool:
                 b_neg_m = np.full(N, b_neg)
             else:
                 b_neg_m = np.zeros(N)
@@ -70,7 +78,7 @@ def _solve_for_coefs(
             b_neg_m = b_neg[:, m]
         
         # _mathscr_v_contribution
-        if Nscoeffs > 0 and m == 0:
+        if iso_source_bool and m_equals_0_bool:
             _mathscr_v_contribution_top = -_mathscr_v(
                         np.array([0]), np.array([0]),
                         s_poly_coeffs[0:1, :],
@@ -82,7 +90,7 @@ def _solve_for_coefs(
                     ).flatten()
         
             _mathscr_v_contribution_middle = np.array([])
-            if NLayers > 1:
+            if multilayer_bool:
                 indices = np.arange(NLayers - 1)
                 _mathscr_v_contribution_middle = (
                     _mathscr_v(
@@ -130,14 +138,14 @@ def _solve_for_coefs(
         else:
             _mathscr_v_contribution = 0
         
-        if I0 > 0:
-            if m < NBDRF:
+        if beam_source_bool:
+            if BDRF_bool:
                 BDRF_RHS_contribution = mathscr_X_pos + R @ B_collect_m[-1, N:]
             else:
                 BDRF_RHS_contribution = 0
             
             RHS_middle = np.array([])
-            if NLayers > 1:
+            if multilayer_bool:
                 RHS_middle = np.array(
                     [
                         (B_collect_m[l + 1, :] - B_collect_m[l, :])
@@ -176,7 +184,7 @@ def _solve_for_coefs(
         E_Lm1L = np.exp(
             K_collect_m[-1, :N] * (scaled_tau_arr_with_0[-1] - scaled_tau_arr_with_0[-2])
         )
-        if m < NBDRF:
+        if BDRF_bool:
             BDRF_LHS_contribution_neg = R @ G_L_nn
             BDRF_LHS_contribution_pos = R @ G_L_np
         else:
@@ -224,7 +232,7 @@ def _solve_for_coefs(
         
         # Solve the system
         # --------------------------------------------------------------------------------------------------------------------------
-        if NLayers >= use_sparse_NLayers:
+        if use_sparse_bool:
             C_m = sc.sparse.linalg.spsolve(sc.sparse.csr_matrix(LHS), RHS).reshape(NLayers, NQuad)
         else:
             C_m = np.linalg.solve(LHS, RHS).reshape(NLayers, NQuad)

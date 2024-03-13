@@ -12,27 +12,36 @@ def _diagonalize(
     NLayers,
     weighted_scaled_Leg_coeffs,
     mu0, I0,
+    beam_source_bool,
     Nscoeffs,
+    iso_source_bool,
 ):
-    """This function is wrapped by the `_assemble_results` function.
+    """This function is wrapped by the `_assemble_solution_functions` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
     The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 4.
 
     """
+    ############################### Assemble system and diagonalize coefficient matrix #########################################
+    
+    # Initialization
+    # --------------------------------------------------------------------------------------------------------------------------
     ells_all = np.arange(NLeg)
     ind = 0
+    
     G_collect = np.empty((NLoops * NLayers, NQuad, NQuad))
     K_collect = np.empty((NLoops * NLayers, NQuad))
-    if I0 > 0:
-        B_collect = np.zeros((NLoops * NLayers, NQuad))
-    if Nscoeffs > 0:
-        G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
-    alpha_list = []
-    beta_list = []
-    X_tilde_list=[]
+    alpha_arr = np.empty((NLoops * NLayers, N, N))
+    beta_arr = np.empty((NLoops * NLayers, N, N))
+    X_tilde_arr = np.empty((NLoops * NLayers, NQuad))
     no_shortcut_indices = []
     no_shortcut_indices_0 = []
+    
+    if beam_source_bool:
+        B_collect = np.zeros((NLoops * NLayers, NQuad))
+    if iso_source_bool:
+        G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
+    # --------------------------------------------------------------------------------------------------------------------------
 
     # Loop over NLoops Fourier modes
     # These can easily be parallelized, but the speed-up is unlikely to be worth the overhead
@@ -40,6 +49,7 @@ def _diagonalize(
     for m in range(NLoops): 
         # Setup
         # --------------------------------------------------------------------------------------------------------------------------
+        m_equals_0_bool = (m == 0)
         ells = ells_all[m:]
         degree_tile = np.tile(ells, (N, 1)).T
         fac = sc.special.poch(ells + m + 1, -2 * m)
@@ -68,7 +78,7 @@ def _diagonalize(
                 D_pos = (scaled_omega_l / 2) * D_temp @ asso_leg_term_pos
                 D_neg = (scaled_omega_l / 2) * D_temp @ asso_leg_term_neg
 
-                if I0 > 0:
+                if beam_source_bool:
                     X_temp = (
                         (scaled_omega_l * I0 * (2 - (m == 0)) / (4 * pi))
                         * weighted_asso_Leg_coeffs_l
@@ -82,14 +92,14 @@ def _diagonalize(
                 # --------------------------------------------------------------------------------------------------------------------------
                 alpha = M_inv[:, None] * (D_pos * W[None, :] - np.eye(N))
                 beta = M_inv[:, None] * D_neg * W[None, :]
-                if I0 > 0:
-                    X_tilde_list.append(np.concatenate([-M_inv * X_pos, M_inv * X_neg]))
+                if beam_source_bool:
+                    X_tilde_arr[ind, :] = np.concatenate([-M_inv * X_pos, M_inv * X_neg])
                 # --------------------------------------------------------------------------------------------------------------------------
                 
+                alpha_arr[ind, :, :] = alpha
+                beta_arr[ind, :, :] = beta
                 no_shortcut_indices.append(ind)
-                alpha_list.append(alpha)
-                beta_list.append(beta)
-                if Nscoeffs > 0 and m == 0:
+                if iso_source_bool and m_equals_0_bool:
                     no_shortcut_indices_0.append(l)
                 
             else:
@@ -100,7 +110,7 @@ def _diagonalize(
                 
                 G_collect[ind, :, :] = G
                 K_collect[ind, :] = -1 / mu_arr
-                if Nscoeffs > 0 and m == 0:
+                if iso_source_bool and m_equals_0_bool:
                     G_inv_collect_0[l, :, :] = G
             ind += 1
                 
@@ -108,12 +118,12 @@ def _diagonalize(
     
         # Diagonalization of coefficient matrix
         # --------------------------------------------------------------------------------------------------------------------------
-        alpha_list = np.atleast_3d(np.array(alpha_list))
-        beta_list = np.atleast_3d(np.array(beta_list))
+        alpha_arr = alpha_arr[: len(no_shortcut_indices), :, :]
+        beta_arr = beta_arr[: len(no_shortcut_indices), :, :]
 
         K_squared_arr, eigenvecs_GpG_arr = np.linalg.eig(
             np.einsum(
-                "lij, ljk -> lik", alpha_list - beta_list, alpha_list + beta_list, optimize=True
+                "lij, ljk -> lik", alpha_arr - beta_arr, alpha_arr + beta_arr, optimize=True
             ),
         )
 
@@ -122,7 +132,7 @@ def _diagonalize(
         eigenvecs_GpG_arr = np.concatenate((eigenvecs_GpG_arr, eigenvecs_GpG_arr), axis=2)
         eigenvecs_GmG_arr = (
             np.einsum(
-                "lij, ljk -> lik", alpha_list + beta_list, eigenvecs_GpG_arr, optimize=True
+                "lij, ljk -> lik", alpha_arr + beta_arr, eigenvecs_GpG_arr, optimize=True
             )
             / K_arr[:, None, :]
         )
@@ -145,19 +155,19 @@ def _diagonalize(
 
         # Particular solution for the sunbeam source
         # --------------------------------------------------------------------------------------------------------------------------
-        if I0 > 0:
-            X_tilde_list = np.atleast_2d(np.array(X_tilde_list))
+        if beam_source_bool:
+            X_tilde_arr = X_tilde_arr[: len(no_shortcut_indices), :]
             B_collect[no_shortcut_indices, :] = np.einsum(
                 "lij, ljk, lk -> li",
                 -G_arr / (1 / mu0 + K_arr)[:, None, :],
                 G_inv_arr,
-                X_tilde_list,
+                X_tilde_arr,
                 optimize=True,
             )
         # --------------------------------------------------------------------------------------------------------------------------
         
-    if I0 > 0:
-        if Nscoeffs > 0:
+    if beam_source_bool:
+        if iso_source_bool:
             return (
                 G_collect.reshape((NLoops, NLayers, NQuad, NQuad)),
                 K_collect.reshape((NLoops, NLayers, NQuad)),
@@ -171,7 +181,7 @@ def _diagonalize(
                 B_collect.reshape((NLoops, NLayers, NQuad)),
             )
     else:
-        if Nscoeffs > 0:
+        if iso_source_bool:
             return (
                 G_collect.reshape((NLoops, NLayers, NQuad, NQuad)),
                 K_collect.reshape((NLoops, NLayers, NQuad)),
