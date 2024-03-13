@@ -31,4 +31,4 @@ notebook_dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/LDEO-CREW/PythonicDISORT"
+"Homepage" = "https://github.com/LDEO-CREW/Pythonic-DISORT"
