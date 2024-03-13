@@ -58,6 +58,11 @@ The latter will almost certainly need user edits to work and in any case it requ
 are not included in this repository. Everything in this repository was built and tested on Windows 11 and 
 not yet tested on other systems.
 
+# Acknowledgements
+
+I acknowledge funding from NSF through the Learning the Earth with Artificial intelligence and Physics (LEAP) 
+Science and Technology Center (STC) (Award #2019625).
+
 # References
 1) S. Chandrasekhar. 1960. *Radiative Transfer.*
 
