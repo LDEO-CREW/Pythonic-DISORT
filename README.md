@@ -17,7 +17,8 @@ The original was downloaded from http://www.rtatmocn.com/disort/. The wrapper is
 # Documentation
 https://pythonic-disort.readthedocs.io/en/latest/
 
-Also see the accompanying Jupyter Notebook: `Pythonic-DISORT.ipynb` in the `docs` directory.
+Also see the accompanying Jupyter Notebook: `Pythonic-DISORT.ipynb` in the `docs` directory
+of our GitHub repository: https://github.com/LDEO-CREW/Pythonic-DISORT.
 The Jupyter Notebook provides comprehensive documentation, suggested inputs, explanations, 
 mathematical derivations and verification tests.
 We highly recommend reading the non-optional parts of sections 1 and 2 before use.
