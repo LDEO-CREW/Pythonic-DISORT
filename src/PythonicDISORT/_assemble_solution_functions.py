@@ -1,11 +1,9 @@
 from PythonicDISORT.subroutines import _mathscr_v
 from PythonicDISORT._diagonalize import _diagonalize
-from PythonicDISORT._solve_for_coefs import _solve_for_coefs 
+from PythonicDISORT._solve_for_coefs import _solve_for_coefs
+
+import numpy as np
 from math import pi
-try:
-    import autograd.numpy as np
-except ImportError:
-    import numpy as np
 
 def _assemble_solution_functions(
     scaled_omega_arr,
@@ -28,6 +26,7 @@ def _assemble_solution_functions(
     scale_tau,
     only_flux,
     use_sparse_NLayers,
+    _autograd_bool,
 ):  
     """This function is wrapped by the `pydisort` function.
     It should be called through `pydisort` and never directly.
@@ -37,6 +36,11 @@ def _assemble_solution_functions(
     documentation, explanation and derivation.
     
     """
+    if _autograd_bool:
+        import autograd.numpy as np
+    else:
+        import numpy as np
+    
     ###################################### Assemble uncorrected solution functions #############################################
     
     # Compute all the necessary quantities
@@ -147,8 +151,11 @@ def _assemble_solution_functions(
                     G_inv_collect_0,
                     mu_arr,
                 )
-                # The following line must be implemented differently for autograd to work on `u` with isotropic sources
-                um[0, :, :] += _mathscr_v_contribution.T
+                
+                if _autograd_bool:
+                    um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NLoops - 1, len(tau), NQuad))))
+                else:
+                    um[0, :, :] += _mathscr_v_contribution.T
                 
             intensities = np.einsum(
                 "mti, mp -> itp",

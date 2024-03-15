@@ -1,13 +1,11 @@
 from PythonicDISORT import subroutines
 from PythonicDISORT._assemble_solution_functions import _assemble_solution_functions
+
+import numpy as np
 import scipy as sc
 from math import pi
 from numpy.polynomial.legendre import Legendre
 from scipy import integrate
-try:
-    import autograd.numpy as np
-except ImportError:
-    import numpy as np
     
 
 def pydisort(
@@ -25,6 +23,7 @@ def pydisort(
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
     use_sparse_NLayers=13,
+    _autograd_bool = False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -97,6 +96,11 @@ def pydisort(
         the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
 
     """
+    if _autograd_bool:
+        import autograd.numpy as np
+    else:
+        import numpy as np
+    
     # Turn scalars into arrays
     # --------------------------------------------------------------------------------------------------------------------------
     tau_arr = np.atleast_1d(tau_arr)
@@ -249,6 +253,7 @@ def pydisort(
             scale_tau,
             only_flux,
             use_sparse_NLayers,
+            _autograd_bool,
         )
         
         # TMS correction
@@ -444,14 +449,12 @@ def pydisort(
             phi = np.atleast_1d(phi)
             NT_corrections = TMS_correction(tau, phi)
 
-            # We provide two options below, comment and uncomment as desired.
-            # Option 2 is more computationally efficient but would prevent the use of autograd for testing.
-
-            #NT_corrections = NT_corrections + np.concatenate(
-            #    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
-            #)  # Option 1
-
-            NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
+            if _autograd_bool:
+                NT_corrections = NT_corrections + np.concatenate(
+                    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
+                )
+            else:
+                NT_corrections[N:, :, :] += IMS_correction(tau, phi)
                
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
@@ -489,4 +492,5 @@ def pydisort(
             scale_tau,
             only_flux,
             use_sparse_NLayers,
+            _autograd_bool,
         )

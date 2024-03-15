@@ -1,10 +1,7 @@
+import numpy as np
 import scipy as sc
 from math import pi
 from numpy.polynomial.legendre import leggauss
-try:
-    import autograd.numpy as np
-except ImportError:
-    import numpy as np
 
 
 def transform_interval(arr, c, d, a=-1, b=1):
@@ -259,12 +256,17 @@ def generate_diff_act_flux_funcs(u0):
     return flux_act_up, flux_act_down_diffuse
 
 
-def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr):
+def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr, _autograd_bool=False):
     """Particular solution for isotropic internal sources.
     It has many seemingly redundant arguments to maximize precomputation
     in the `pydisort` function which calls it.
 
     """
+    if _autograd_bool:
+        import autograd.numpy as np
+    else:
+        import numpy as np
+    
     n = Nscoeffs - 1
 
     def mathscr_b(i):
