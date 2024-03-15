@@ -125,14 +125,14 @@ def pydisort(
     else:
         Nscoeffs = np.shape(s_poly_coeffs)[1]
     NLayers = len(tau_arr)
-    scalar_b_pos = False
-    scalar_b_neg = False
+    b_pos_is_scalar = False
+    b_neg_is_scalar = False
     thickness_arr = np.concatenate([[tau_arr[0]], np.diff(tau_arr)])
     NLeg_all = np.shape(Leg_coeffs_all)[1]
     N = NQuad // 2
-    beam_source_bool = I0 > 0
-    iso_source_bool = Nscoeffs > 0
-    multilayer_bool = NLayers > 1
+    there_is_beam_source = I0 > 0
+    there_is_iso_source = Nscoeffs > 0
+    atmos_is_multilayered = NLayers > 1
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Input checks
@@ -155,7 +155,7 @@ def pydisort(
     assert len(omega_arr) == NLayers
     if len(f_arr) != 1 or f_arr[0] != 0:
         assert len(f_arr) == NLayers
-    if iso_source_bool:
+    if there_is_iso_source:
         assert np.shape(s_poly_coeffs)[0] == NLayers
     # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NLoops)
     assert NQuad >= 2
@@ -166,16 +166,16 @@ def pydisort(
     assert NQuad >= NLeg
     # We require principal angles and a downward incident beam
     assert I0 >= 0
-    if beam_source_bool:
+    if there_is_beam_source:
         assert 0 < mu0 and mu0 <= 1
         assert 0 <= phi0 and phi0 < 2 * pi
     # Ensure that the BC inputs are of the correct shape
     if len(np.atleast_1d(b_pos)) == 1:
-        scalar_b_pos = True
+        b_pos_is_scalar = True
     else:
         assert np.shape(b_pos) == (N, NLoops)
     if len(np.atleast_1d(b_neg)) == 1:
-        scalar_b_neg = True
+        b_neg_is_scalar = True
     else:
         assert np.shape(b_neg) == (N, NLoops)
     # The fractional scattering must be between 0 and 1
@@ -189,7 +189,7 @@ def pydisort(
     NBDRF = len(BDRF_Fourier_modes)
     weighted_Leg_coeffs_all = (2 * np.arange(NLeg_all) + 1) * Leg_coeffs_all
     Leg_coeffs = Leg_coeffs_all[:, :NLeg]
-    if (scalar_b_pos and b_pos == 0) and (scalar_b_neg and b_neg == 0) and not iso_source_bool and beam_source_bool:
+    if (b_pos_is_scalar and b_pos == 0) and (b_neg_is_scalar and b_neg == 0) and not there_is_iso_source and there_is_beam_source:
         I0_orig = I0
         I0 = 1
     else:
@@ -227,7 +227,7 @@ def pydisort(
         scaled_omega_arr = omega_arr
     # --------------------------------------------------------------------------------------------------------------------------
     
-    if NT_cor and not only_flux and beam_source_bool and np.any(f_arr > 0) and NLeg < NLeg_all:
+    if NT_cor and not only_flux and there_is_beam_source and np.any(f_arr > 0) and NLeg < NLeg_all:
         
         ############################### Perform NT corrections on the intensity but not the flux ###################################
         
@@ -240,16 +240,16 @@ def pydisort(
             M_inv, W,
             N, NQuad, NLeg, NLoops,
             NLayers, NBDRF,
-            multilayer_bool,
+            atmos_is_multilayered,
             weighted_scaled_Leg_coeffs,
             BDRF_Fourier_modes,
             mu0, I0, I0_orig, phi0,
-            beam_source_bool,
+            there_is_beam_source,
             b_pos, b_neg,
-            scalar_b_pos, scalar_b_neg,
+            b_pos_is_scalar, b_neg_is_scalar,
             s_poly_coeffs,
             Nscoeffs,
-            iso_source_bool,
+            there_is_iso_source,
             scale_tau,
             only_flux,
             use_sparse_NLayers,
@@ -322,7 +322,7 @@ def pydisort(
             # TODO: Despite being vectorized and otherwise optimized, this block of code is slower than desired
             # and is the bottleneck for the TMS correction
             # --------------------------------------------------------------------------------------------------------------------------
-            if multilayer_bool:
+            if atmos_is_multilayered:
 
                 layers_arr = np.arange(NLayers)[:, None]
                 pos_contribution_mask = (l[None, :] < layers_arr).flatten()
@@ -479,16 +479,16 @@ def pydisort(
             M_inv, W,
             N, NQuad, NLeg, NLoops,
             NLayers, NBDRF,
-            multilayer_bool,
+            atmos_is_multilayered,
             weighted_scaled_Leg_coeffs,
             BDRF_Fourier_modes,
             mu0, I0, I0_orig, phi0,
-            beam_source_bool,
+            there_is_beam_source,
             b_pos, b_neg,
-            scalar_b_pos, scalar_b_neg,
+            b_pos_is_scalar, b_neg_is_scalar,
             s_poly_coeffs,
             Nscoeffs,
-            iso_source_bool,
+            there_is_iso_source,
             scale_tau,
             only_flux,
             use_sparse_NLayers,

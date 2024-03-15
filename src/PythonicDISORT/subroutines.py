@@ -290,7 +290,15 @@ def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr, _autograd_b
         optimize=True,
     )
     
+def _nd_slice_to_indexes(nd_slice):
+    """Code taken from https://stackoverflow.com/questions/64097025/how-to-convert-n-d-slice-to-indexes-in-numpy.
+    This function is used to efficiently construct sparse COO matrices.
     
+    """
+    grid = np.mgrid[{tuple: nd_slice, slice: (nd_slice,)}[type(nd_slice)]]
+    return tuple(grid[i].ravel() for i in range(grid.shape[0]))
+    
+
 def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
     """Performs pointwise comparisons between results from Stamnes' DISORT,
     which are stored in .npz files, against results from PythonicDISORT. Used in our PyTests.
