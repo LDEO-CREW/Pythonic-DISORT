@@ -189,7 +189,7 @@ def atleast_2d_append(*arys):
     Dimensions are added as necessary to the back of the shape tuple rather than to the front.
         
         This is exactly NumPy's ``numpy.atleast_2d`` function but altered to add dimensions to the back of the shape tuple rather than to the front.
-        View the documentation for``numpy.atleast_2d`` function at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
+        View the documentation for ``numpy.atleast_2d`` at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
 
     Parameters
     ----------
