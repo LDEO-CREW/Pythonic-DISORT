@@ -42,9 +42,10 @@ def pydisort(
     omega_arr : array
         Single-scattering albedo of each atmospheric layer.
     NQuad : int
-        Number of mu quadrature nodes.
+        Number of `mu` quadrature nodes.
     Leg_coeffs_all : ndarray
-        All available unweighted phase function Legendre coefficients.
+        All available unweighted phase function Legendre coefficients. 
+        Each coefficient should be between 0 and 1 inclusive.
     mu0 : float
         Cosine of polar angle of the incident beam.
     I0 : float
@@ -66,7 +67,7 @@ def pydisort(
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
     BDRF_Fourier_modes : optional, list
-        BDRF Fourier modes, each a function with arguments mu, -mup of type array
+        BDRF Fourier modes, each a function with arguments `mu, -mu_p` of type array
         and which output has the same dimensions as the outer product of the two arrays.
     s_poly_coeffs : optional, array
         Polynomial coefficients of isotropic internal sources.
@@ -77,21 +78,22 @@ def pydisort(
     Returns
     -------
     array
-        All mu (cosine of polar angle) quadrature nodes.
+        All `mu` (cosine of polar angle) quadrature nodes.
     function
-        (Energetic) Flux function with argument tau (type: array) for positive (upward) mu values.
+        (Energetic) Flux function with argument `tau` (type: array) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (type: array).
     function
-        (Energetic) Flux function with argument tau (type: array) for negative (downward) mu values.
+        (Energetic) Flux function with argument `tau` (type: array) for negative (downward) `mu` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)).
     function
-        Zeroth Fourier mode of the intensity with argument tau (type: array).
-        Returns an ndarray with axes corresponding to variation with mu and tau respectively.
+        Zeroth Fourier mode of the intensity with argument `tau` (type: array).
+        Returns an ndarray with axes corresponding to variation with `mu` and `tau` respectively.
         This function is useful for calculating actinic fluxes and other quantities of interest,
-        but reclassification of delta-scaled flux and other corrections must be done manually.
+        but reclassification of delta-scaled flux and other corrections must be done manually
+        (for actinic flux `generate_diff_act_flux_funcs` will automatically perform the reclassification).
     function, optional
-        Intensity function with arguments (tau, phi, return_Fourier_error=False) of types (array, array, bool).
-        Returns an ndarray with axes corresponding to variation with mu, tau, phi respectively.
+        Intensity function with arguments `(tau, phi, return_Fourier_error=False)` of types `(array, array, bool)`.
+        Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
         The optional flag `return_Fourier_error` determines whether the function will also return
         the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
 
@@ -147,7 +149,7 @@ def pydisort(
     # The user must supply at least as many phase function Legendre coefficients as intended for use
     assert NLeg > 0
     assert np.all(Leg_coeffs_all[:, 0] == 1)
-    assert np.all(np.abs(Leg_coeffs_all) <= 1)
+    assert np.all(0 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)
     assert np.all(np.array([f.__code__.co_argcount for f in BDRF_Fourier_modes]) == 2)
     assert NLeg <= NLeg_all
     # Ensure that the first dimension of the following inputs corresponds to the number of layers
@@ -163,7 +165,7 @@ def pydisort(
     assert NLoops > 0
     assert NLoops <= NLeg
     # Not strictly necessary but there will be tremendous inaccuracies if this is violated
-    assert NQuad >= NLeg
+    assert NLeg <= NQuad
     # We require principal angles and a downward incident beam
     assert I0 >= 0
     if there_is_beam_source:
