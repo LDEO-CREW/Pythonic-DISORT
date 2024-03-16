@@ -256,13 +256,13 @@ def generate_diff_act_flux_funcs(u0):
     return flux_act_up, flux_act_down_diffuse
 
 
-def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr, _autograd_bool=False):
+def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr, _is_compatible_with_autograd=False):
     """Particular solution for isotropic internal sources.
     It has many seemingly redundant arguments to maximize precomputation
     in the `pydisort` function which calls it.
 
     """
-    if _autograd_bool:
+    if _is_compatible_with_autograd:
         import autograd.numpy as np
     else:
         import numpy as np

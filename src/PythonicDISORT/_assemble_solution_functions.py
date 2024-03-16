@@ -26,7 +26,7 @@ def _assemble_solution_functions(
     scale_tau,
     only_flux,
     use_sparse_NLayers,
-    _autograd_bool,
+    _is_compatible_with_autograd,
 ):  
     """This function is wrapped by the `pydisort` function.
     It should be called through `pydisort` and never directly.
@@ -36,7 +36,7 @@ def _assemble_solution_functions(
     documentation, explanation and derivation.
     
     """
-    if _autograd_bool:
+    if _is_compatible_with_autograd:
         import autograd.numpy as np
     else:
         import numpy as np
@@ -150,10 +150,10 @@ def _assemble_solution_functions(
                     K_collect_0,
                     G_inv_collect_0,
                     mu_arr,
-                    _autograd_bool,
+                    _is_compatible_with_autograd,
                 )
                 
-                if _autograd_bool:
+                if _is_compatible_with_autograd:
                     um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NLoops - 1, len(tau), NQuad))))
                 else:
                     um[0, :, :] += _mathscr_v_contribution.T
@@ -245,7 +245,7 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _autograd_bool,
+                _is_compatible_with_autograd,
             )
             u0 += _mathscr_v_contribution
         
@@ -291,7 +291,7 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _autograd_bool,
+                _is_compatible_with_autograd,
             )[:N, :]
         else:
             _mathscr_v_contribution = 0
@@ -345,7 +345,7 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _autograd_bool,
+                _is_compatible_with_autograd,
             )[N:, :]
         else:
             _mathscr_v_contribution = 0

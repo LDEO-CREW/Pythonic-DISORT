@@ -198,6 +198,17 @@ def _solve_for_coefs(
             row_indices = np.empty(density)
             col_indices = np.empty(density)
             block_rows = np.empty(density)
+            
+            block_row_len = 2 * NQuad**2
+            block_row_ind = np.arange(block_row_len).reshape(NQuad, 2 * NQuad)
+            block_row_sort = np.empty(block_row_len, dtype='int')
+            
+            block_row_sort[:N_squared] = block_row_ind[:N, :N].flatten()
+            block_row_sort[N_squared : 2 * N_squared] = block_row_ind[N : 2 * N, :N].flatten()
+            block_row_sort[2 * N_squared : 4 * N_squared] = block_row_ind[:2 * N, N : 2 * N].flatten()
+            block_row_sort[4 * N_squared : 6 * N_squared] = block_row_ind[:2 * N, 2 * N : 3 * N].flatten()
+            block_row_sort[6 * N_squared : 7 * N_squared] = block_row_ind[:N, 3 * N : 4 * N].flatten()
+            block_row_sort[7 * N_squared : 8 * N_squared] = block_row_ind[N : 2 * N, 3 * N : 4 * N].flatten()
 
             # BCs for the entire atmosphere
             row_indices[:N_squared], col_indices[:N_squared] = _nd_slice_to_indexes(np.s_[:N, :N])
@@ -226,8 +237,6 @@ def _solve_for_coefs(
 
             # Interlayer / continuity BCs
             for l in range(NLayers - 1):
-                block_row_len = 2 * NQuad**2
-
                 G_l_pn = G_collect_m[l, :N, :N]
                 G_l_nn = G_collect_m[l, N:, :N]
                 G_l_ap = G_collect_m[l, :, N:]
@@ -242,27 +251,24 @@ def _solve_for_coefs(
                 K_lp1_pos = K_collect_m[l + 1, N:]
                 E_lm1l = np.exp(K_l_pos * (scaled_tau_arr_lm1 - scaled_tau_arr_l))
                 E_llp1 = np.exp(K_lp1_pos * (scaled_tau_arr_l - scaled_tau_arr_lp1))
-
-                (
-                    row_indices[
-                        4 * N_squared + l * block_row_len : 4 * N_squared + (l + 1) * block_row_len
-                    ],
-                    col_indices[
-                        4 * N_squared + l * block_row_len : 4 * N_squared + (l + 1) * block_row_len
-                    ],
-                ) = _nd_slice_to_indexes(
-                    np.s_[N + l * NQuad : N + (l + 1) * NQuad, l * NQuad : l * NQuad + 2 * NQuad]
+                
+                row_indices_l, col_indices_l = _nd_slice_to_indexes(
+                    np.s_[N + l * NQuad : N + (l + 1) * NQuad, l * NQuad : (l + 2) * NQuad]
                 )
-                block_rows[
+                row_indices[
                     4 * N_squared + l * block_row_len : 4 * N_squared + (l + 1) * block_row_len
-                ] = np.hstack(
-                    [
-                        np.vstack([G_l_pn * E_lm1l[None, :], G_l_nn * E_lm1l[None, :]]),
-                        G_l_ap,
-                        -G_lp1_an,
-                        -np.vstack([G_lp1_pp * E_llp1[None, :], G_lp1_np * E_llp1[None, :]]),
-                    ]
-                ).flatten()
+                ] = row_indices_l[block_row_sort]
+                col_indices[
+                    4 * N_squared + l * block_row_len : 4 * N_squared + (l + 1) * block_row_len
+                ] = col_indices_l[block_row_sort]
+                
+                starting_ind = 4 * N_squared + l * block_row_len
+                block_rows[starting_ind : N_squared + starting_ind] = (G_l_pn * E_lm1l[None, :]).flatten()
+                block_rows[starting_ind + N_squared : 2 * N_squared + starting_ind] = (G_l_nn * E_lm1l[None, :]).flatten()
+                block_rows[starting_ind + 2 * N_squared : 4 * N_squared + starting_ind] = G_l_ap.flatten()
+                block_rows[starting_ind + 4 * N_squared : 6 * N_squared + starting_ind] = -G_lp1_an.flatten()
+                block_rows[starting_ind + 6 * N_squared : 7 * N_squared + starting_ind] = -(G_lp1_pp * E_llp1[None, :]).flatten()
+                block_rows[starting_ind + 7 * N_squared : 8 * N_squared + starting_ind] = -(G_lp1_np * E_llp1[None, :]).flatten()
     
             LHS = sc.sparse.coo_matrix(
                 (
@@ -304,20 +310,17 @@ def _solve_for_coefs(
                 # Postive eigenvalues
                 K_l_pos = K_collect_m[l, N:]
                 K_lp1_pos = K_collect_m[l + 1, N:]
-
                 E_lm1l = np.exp(K_l_pos * (scaled_tau_arr_lm1 - scaled_tau_arr_l))
                 E_llp1 = np.exp(K_lp1_pos * (scaled_tau_arr_l - scaled_tau_arr_lp1))
-                block_row = np.hstack(
-                    [
-                        np.vstack([G_l_pn * E_lm1l[None, :], G_l_nn * E_lm1l[None, :]]),
-                        G_l_ap,
-                        -G_lp1_an,
-                        -np.vstack([G_lp1_pp * E_llp1[None, :], G_lp1_np * E_llp1[None, :]]),
-                    ]
-                )
-                LHS[
-                    N + l * NQuad : N + (l + 1) * NQuad, l * NQuad : l * NQuad + 2 * NQuad
-                ] = block_row
+                
+                starting_row = N + l * NQuad
+                starting_col = l * NQuad
+                LHS[starting_row : N + starting_row, starting_col : N + starting_col] = G_l_pn * E_lm1l[None, :]
+                LHS[N + starting_row : 2 * N + starting_row, starting_col : N + starting_col] = G_l_nn * E_lm1l[None, :]
+                LHS[starting_row : 2 * N + starting_row, N + starting_col : 2 * N + starting_col] = G_l_ap
+                LHS[starting_row : 2 * N + starting_row, 2 * N + starting_col : 3 * N + starting_col] = -G_lp1_an
+                LHS[starting_row : N + starting_row, 3 * N + starting_col : 4 * N + starting_col] = -G_lp1_pp * E_llp1[None, :]
+                LHS[N + starting_row : 2 * N + starting_row, 3 * N + starting_col : 4 * N + starting_col] = -G_lp1_np * E_llp1[None, :]
             
             # Solve the system
             C_m = np.linalg.solve(LHS, RHS).reshape(NLayers, NQuad)
