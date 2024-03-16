@@ -326,8 +326,8 @@ def pydisort(
             # --------------------------------------------------------------------------------------------------------------------------
             if atmos_is_multilayered:
                 layers_arr = np.arange(NLayers)[:, None]
-                pos_contribution_mask = (l[None, :] < layers_arr).flatten()
-                neg_contribution_mask = (l[None, :] > layers_arr).flatten()
+                pos_contribution_mask = (l[None, :] < layers_arr).ravel()
+                neg_contribution_mask = (l[None, :] > layers_arr).ravel()
                 
                 layers_arr_repeat = np.repeat(layers_arr, Ntau)
                 scaled_tau_tile = np.tile(scaled_tau, NLayers)

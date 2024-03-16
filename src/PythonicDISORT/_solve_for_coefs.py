@@ -89,7 +89,7 @@ def _solve_for_coefs(
                         K_collect_m[0:1, :],
                         G_inv_collect_0[0:1, :, :],
                         mu_arr,
-                    ).flatten()
+                    ).ravel()
         
             _mathscr_v_contribution_middle = np.array([])
             if atmos_is_multilayered:
@@ -115,7 +115,7 @@ def _solve_for_coefs(
                         G_inv_collect_0[1:, :, :],
                         mu_arr,
                     )
-                ).flatten()
+                ).ravel()
             
             _mathscr_v_contribution_bottom = _mathscr_v(
                     tau_arr[-1:], np.array([0]),
@@ -124,7 +124,7 @@ def _solve_for_coefs(
                     G_collect_m[-1:, N:, :],
                     K_collect_m[-1:, :],
                     G_inv_collect_0[-1:, :, :],
-                    mu_arr).flatten()
+                    mu_arr).ravel()
             if NBDRF > 0:
                 _mathscr_v_contribution_bottom = (
                     R + np.eye(N)
@@ -154,7 +154,7 @@ def _solve_for_coefs(
                         * np.exp(-mu0 * scaled_tau_arr_with_0[l + 1])
                         for l in range(NLayers - 1)
                     ]
-                ).flatten()
+                ).ravel()
             
             RHS = (
                 np.concatenate(
@@ -203,37 +203,37 @@ def _solve_for_coefs(
             block_row_ind = np.arange(block_row_len).reshape(NQuad, 2 * NQuad)
             block_row_sort = np.empty(block_row_len, dtype='int')
             
-            block_row_sort[:N_squared] = block_row_ind[:N, :N].flatten()
-            block_row_sort[N_squared : 2 * N_squared] = block_row_ind[N : 2 * N, :N].flatten()
-            block_row_sort[2 * N_squared : 4 * N_squared] = block_row_ind[:2 * N, N : 2 * N].flatten()
-            block_row_sort[4 * N_squared : 6 * N_squared] = block_row_ind[:2 * N, 2 * N : 3 * N].flatten()
-            block_row_sort[6 * N_squared : 7 * N_squared] = block_row_ind[:N, 3 * N : 4 * N].flatten()
-            block_row_sort[7 * N_squared : 8 * N_squared] = block_row_ind[N : 2 * N, 3 * N : 4 * N].flatten()
+            block_row_sort[:N_squared] = block_row_ind[:N, :N].ravel()
+            block_row_sort[N_squared : 2 * N_squared] = block_row_ind[N : 2 * N, :N].ravel()
+            block_row_sort[2 * N_squared : 4 * N_squared] = block_row_ind[:2 * N, N : 2 * N].ravel()
+            block_row_sort[4 * N_squared : 6 * N_squared] = block_row_ind[:2 * N, 2 * N : 3 * N].ravel()
+            block_row_sort[6 * N_squared : 7 * N_squared] = block_row_ind[:N, 3 * N : 4 * N].ravel()
+            block_row_sort[7 * N_squared : 8 * N_squared] = block_row_ind[N : 2 * N, 3 * N : 4 * N].ravel()
 
             # BCs for the entire atmosphere
             row_indices[:N_squared], col_indices[:N_squared] = _nd_slice_to_indexes(np.s_[:N, :N])
-            block_rows[:N_squared] = G_0_nn.flatten()
+            block_rows[:N_squared] = G_0_nn.ravel()
             (
                 row_indices[N_squared : 2 * N_squared],
                 col_indices[N_squared : 2 * N_squared],
             ) = _nd_slice_to_indexes(np.s_[:N, N:NQuad])
             block_rows[N_squared : 2 * N_squared] = (
                 G_0_np * np.exp(K_collect_m[0, :N] * scaled_tau_arr_with_0[1])[None, :]
-            ).flatten()
+            ).ravel()
             (
                 row_indices[2 * N_squared : 3 * N_squared],
                 col_indices[2 * N_squared : 3 * N_squared],
             ) = _nd_slice_to_indexes(np.s_[dim - N : dim, dim - NQuad : dim - N])
             block_rows[2 * N_squared : 3 * N_squared] = (
                 (G_L_pn - BDRF_LHS_contribution_neg) * E_Lm1L[None, :]
-            ).flatten()
+            ).ravel()
             (
                 row_indices[3 * N_squared : 4 * N_squared],
                 col_indices[3 * N_squared : 4 * N_squared],
             ) = _nd_slice_to_indexes(np.s_[dim - N : dim, dim - N : dim])
             block_rows[3 * N_squared : 4 * N_squared] = (
                 G_L_pp - BDRF_LHS_contribution_pos
-            ).flatten()
+            ).ravel()
 
             # Interlayer / continuity BCs
             for l in range(NLayers - 1):
@@ -263,12 +263,12 @@ def _solve_for_coefs(
                 ] = col_indices_l[block_row_sort]
                 
                 starting_ind = 4 * N_squared + l * block_row_len
-                block_rows[starting_ind : N_squared + starting_ind] = (G_l_pn * E_lm1l[None, :]).flatten()
-                block_rows[starting_ind + N_squared : 2 * N_squared + starting_ind] = (G_l_nn * E_lm1l[None, :]).flatten()
-                block_rows[starting_ind + 2 * N_squared : 4 * N_squared + starting_ind] = G_l_ap.flatten()
-                block_rows[starting_ind + 4 * N_squared : 6 * N_squared + starting_ind] = -G_lp1_an.flatten()
-                block_rows[starting_ind + 6 * N_squared : 7 * N_squared + starting_ind] = -(G_lp1_pp * E_llp1[None, :]).flatten()
-                block_rows[starting_ind + 7 * N_squared : 8 * N_squared + starting_ind] = -(G_lp1_np * E_llp1[None, :]).flatten()
+                block_rows[starting_ind : N_squared + starting_ind] = (G_l_pn * E_lm1l[None, :]).ravel()
+                block_rows[starting_ind + N_squared : 2 * N_squared + starting_ind] = (G_l_nn * E_lm1l[None, :]).ravel()
+                block_rows[starting_ind + 2 * N_squared : 4 * N_squared + starting_ind] = G_l_ap.ravel()
+                block_rows[starting_ind + 4 * N_squared : 6 * N_squared + starting_ind] = -G_lp1_an.ravel()
+                block_rows[starting_ind + 6 * N_squared : 7 * N_squared + starting_ind] = -(G_lp1_pp * E_llp1[None, :]).ravel()
+                block_rows[starting_ind + 7 * N_squared : 8 * N_squared + starting_ind] = -(G_lp1_np * E_llp1[None, :]).ravel()
     
             LHS = sc.sparse.coo_matrix(
                 (
