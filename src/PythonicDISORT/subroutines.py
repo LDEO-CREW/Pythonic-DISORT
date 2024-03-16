@@ -262,24 +262,45 @@ def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr, _is_compati
     in the `pydisort` function which calls it.
 
     """
+    n = Nscoeffs - 1
+    
     if _is_compatible_with_autograd:
         import autograd.numpy as np
+    
+        def mathscr_b(i):
+            j_arr = np.arange(i + 1)
+            s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
+            return np.sum(
+                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i))[None, None, :]
+                * K[:, :, None] ** -(i - j_arr + 1)[None, None, :]
+                * s_poly_coeffs_nj[:, None, :],
+                axis=-1,
+            )
+        mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
     else:
         import numpy as np
-    
-    n = Nscoeffs - 1
+        
+        shape = np.shape(K)
+        i_arr = np.arange(Nscoeffs)
+        i_arr_repeat = np.repeat(i_arr, i_arr + 1)
+        j_arr = np.concatenate([np.arange(i + 1) for i in range(Nscoeffs)])
+        s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
 
-    def mathscr_b(i):
-        j = np.arange(i + 1)
-        s_poly_coeffs_nj = s_poly_coeffs[:, n - j]
-        return np.sum(
-            (sc.special.factorial(n - j) / sc.special.factorial(n - i))[None, None, :]
-            * K[:, :, None] ** -(i - j + 1)[None, None, :]
-            * s_poly_coeffs_nj[:, None, :],
-            axis=-1,
+        mathscr_v_coeffs = np.zeros((Nscoeffs, shape[0], shape[1]))
+        np.add.at(
+            mathscr_v_coeffs,
+            i_arr_repeat,
+            np.moveaxis(
+                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i_arr_repeat))[
+                    None, None, :
+                ]
+                * K[:, :, None] ** -(i_arr_repeat - j_arr + 1)[None, None, :]
+                * s_poly_coeffs_nj[:, None, :],
+                -1,
+                0,
+            ),
         )
 
-    mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
     return np.einsum(
         "tik, tc, ctk, tkj, j -> it",
         G[l, :, :],
