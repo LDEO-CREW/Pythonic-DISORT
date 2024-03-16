@@ -11,7 +11,7 @@ In addition, upon the request of a user, we added a subroutine to calculate acti
 
 You may contact me, Dion, through dh3065@columbia.edu.
 
-Our **GitHub repository: https://github.com/LDEO-CREW/Pythonic-DISORT **also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) in the `disort4.0.99_f2py` directory.
+Our **GitHub repository:** https://github.com/LDEO-CREW/Pythonic-DISORT also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) in the `disort4.0.99_f2py` directory.
 The original was downloaded from http://www.rtatmocn.com/disort/. The wrapper is inspired by https://github.com/kconnour/pyRT_DISORT.
 
 # Documentation
