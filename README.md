@@ -39,7 +39,7 @@ to show how the tests were implemented. These notebooks double up as examples of
 
 ## Requirements to run PythonicDISORT
 * Python 3.8+
-* `numpy >= 1.8.0` (`numpy >= 1.25.0` recommended for significant speed-ups)
+* `numpy >= 1.8.0`
 * `scipy >= 1.8.0`
 * (OPTIONAL) `pytest >= 6.2.5` (Required for non-Notebook tests)
 
