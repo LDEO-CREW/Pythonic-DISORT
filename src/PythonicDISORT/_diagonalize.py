@@ -4,7 +4,7 @@ from math import pi
 
 
 def _diagonalize(
-    NLoops,
+    NFourier,
     scaled_omega_arr,
     mu_arr_pos, mu_arr,
     M_inv, W,
@@ -29,24 +29,24 @@ def _diagonalize(
     ells_all = np.arange(NLeg)
     ind = 0
     
-    G_collect = np.empty((NLoops * NLayers, NQuad, NQuad))
-    K_collect = np.empty((NLoops * NLayers, NQuad))
-    alpha_arr = np.empty((NLoops * NLayers, N, N))
-    beta_arr = np.empty((NLoops * NLayers, N, N))
-    X_tilde_arr = np.empty((NLoops * NLayers, NQuad))
+    G_collect = np.empty((NFourier * NLayers, NQuad, NQuad))
+    K_collect = np.empty((NFourier * NLayers, NQuad))
+    alpha_arr = np.empty((NFourier * NLayers, N, N))
+    beta_arr = np.empty((NFourier * NLayers, N, N))
+    X_tilde_arr = np.empty((NFourier * NLayers, NQuad))
     no_shortcut_indices = []
     no_shortcut_indices_0 = []
     
     if there_is_beam_source:
-        B_collect = np.zeros((NLoops * NLayers, NQuad))
+        B_collect = np.zeros((NFourier * NLayers, NQuad))
     if there_is_iso_source:
         G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
     # --------------------------------------------------------------------------------------------------------------------------
 
-    # Loop over NLoops Fourier modes
+    # Loop over NFourier Fourier modes
     # These can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     # --------------------------------------------------------------------------------------------------------------------------  
-    for m in range(NLoops): 
+    for m in range(NFourier): 
         # Setup
         # --------------------------------------------------------------------------------------------------------------------------
         m_equals_0 = (m == 0)
@@ -169,26 +169,26 @@ def _diagonalize(
     if there_is_beam_source:
         if there_is_iso_source:
             return (
-                G_collect.reshape((NLoops, NLayers, NQuad, NQuad)),
-                K_collect.reshape((NLoops, NLayers, NQuad)),
-                B_collect.reshape((NLoops, NLayers, NQuad)),
+                G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
+                K_collect.reshape((NFourier, NLayers, NQuad)),
+                B_collect.reshape((NFourier, NLayers, NQuad)),
                 G_inv_collect_0,
             )
         else:
             return (
-                G_collect.reshape((NLoops, NLayers, NQuad, NQuad)),
-                K_collect.reshape((NLoops, NLayers, NQuad)),
-                B_collect.reshape((NLoops, NLayers, NQuad)),
+                G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
+                K_collect.reshape((NFourier, NLayers, NQuad)),
+                B_collect.reshape((NFourier, NLayers, NQuad)),
             )
     else:
         if there_is_iso_source:
             return (
-                G_collect.reshape((NLoops, NLayers, NQuad, NQuad)),
-                K_collect.reshape((NLoops, NLayers, NQuad)),
+                G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
+                K_collect.reshape((NFourier, NLayers, NQuad)),
                 G_inv_collect_0,
             )
         else:
             return (
-                G_collect.reshape((NLoops, NLayers, NQuad, NQuad)), 
-                K_collect.reshape((NLoops, NLayers, NQuad)),
+                G_collect.reshape((NFourier, NLayers, NQuad, NQuad)), 
+                K_collect.reshape((NFourier, NLayers, NQuad)),
             )

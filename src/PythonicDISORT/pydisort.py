@@ -14,7 +14,7 @@ def pydisort(
     Leg_coeffs_all,
     mu0, I0, phi0,
     NLeg=None, 
-    NLoops=None,
+    NFourier=None,
     b_pos=0, 
     b_neg=0,
     only_flux=False,
@@ -54,7 +54,7 @@ def pydisort(
         Azimuthal angle of the incident beam.
     NLeg : optional, int
         Number of phase function Legendre coefficients.
-    NLoops : optional, int
+    NFourier : optional, int
         Number of Fourier modes to use in the intensity function.
     b_pos : optional, 2darray or float
         Dirichlet boundary condition for the upward direction.
@@ -116,8 +116,8 @@ def pydisort(
     # --------------------------------------------------------------------------------------------------------------------------
     if NLeg is None:
         NLeg = NQuad
-    if NLoops is None:
-        NLoops = NQuad
+    if NFourier is None:
+        NFourier = NQuad
     if np.all(b_pos == 0):
         b_pos = 0
     if np.all(b_neg == 0):
@@ -159,11 +159,11 @@ def pydisort(
         assert len(f_arr) == NLayers
     if there_is_iso_source:
         assert np.shape(s_poly_coeffs)[0] == NLayers
-    # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NLoops)
+    # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NFourier)
     assert NQuad >= 2
     assert NQuad % 2 == 0
-    assert NLoops > 0
-    assert NLoops <= NLeg
+    assert NFourier > 0
+    assert NFourier <= NLeg
     # Not strictly necessary but there will be tremendous inaccuracies if this is violated
     assert NLeg <= NQuad
     # We require principal angles and a downward incident beam
@@ -175,11 +175,11 @@ def pydisort(
     if len(np.atleast_1d(b_pos)) == 1:
         b_pos_is_scalar = True
     else:
-        assert np.shape(b_pos) == (N, NLoops)
+        assert np.shape(b_pos) == (N, NFourier)
     if len(np.atleast_1d(b_neg)) == 1:
         b_neg_is_scalar = True
     else:
-        assert np.shape(b_neg) == (N, NLoops)
+        assert np.shape(b_neg) == (N, NFourier)
     # The fractional scattering must be between 0 and 1
     assert np.all(0 <= f_arr) and np.all(f_arr <= 1)
     # The minimum threshold is the minimum numbers of layers: 1
@@ -240,7 +240,7 @@ def pydisort(
             scaled_tau_arr_with_0,
             mu_arr_pos, mu_arr,
             M_inv, W,
-            N, NQuad, NLeg, NLoops,
+            N, NQuad, NLeg, NFourier,
             NLayers, NBDRF,
             atmos_is_multilayered,
             weighted_scaled_Leg_coeffs,
@@ -487,14 +487,14 @@ def pydisort(
         
     else:
         if only_flux:
-            NLoops = 1 # We only need to solve for the 0th Fourier mode to compute the flux
+            NFourier = 1 # We only need to solve for the 0th Fourier mode to compute the flux
         return (mu_arr,) + _assemble_solution_functions(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
             mu_arr_pos, mu_arr,
             M_inv, W,
-            N, NQuad, NLeg, NLoops,
+            N, NQuad, NLeg, NFourier,
             NLayers, NBDRF,
             atmos_is_multilayered,
             weighted_scaled_Leg_coeffs,

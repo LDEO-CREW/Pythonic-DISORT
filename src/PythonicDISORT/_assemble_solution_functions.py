@@ -11,7 +11,7 @@ def _assemble_solution_functions(
     scaled_tau_arr_with_0,
     mu_arr_pos, mu_arr,
     M_inv, W,
-    N, NQuad, NLeg, NLoops,
+    N, NQuad, NLeg, NFourier,
     NLayers, NBDRF,
     atmos_is_multilayered,
     weighted_scaled_Leg_coeffs,
@@ -46,7 +46,7 @@ def _assemble_solution_functions(
     # Compute all the necessary quantities
     # --------------------------------------------------------------------------------------------------------------------------
     outputs = _diagonalize(
-        NLoops,
+        NFourier,
         scaled_omega_arr,
         mu_arr_pos, mu_arr,
         M_inv, W,
@@ -74,7 +74,7 @@ def _assemble_solution_functions(
         B_collect = None
             
     GC_collect = _solve_for_coefs(
-        NLoops,
+        NFourier,
         G_collect,
         K_collect,
         B_collect,
@@ -154,14 +154,14 @@ def _assemble_solution_functions(
                 )
                 
                 if _is_compatible_with_autograd:
-                    um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NLoops - 1, len(tau), NQuad))))
+                    um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NFourier - 1, len(tau), NQuad))))
                 else:
                     um[0, :, :] += _mathscr_v_contribution.T
                 
             intensities = np.einsum(
                 "mti, mp -> itp",
                 um,
-                np.cos(np.arange(NLoops)[:, None] * (phi0 - phi)[None, :]),
+                np.cos(np.arange(NFourier)[:, None] * (phi0 - phi)[None, :]),
                 optimize=True,
             )
 
@@ -183,7 +183,7 @@ def _assemble_solution_functions(
                     )
                 intensities_abs = np.abs(intensities)
                 Fourier_error = np.max(
-                    np.abs(ulast[:, :, None] * np.cos((NLoops - 1) * (phi0 - phi))[None, None, :]),
+                    np.abs(ulast[:, :, None] * np.cos((NFourier - 1) * (phi0 - phi))[None, None, :]),
                     intensities_abs,
                     out=np.zeros_like(intensities_abs),
                     where=intensities_abs > 1e-8,
