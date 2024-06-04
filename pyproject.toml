@@ -8,7 +8,7 @@ dependencies = [
   "scipy>=1.8.0",
 ]
 name = "PythonicDISORT"
-version = "0.1.1"
+version = "0.2.0"
 authors = [
   { name="Dion HO Jia Xu", email="dh3065@columbia.edu" },
 ]
@@ -22,12 +22,12 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+joblib = ["joblib >= 1.0.0"]
 pytest = ["pytest >= 6.2.5"]
 notebook_dependencies = [
 	"autograd>=1.5",
 	"jupyter>1.0.0",
 	"notebook>6.5.2",
-	"ipympl>=0.8.8",
 ]
 
 [project.urls]

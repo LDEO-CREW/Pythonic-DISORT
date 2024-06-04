@@ -24,7 +24,8 @@ def pydisort(
     NT_cor=False,
     Leg_coeffs_BDRF=np.array([]),
     s_poly_coeffs=np.array([[]]),
-    use_sparse_NLayers=6
+    use_sparse_NLayers=6,
+    n_jobs=1
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -73,6 +74,11 @@ def pydisort(
         Arrange coefficients from lowest order term to highest.
     use_sparse_NLayers : optional, int
         At or above how many atmospheric layers should SciPy's sparse matrix framework be used?
+    n_jobs: optional, int
+        Maximum number of concurrently running jobs during parallelization.
+        This is exactly the `n_jobs` argument in `joblib.Parallel`, see 
+        https://joblib.readthedocs.io/en/stable/generated/joblib.Parallel.html
+        and https://joblib.readthedocs.io/en/stable/parallel.html.
 
     Returns
     -------
@@ -224,7 +230,8 @@ def pydisort(
             Nscoeffs,
             scale_tau,
             False,
-            use_sparse_NLayers
+            use_sparse_NLayers,
+            n_jobs
         )
         
         # TMS correction
@@ -297,12 +304,12 @@ def pydisort(
 
                 def Contribution_from_layer(j):
                     contribution = np.zeros((NQuad, Ntau, Nphi))
-                    pos_contribution_bools = l < j
-                    neg_contribution_bools = l > j
-                    scaled_tau_l_pos = scaled_tau[None, pos_contribution_bools]
-                    scaled_tau_l_neg = scaled_tau[None, neg_contribution_bools]
-                    if np.any(pos_contribution_bools):
-                        contribution[:N, pos_contribution_bools, :] = (
+                    pos_contribution_mask = l < j
+                    neg_contribution_mask = l > j
+                    scaled_tau_l_pos = scaled_tau[None, pos_contribution_mask]
+                    scaled_tau_l_neg = scaled_tau[None, neg_contribution_mask]
+                    if np.any(pos_contribution_mask):
+                        contribution[:N, pos_contribution_mask, :] = (
                             mathscr_B_pos[:, [j], :]
                             * (
                                 np.exp(
@@ -317,8 +324,8 @@ def pydisort(
                                 )
                             )[:, :, None]
                         )
-                    if np.any(neg_contribution_bools):
-                        contribution[N:, neg_contribution_bools, :] = (
+                    if np.any(neg_contribution_mask):
+                        contribution[N:, neg_contribution_mask, :] = (
                             mathscr_B_neg[:, [j], :]
                             * (
                                 np.exp(
@@ -433,5 +440,6 @@ def pydisort(
             Nscoeffs,
             scale_tau,
             only_flux,
-            use_sparse_NLayers
+            use_sparse_NLayers,
+            n_jobs
         )

@@ -1,8 +1,8 @@
 # All optional dependencies for the Pythonic DISORT project
 # Install through "pip install -r all_optional_dependencies.txt"
 
+joblib
 pytest
 autograd
 jupyter
 notebook
-ipympl

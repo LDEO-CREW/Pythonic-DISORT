@@ -20,7 +20,7 @@ We highly recommend reading the non-optional parts of sections 1 and 2 before us
 
 ## PyTest
 
-Separate from the notebook verification tests, we used PyTest to recreate most of the test problems from Stamnes et. al.'s `disotest.f90`.
+Separate from the verification tests in the Jupyter Notebook, we used PyTest to recreate most of the test problems from Stamnes et. al.'s `disotest.f90`.
 With PyTest installed, execute the console command `pytest` in the `pydisotest` directory to run these tests.
 
 # Installation
@@ -33,13 +33,13 @@ With PyTest installed, execute the console command `pytest` in the `pydisotest` 
 * Python 3.8+
 * `numpy >= 1.17.3`
 * `scipy >= 1.8.0`
-* (OPTIONAL) `pytest >= 6.2.5`
+* (OPTIONAL) `joblib >= 1.0.0` (Required for parallelization)
+* (OPTIONAL) `pytest >= 6.2.5` (Required for non-Notebook tests)
 
 ## Additional requirements to run the Jupyter Notebook
 * `autograd >= 1.5`
 * `jupyter > 1.0.0`
 * `notebook > 6.5.2`
-* (OPTIONAL) `ipympl >= 0.8.8`
 
 In addition, our F2PY-wrapped Stamnes' DISORT (in the `disort4.0.99_f2py` directory) must be set up to run the last section (section 6).
 
