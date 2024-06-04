@@ -1,5 +1,5 @@
 from PythonicDISORT import subroutines
-from PythonicDISORT._loop_and_assemble_results import _loop_and_assemble_results
+from PythonicDISORT._assemble_solution_functions import _assemble_solution_functions
 import scipy as sc
 from math import pi
 from numpy.polynomial.legendre import Legendre
@@ -25,7 +25,6 @@ def pydisort(
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
     use_sparse_NLayers=13,
-    n_jobs=1
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -56,7 +55,7 @@ def pydisort(
     NLeg : optional, int
         Number of phase function Legendre coefficients.
     NLoops : optional, int
-        Number of outermost loops to perform, also number of Fourier modes in the numerical solution.
+        Number of Fourier modes to use in the intensity function.
     b_pos : optional, 2darray or float
         Dirichlet boundary condition for the upward direction.
     b_neg : optional, 2darray or float
@@ -75,11 +74,6 @@ def pydisort(
         Arrange coefficients from lowest order term to highest.
     use_sparse_NLayers : optional, int
         At or above how many atmospheric layers should SciPy's sparse matrix framework be used?
-    n_jobs: optional, int
-        Maximum number of concurrently running jobs during parallelization.
-        This is exactly the `n_jobs` argument in `joblib.Parallel`, see 
-        https://joblib.readthedocs.io/en/stable/generated/joblib.Parallel.html
-        and https://joblib.readthedocs.io/en/stable/parallel.html.
 
     Returns
     -------
@@ -132,6 +126,9 @@ def pydisort(
     thickness_arr = np.concatenate([[tau_arr[0]], np.diff(tau_arr)])
     NLeg_all = np.shape(Leg_coeffs_all)[1]
     N = NQuad // 2
+    beam_source_bool = I0 > 0
+    iso_source_bool = Nscoeffs > 0
+    multilayer_bool = NLayers > 1
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Input checks
@@ -154,7 +151,7 @@ def pydisort(
     assert len(omega_arr) == NLayers
     if len(f_arr) != 1 or f_arr[0] != 0:
         assert len(f_arr) == NLayers
-    if Nscoeffs > 0:
+    if iso_source_bool:
         assert np.shape(s_poly_coeffs)[0] == NLayers
     # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NLoops)
     assert NQuad >= 2
@@ -165,7 +162,7 @@ def pydisort(
     assert NQuad >= NLeg
     # We require principal angles and a downward incident beam
     assert I0 >= 0
-    if I0 > 0:
+    if beam_source_bool:
         assert 0 < mu0 and mu0 <= 1
         assert 0 <= phi0 and phi0 < 2 * pi
     # Ensure that the BC inputs are of the correct shape
@@ -188,7 +185,7 @@ def pydisort(
     NBDRF = len(BDRF_Fourier_modes)
     weighted_Leg_coeffs_all = (2 * np.arange(NLeg_all) + 1) * Leg_coeffs_all
     Leg_coeffs = Leg_coeffs_all[:, :NLeg]
-    if (scalar_b_pos and b_pos == 0) and (scalar_b_neg and b_neg == 0) and Nscoeffs == 0 and I0 > 0:
+    if (scalar_b_pos and b_pos == 0) and (scalar_b_neg and b_neg == 0) and not iso_source_bool and beam_source_bool:
         I0_orig = I0
         I0 = 1
     else:
@@ -226,12 +223,12 @@ def pydisort(
         scaled_omega_arr = omega_arr
     # --------------------------------------------------------------------------------------------------------------------------
     
-    if NT_cor and not only_flux and I0 > 0 and np.any(f_arr > 0) and NLeg < NLeg_all:
+    if NT_cor and not only_flux and beam_source_bool and np.any(f_arr > 0) and NLeg < NLeg_all:
         
         ############################### Perform NT corrections on the intensity but not the flux ###################################
         
         # Delta-M scaled solution; no further corrections to the flux
-        flux_up, flux_down, u0, u_star = _loop_and_assemble_results(
+        flux_up, flux_down, u0, u_star = _assemble_solution_functions(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
@@ -239,17 +236,19 @@ def pydisort(
             M_inv, W,
             N, NQuad, NLeg, NLoops,
             NLayers, NBDRF,
+            multilayer_bool,
             weighted_scaled_Leg_coeffs,
             BDRF_Fourier_modes,
             mu0, I0, I0_orig, phi0,
+            beam_source_bool,
             b_pos, b_neg,
             scalar_b_pos, scalar_b_neg,
             s_poly_coeffs,
             Nscoeffs,
+            iso_source_bool,
             scale_tau,
-            False,
+            only_flux,
             use_sparse_NLayers,
-            n_jobs
         )
         
         # TMS correction
@@ -297,8 +296,6 @@ def pydisort(
                 * (mu0 / (mu0 + mu_arr))[:, None, None]
                 * (p_true / (1 - f_arr[None, :, None]) - p_trun)
             )
-            mathscr_B_pos = mathscr_B[:N, :, :]
-            mathscr_B_neg = mathscr_B[N:, :, :]
             # --------------------------------------------------------------------------------------------------------------------------
             
             TMS_correction_pos = (
@@ -317,56 +314,84 @@ def pydisort(
             )
             
             # Contribution from other layers
+            # TODO: Despite being vectorized and otherwise optimized, this block of code is slower than desired
+            # and is the bottleneck for the TMS correction
             # --------------------------------------------------------------------------------------------------------------------------
-            if NLayers > 1:
+            if multilayer_bool:
 
-                def Contribution_from_layer(j):
-                    contribution = np.zeros((NQuad, Ntau, Nphi))
-                    pos_contribution_mask = l < j
-                    neg_contribution_mask = l > j
-                    scaled_tau_l_pos = scaled_tau[None, pos_contribution_mask]
-                    scaled_tau_l_neg = scaled_tau[None, neg_contribution_mask]
-                    if np.any(pos_contribution_mask):
-                        contribution[:N, pos_contribution_mask, :] = (
-                            mathscr_B_pos[:, [j], :]
-                            * (
-                                np.exp(
-                                    (scaled_tau_l_pos - scaled_tau_arr_with_0[j])
-                                    / mu_arr_pos[:, None]
-                                    - scaled_tau_arr_with_0[j] / mu0
-                                )
-                                - np.exp(
-                                    (scaled_tau_l_pos - scaled_tau_arr_with_0[j + 1])
-                                    / mu_arr_pos[:, None]
-                                    - scaled_tau_arr_with_0[j + 1] / mu0
-                                )
-                            )[:, :, None]
-                        )
-                    if np.any(neg_contribution_mask):
-                        contribution[N:, neg_contribution_mask, :] = (
-                            mathscr_B_neg[:, [j], :]
-                            * (
-                                np.exp(
-                                    (scaled_tau_arr_with_0[j + 1] - scaled_tau_l_neg)
-                                    / mu_arr_pos[:, None]
-                                    - scaled_tau_arr_with_0[j + 1] / mu0
-                                )
-                                - np.exp(
-                                    (scaled_tau_arr_with_0[j] - scaled_tau_l_neg)
-                                    / mu_arr_pos[:, None]
-                                    - scaled_tau_arr_with_0[j] / mu0
-                                )
-                            )[:, :, None]
-                        )
-                    return contribution
+                layers_arr = np.arange(NLayers)[:, None]
+                pos_contribution_mask = (l[None, :] < layers_arr).flatten()
+                neg_contribution_mask = (l[None, :] > layers_arr).flatten()
 
-                Contribution_from_other_layers = np.sum(
-                    list(map(Contribution_from_layer, range(NLayers))), axis=0
-                )
+                layers_arr_repeat = np.repeat(layers_arr, Ntau)
+                scaled_tau_tile = np.tile(scaled_tau, NLayers)
+                scaled_tau_arr_with_0_repeat = np.repeat(scaled_tau_arr_with_0, Ntau)
+
+                if np.any(pos_contribution_mask):
+                    contribution_from_other_layers_pos = np.zeros((N, NLayers * Ntau, Nphi))
+                    scaled_tau_l_tile_pos = scaled_tau_tile[pos_contribution_mask]
+                    mathscr_B_l_repeat_posmasked = mathscr_B[:N, layers_arr_repeat[pos_contribution_mask], :]
+                    scaled_tau_arr_with_0_l_tile_posmasked = scaled_tau_arr_with_0_repeat[:-Ntau][
+                        pos_contribution_mask
+                    ]
+                    scaled_tau_arr_with_0_lp1_tile_posmasked = scaled_tau_arr_with_0_repeat[Ntau:][
+                        pos_contribution_mask
+                    ]
+                    
+                    contribution_from_other_layers_pos[:, pos_contribution_mask, :] = (
+                        mathscr_B_l_repeat_posmasked
+                        * (
+                            np.exp(
+                                (scaled_tau_l_tile_pos - scaled_tau_arr_with_0_l_tile_posmasked)
+                                / mu_arr_pos[:, None]
+                                - scaled_tau_arr_with_0_l_tile_posmasked / mu0
+                            )
+                            - np.exp(
+                                (scaled_tau_l_tile_pos - scaled_tau_arr_with_0_lp1_tile_posmasked)
+                                / mu_arr_pos[:, None]
+                                - scaled_tau_arr_with_0_lp1_tile_posmasked / mu0
+                            )
+                        )[:, :, None]
+                    )
+                    contribution_from_other_layers_pos = np.sum(
+                        contribution_from_other_layers_pos.reshape((N, NLayers, Ntau, Nphi)), axis=1
+                    )
+                if np.any(neg_contribution_mask):
+                    contribution_from_other_layers_neg = np.zeros((N, NLayers * Ntau, Nphi))
+                    scaled_tau_l_tile_neg = scaled_tau_tile[neg_contribution_mask]
+                    mathscr_B_l_repeat_negmasked = mathscr_B[N:, layers_arr_repeat[neg_contribution_mask], :]
+                    scaled_tau_arr_with_0_l_tile_negmasked = scaled_tau_arr_with_0_repeat[:-Ntau][
+                        neg_contribution_mask
+                    ]
+                    scaled_tau_arr_with_0_lp1_tile_negmasked = scaled_tau_arr_with_0_repeat[Ntau:][
+                        neg_contribution_mask
+                    ]
+                    
+                    contribution_from_other_layers_neg[:, neg_contribution_mask, :] = (
+                        mathscr_B_l_repeat_negmasked
+                        * (
+                            np.exp(
+                                (scaled_tau_arr_with_0_lp1_tile_negmasked - scaled_tau_l_tile_neg)
+                                / mu_arr_pos[:, None]
+                                - scaled_tau_arr_with_0_lp1_tile_negmasked / mu0
+                            )
+                            - np.exp(
+                                (scaled_tau_arr_with_0_l_tile_negmasked - scaled_tau_l_tile_neg)
+                                / mu_arr_pos[:, None]
+                                - scaled_tau_arr_with_0_l_tile_negmasked / mu0
+                            )
+                        )[:, :, None]
+                    )
+                    contribution_from_other_layers_neg = np.sum(
+                        contribution_from_other_layers_neg.reshape((N, NLayers, Ntau, Nphi)), axis=1
+                    )
+                
                 return (
                     mathscr_B[:, l, :]
                     * np.vstack((TMS_correction_pos, TMS_correction_neg))[:, :, None]
-                    + Contribution_from_other_layers
+                    + np.concatenate(
+                        (contribution_from_other_layers_pos, contribution_from_other_layers_neg), axis=0
+                    )
                 )
             # --------------------------------------------------------------------------------------------------------------------------
                 
@@ -441,7 +466,9 @@ def pydisort(
         return mu_arr, flux_up, flux_down, u0, u_corrected
         
     else:
-        return (mu_arr,) + _loop_and_assemble_results(
+        if only_flux:
+            NLoops = 1 # We only need to solve for the 0th Fourier mode to compute the flux
+        return (mu_arr,) + _assemble_solution_functions(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
@@ -449,15 +476,17 @@ def pydisort(
             M_inv, W,
             N, NQuad, NLeg, NLoops,
             NLayers, NBDRF,
+            multilayer_bool,
             weighted_scaled_Leg_coeffs,
             BDRF_Fourier_modes,
             mu0, I0, I0_orig, phi0,
+            beam_source_bool,
             b_pos, b_neg,
             scalar_b_pos, scalar_b_neg,
             s_poly_coeffs,
             Nscoeffs,
+            iso_source_bool,
             scale_tau,
             only_flux,
             use_sparse_NLayers,
-            n_jobs
         )

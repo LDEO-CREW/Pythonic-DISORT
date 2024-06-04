@@ -1,12 +1,13 @@
 from PythonicDISORT.subroutines import _mathscr_v
-from PythonicDISORT._one_Fourier_mode import _one_Fourier_mode 
+from PythonicDISORT._diagonalize import _diagonalize
+from PythonicDISORT._solve_for_coefs import _solve_for_coefs 
 from math import pi
 try:
     import autograd.numpy as np
 except ImportError:
     import numpy as np
 
-def _loop_and_assemble_results(
+def _assemble_solution_functions(
     scaled_omega_arr,
     tau_arr,
     scaled_tau_arr_with_0,
@@ -14,129 +15,90 @@ def _loop_and_assemble_results(
     M_inv, W,
     N, NQuad, NLeg, NLoops,
     NLayers, NBDRF,
+    multilayer_bool,
     weighted_scaled_Leg_coeffs,
     BDRF_Fourier_modes,
     mu0, I0, I0_orig, phi0,
+    beam_source_bool,
     b_pos, b_neg,
     scalar_b_pos, scalar_b_neg,
     s_poly_coeffs,
     Nscoeffs,
+    iso_source_bool,
     scale_tau,
     only_flux,
     use_sparse_NLayers,
-    n_jobs
 ):  
     """This function is wrapped by the `pydisort` function.
     It should be called through `pydisort` and never directly.
     It has many seemingly redundant arguments to maximize precomputation in `pydisort`.
-    Most of the arguments are passed to the `_one_Fourier_mode` function which this function wraps and loops.
-    These loops are relatively easy to parallelize especially since we packaged a loop as a function,
-    but we have not implemented the parallelization (TODO).
+    These arguments are passed on to the `_diagonalize` and `_solve_for_coefs` functions 
+    which this function wraps. See the Jupyter Notebook, especially section 3, for 
+    documentation, explanation and derivation.
     
     """
-    # We only need to solve for the 0th Fourier mode to determine the flux
+    ###################################### Assemble uncorrected solution functions #############################################
+    
+    # Compute all the necessary quantities
     # --------------------------------------------------------------------------------------------------------------------------
-    outputs = _one_Fourier_mode(
-        0,
+    outputs = _diagonalize(
+        NLoops,
         scaled_omega_arr,
-        tau_arr,
-        scaled_tau_arr_with_0,
         mu_arr_pos, mu_arr,
         M_inv, W,
         N, NQuad, NLeg,
-        NLayers, NBDRF,
+        NLayers,
         weighted_scaled_Leg_coeffs,
+        mu0, I0,
+        beam_source_bool,
+        Nscoeffs,
+        iso_source_bool,
+    )
+    if beam_source_bool:
+        if iso_source_bool:
+            G_collect, K_collect, B_collect, G_inv_collect_0 = outputs
+        else:
+            G_collect, K_collect, B_collect = outputs
+            G_inv_collect_0 = None
+        B_collect_0 = B_collect[0, :, :]
+    else:
+        if iso_source_bool:
+            G_collect, K_collect, G_inv_collect_0 = outputs
+        else:
+            G_collect, K_collect = outputs
+            G_inv_collect_0 = None
+        B_collect = None
+            
+    GC_collect = _solve_for_coefs(
+        NLoops,
+        G_collect,
+        K_collect,
+        B_collect,
+        G_inv_collect_0,
+        tau_arr,
+        scaled_tau_arr_with_0,
+        mu_arr_pos, mu_arr_pos * W, mu_arr,
+        N, NQuad,
+        NLayers, NBDRF,
+        multilayer_bool,
         BDRF_Fourier_modes,
         mu0, I0,
+        beam_source_bool,
         b_pos, b_neg,
         scalar_b_pos, scalar_b_neg,
         s_poly_coeffs,
         Nscoeffs,
-        use_sparse_NLayers
+        iso_source_bool,
+        use_sparse_NLayers,
     )
-    if I0 > 0:
-        if Nscoeffs > 0:
-            G_collect_0, C_0, K_collect_0, B_collect_0, G_inv_collect_0 = outputs
-            GC_collect_0 = G_collect_0 * C_0[:, None, :]
-        else:
-            GC_collect_0, K_collect_0, B_collect_0 = outputs
-    else:
-        if Nscoeffs > 0:
-            G_collect_0, C_0, K_collect_0, G_inv_collect_0 = outputs
-            GC_collect_0 = G_collect_0 * C_0[:, None, :]
-        else:
-            GC_collect_0, K_collect_0 = outputs    
-    # -------------------------------------------------------------------------------------------------------------------------- 
     
-    if not only_flux:
-        # To solve for the intensity, we need to loop NLoops times over the Fourier modes m
-        # --------------------------------------------------------------------------------------------------------------------------
-        GC_collect = np.empty((NLoops, NLayers, NQuad, NQuad))
-        K_collect = np.empty((NLoops, NLayers, NQuad))
-        GC_collect[0, :, :, :] = GC_collect_0
-        K_collect[0, :, :] = K_collect_0
-        if I0 > 0:
-            B_collect = np.empty((NLoops, NLayers, NQuad))
-            B_collect[0, :, :] = B_collect_0
-                
-        if n_jobs == 1:
-            for m in range(1, NLoops): 
-                outputs = _one_Fourier_mode(
-                    m,
-                    scaled_omega_arr,
-                    tau_arr,
-                    scaled_tau_arr_with_0,
-                    mu_arr_pos, mu_arr,
-                    M_inv, W,
-                    N, NQuad, NLeg,
-                    NLayers, NBDRF,
-                    weighted_scaled_Leg_coeffs,
-                    BDRF_Fourier_modes,
-                    mu0, I0,
-                    b_pos, b_neg,
-                    scalar_b_pos, scalar_b_neg,
-                    s_poly_coeffs,
-                    Nscoeffs,
-                    use_sparse_NLayers
-                )
-                if I0 > 0:
-                    GC_collect[m, :, :, :], K_collect[m, :, :], B_collect[m, :, :] = outputs
-                else:
-                    GC_collect[m, :, :, :], K_collect[m, :, :] = outputs
-        else:
-            from joblib import Parallel, delayed
-
-            _one_Fourier_mode_m = lambda m: _one_Fourier_mode(
-                m,
-                scaled_omega_arr,
-                tau_arr,
-                scaled_tau_arr_with_0,
-                mu_arr_pos, mu_arr,
-                M_inv, W,
-                N, NQuad, NLeg,
-                NLayers, NBDRF,
-                weighted_scaled_Leg_coeffs,
-                BDRF_Fourier_modes,
-                mu0, I0,
-                b_pos, b_neg,
-                scalar_b_pos, scalar_b_neg,
-                s_poly_coeffs,
-                Nscoeffs,
-                use_sparse_NLayers
-            )
-            outputs = Parallel(n_jobs=n_jobs)(
-                delayed(_one_Fourier_mode_m)(m) for m in range(1, NLoops)
-            )
-            
-            for m in range(1, NLoops):
-                outputs_m = outputs[m - 1]
-                GC_collect[m, :, :, :] = outputs_m[0]
-                K_collect[m, :, :] = outputs_m[1]
-                if I0 > 0:
-                    B_collect[m, :, :] = outputs_m[2]
-                
-        # --------------------------------------------------------------------------------------------------------------------------
+    G_collect_0 = G_collect[0, :, :, :]
+    K_collect_0 = K_collect[0, :, :]
+    GC_collect_0 = GC_collect[0, :, :, :]
+    # --------------------------------------------------------------------------------------------------------------------------   
         
+    if not only_flux:
+ 
         # Construct the intensity function
         # --------------------------------------------------------------------------------------------------------------------------
         def u(tau, phi, return_Fourier_error=False):
@@ -165,7 +127,7 @@ def _loop_and_assemble_results(
                 ],
                 axis=-1,
             )
-            if I0 > 0:
+            if beam_source_bool:
                 um = np.einsum(
                     "mtij, mtj -> mti", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
                 ) + B_collect[:, l, :] * np.exp(-scaled_tau[None, :, None] / mu0)
@@ -175,7 +137,7 @@ def _loop_and_assemble_results(
                 )
             
             # Contribution from particular solution for isotropic internal sources
-            if Nscoeffs > 0:
+            if iso_source_bool:
                 _mathscr_v_contribution = _mathscr_v(
                     tau, l,
                     s_poly_coeffs,
@@ -203,7 +165,7 @@ def _loop_and_assemble_results(
                     ],
                     axis=-1,
                 )
-                if I0 > 0:
+                if beam_source_bool:
                     ulast = np.einsum(
                         "tij, tj -> it", GC_collect[-1, l, :, :], np.exp(exponent), optimize=True
                     ) + B_collect[-1, l, :].T * np.exp(-scaled_tau[None, :] / mu0)
@@ -256,7 +218,7 @@ def _loop_and_assemble_results(
             ],
             axis=-1,
         )
-        if I0 > 0:
+        if beam_source_bool:
             u0 = np.einsum(
                 "tij, tj -> it", GC_collect_0[l, :, :], np.exp(exponent), optimize=True
             ) + B_collect_0[l, :].T * np.exp(-scaled_tau[None, :] / mu0)
@@ -266,7 +228,7 @@ def _loop_and_assemble_results(
             )
         
         # Contribution from particular solution for isotropic internal sources
-        if Nscoeffs > 0:
+        if iso_source_bool:
             _mathscr_v_contribution = _mathscr_v(
                 tau, l,
                 s_poly_coeffs,
@@ -288,7 +250,7 @@ def _loop_and_assemble_results(
     # --------------------------------------------------------------------------------------------------------------------------
     GC_pos = GC_collect_0[:, :N, :]
     GC_neg = GC_collect_0[:, N:, :]
-    if I0 > 0:
+    if beam_source_bool:
         B_pos = B_collect_0[:, :N].T
         B_neg = B_collect_0[:, N:].T
 
@@ -311,7 +273,7 @@ def _loop_and_assemble_results(
         else:
             scaled_tau = tau
 
-        if Nscoeffs > 0:
+        if iso_source_bool:
             _mathscr_v_contribution = _mathscr_v(
                 tau, l,
                 s_poly_coeffs,
@@ -324,7 +286,7 @@ def _loop_and_assemble_results(
         else:
             _mathscr_v_contribution = 0
 
-        if I0 > 0:
+        if beam_source_bool:
             direct_beam_contribution = B_pos[:, l] * np.exp(-scaled_tau[None, :] / mu0)
         else:
             direct_beam_contribution = 0
@@ -364,7 +326,7 @@ def _loop_and_assemble_results(
         else:
             scaled_tau = tau
 
-        if Nscoeffs > 0:
+        if iso_source_bool:
             _mathscr_v_contribution = _mathscr_v(
                 tau, l,
                 s_poly_coeffs,
@@ -377,7 +339,7 @@ def _loop_and_assemble_results(
         else:
             _mathscr_v_contribution = 0
         
-        if I0 > 0:
+        if beam_source_bool:
             direct_beam_contribution = B_neg[:, l] * np.exp(-scaled_tau[None, :] / mu0)
             direct_beam = I0 * mu0 * np.exp(-tau / mu0)
             direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0)

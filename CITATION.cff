@@ -1,0 +1,31 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: PythonicDISORT
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Dion J. X.
+    family-names: Ho
+    email: dh3065@columbia.edu
+    affiliation: Columbia University, Department of Applied Physics and Applied Mathematics
+    orcid: 'https://orcid.org/0009-0000-5829-5081'
+repository-code: 'https://github.com/LDEO-CREW/Pythonic-DISORT'
+abstract: >-
+  PythonicDISORT is a Discrete Ordinates Solver for the (1D) Radiative Transfer
+  Equation in a single or multi-layer plane-parallel atmosphere. 
+  It is coded entirely in Python 3 and is based on Stamnes'
+  FORTRAN DISORT (see references in the Jupyter Notebook)
+  and has its main features.
+keywords:
+  - Python
+  - Radiative Transfer
+  - Discrete Ordinates Method
+  - Atmospheric Science
+  - Climate Science
+  - DISORT
+license: MIT
+date-released: 2023-05-30
