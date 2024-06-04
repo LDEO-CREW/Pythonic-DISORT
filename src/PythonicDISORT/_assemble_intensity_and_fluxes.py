@@ -28,9 +28,9 @@ def _assemble_intensity_and_fluxes(
     NLayers_to_use_sparse,              # Number of layers above or equal which to use sparse matrices
     _autograd_compatible,               # Should the output functions be compatible with autograd?
 ):  
-    """In this function the solution functions: intensity `u`, upward flux `flux_up`, downward flux `flux_down` 
-    are assembled from the eigenpairs and the coefficients which have been solved from the boundary conditions. 
-    These solution functions are then returned.
+    """Assembles the solution functions: intensity `u`, upward flux `flux_up`, downward flux `flux_down` 
+    from the previously solved eigenpairs and coefficients from the boundary conditions. 
+    Returns these solution functions.
     This function is wrapped by the `pydisort` function.
     It should be called through `pydisort` and never directly.
     It has many seemingly redundant arguments, which are described below,
@@ -162,6 +162,13 @@ def _assemble_intensity_and_fluxes(
         # Construct the intensity function (refer to Section 3.7 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         def u(tau, phi, return_Fourier_error=False):
+            """
+            Intensity function with arguments `(tau, phi, return_Fourier_error=False)` 
+            of types `(array or float, array or float, bool)`.
+            Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
+            The optional flag `return_Fourier_error` determines whether the function will also return
+            the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
+            """
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
             assert np.all(tau >= 0)
@@ -251,7 +258,14 @@ def _assemble_intensity_and_fluxes(
     
     # Construct u0
     # --------------------------------------------------------------------------------------------------------------------------
-    def u0(tau, return_act_dscale_reclassification=False):
+    def u0(tau, _return_act_dscale_for_reclass=False):
+        """        
+        Zeroth Fourier mode of the intensity with argument `tau` (type: array or float).
+        Returns an ndarray with axes corresponding to variation with `mu` and `tau` respectively.
+        This function is useful for calculating actinic fluxes and other quantities of interest,
+        but reclassification of delta-scaled flux and other corrections must be done manually
+        (for actinic flux `generate_diff_act_flux_funcs` will automatically perform the reclassification).
+        """
         tau = np.atleast_1d(tau)
         assert np.all(tau >= 0)
         assert np.all(tau <= tau_arr[-1])
@@ -268,11 +282,11 @@ def _assemble_intensity_and_fluxes(
             scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
             # The following complements the function `subroutines.generate_diff_act_flux_funcs`
             # in performing the reclassification of delta-scaled actinic flux
-            if return_act_dscale_reclassification: 
+            if _return_act_dscale_for_reclass: 
                 act_dscale_reclassification = I0 * np.exp(-scaled_tau / mu0) - I0 * np.exp(-tau / mu0)
         else:
             scaled_tau = tau
-            if return_act_dscale_reclassification:
+            if _return_act_dscale_for_reclass:
                 act_dscale_reclassification = 0
 
         exponent = np.concatenate(
@@ -305,7 +319,7 @@ def _assemble_intensity_and_fluxes(
             )
             u0 += _mathscr_v_contribution
         
-        if return_act_dscale_reclassification:
+        if _return_act_dscale_for_reclass:
             return I0_orig * np.squeeze(u0), act_dscale_reclassification
         else:
             return I0_orig * np.squeeze(u0)
@@ -321,6 +335,10 @@ def _assemble_intensity_and_fluxes(
 
 
     def flux_up(tau):
+        """    
+        (Energetic) Flux function with argument `tau` (type: array or float) for positive (upward) `mu` values.
+        Returns the diffuse flux magnitudes (same type and size as `tau`).
+        """
         tau = np.atleast_1d(tau)
         assert np.all(tau >= 0)
         assert np.all(tau <= tau_arr[-1])
@@ -375,6 +393,11 @@ def _assemble_intensity_and_fluxes(
 
 
     def flux_down(tau):
+        """
+        (Energetic) Flux function with argument `tau` (type: array or float) for negative (downward) `mu` values.
+        Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
+        same type and size as `tau`.
+        """
         tau = np.atleast_1d(tau)
         assert np.all(tau >= 0)
         assert np.all(tau <= tau_arr[-1])

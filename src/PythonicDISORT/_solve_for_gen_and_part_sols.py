@@ -17,9 +17,9 @@ def _solve_for_gen_and_part_sols(
     there_is_iso_source,        # Is there an isotropic source?
 ):
     """
-    In this function the coefficient matrix of the system of ODEs for each Fourier mode is diagonalized 
-    and the eigenpairs are returned; the general solution to each system of ODEs is determined up to unknown coefficients.
-    The particular solutions to each system of ODEs is also determined and its coefficient vector is returned.
+    Diagonalizes the coefficient matrix of the system of ordinary differential equations (ODEs) 
+    for each Fourier mode and returns the eigenpairs which give the general solution up to unknown coefficients.
+    Also solves for the particular solution to each system of ODEs and returns its coefficient vector.
     This function is wrapped by the `_assemble_intensity_and_fluxes` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
@@ -46,16 +46,18 @@ def _solve_for_gen_and_part_sols(
     | `there_is_iso_source`          | boolean                            |
     
     Notable internal variables of _solve_for_gen_and_part_sols
-    |      Variable     |             Type / Shape               |
-    | ----------------- | -------------------------------------- |
-    | `ells_all`        | `NLeg`                                 |
-    | `G_collect`       | `NFourier*NLayers x NQuad x NQuad`     | Reshaped to NFourier x NLayers x NQuad x NQuad
-    | `K_collect`       | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
-    | `alpha_arr`       | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
-    | `beta_arr`        | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
-    | `X_tilde_arr`     | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
-    | `B_collect`       | `NFourier*NLayers x NQuad` or `None`   | Reshaped to NFourier x NLayers x NQuad
-    | `G_inv_collect_0` | `NLayers x NQuad x NQuad` or `None`    |
+    |       Variable      |             Type / Shape               |
+    | ------------------- | -------------------------------------- |
+    | `ells_all`          | `NLeg`                                 |
+    | `G_collect`         | `NFourier*NLayers x NQuad x NQuad`     | Reshaped to NFourier x NLayers x NQuad x NQuad
+    | `K_collect`         | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
+    | `alpha_arr`         | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
+    | `beta_arr`          | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
+    | `X_tilde_arr`       | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
+    | `B_collect`         | `NFourier*NLayers x NQuad` or `None`   | Reshaped to NFourier x NLayers x NQuad
+    | `eigenvecs_GpG_arr` | `NFourier*NLayers x NQuad/2 x NQuad    |
+    | `eigenvecs_GmG_arr` | `NFourier*NLayers x NQuad/2 x NQuad    |
+    | `G_inv_collect_0`   | `NLayers x NQuad x NQuad` or `None`    |
 
     """
     ############################### Assemble system and diagonalize coefficient matrix #########################################
@@ -190,7 +192,7 @@ def _solve_for_gen_and_part_sols(
             G_inv_collect_0[no_shortcut_indices_0, :, :] = G_inv_arr[: len(no_shortcut_indices_0), :, :]
         # --------------------------------------------------------------------------------------------------------------------------
 
-        # Particular solution for the sunbeam source (refer to Section 3.6.1 of the Comprehensive Documentation)
+        # Particular solution for the direct beam source (refer to Section 3.6.1 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         if there_is_beam_source:
             X_tilde_arr = X_tilde_arr[: len(no_shortcut_indices), :]

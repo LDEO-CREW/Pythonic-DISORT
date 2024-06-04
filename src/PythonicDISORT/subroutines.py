@@ -365,6 +365,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
     which are stored in .npz files, against results from PythonicDISORT. Used in our PyTests.
 
     """
+    # Load saved results from Stamnes' DISORT
     uu = results["uu"]
     flup = results["flup"]
     rfldn = results["rfldn"]
@@ -438,6 +439,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
     diff_tau_pt = tau_test_arr[max_diff_tau_index]
     ratio_tau_pt = tau_test_arr[max_ratio_tau_index]
     print("Intensities")
+    print()
     print("At tau = " + str(diff_tau_pt))
     print("Max pointwise difference =", np.max(diff[:, max_diff_tau_index, :]))
     print("At tau = " + str(ratio_tau_pt))

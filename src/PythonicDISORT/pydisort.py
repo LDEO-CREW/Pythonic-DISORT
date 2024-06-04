@@ -28,6 +28,7 @@ def pydisort(
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
     and sources. Optionally performs delta-M scaling and NT corrections. 
+    Refer to the `*_test.ipynb` Jupyter Notebooks in the `pydisotest` directory for examples of use.
     
         See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters
         for a more detailed explanation of each parameter.
@@ -64,7 +65,7 @@ def pydisort(
         Dirichlet boundary condition for the downward direction.
     only_flux : optional, bool
         Do NOT compute the intensity function?
-    f_arr : optional, array
+    f_arr : optional, array or float
         Fractional scattering into peak for each atmospheric layer.
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
@@ -79,22 +80,24 @@ def pydisort(
 
     Returns
     -------
-    mu_arr : array
+    mu_arr : array or float
         All `mu` (cosine of polar angle) quadrature nodes.
     Fp(tau) : function, function
-        (Energetic) Flux function with argument `tau` (type: array) for positive (upward) `mu` values.
-        Returns the diffuse flux magnitudes (type: array).
+        (Energetic) Flux function with argument `tau` (type: array or float) for positive (upward) `mu` values.
+        Returns the diffuse flux magnitudes (same type and size as `tau`).
     Fm(tau) : function
-        (Energetic) Flux function with argument `tau` (type: array) for negative (downward) `mu` values.
-        Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)).
+        (Energetic) Flux function with argument `tau` (type: array or float) for negative (downward) `mu` values.
+        Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
+        same type and size as `tau`.
     u0(tau) : function
-        Zeroth Fourier mode of the intensity with argument `tau` (type: array).
+        Zeroth Fourier mode of the intensity with argument `tau` (type: array or float).
         Returns an ndarray with axes corresponding to variation with `mu` and `tau` respectively.
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually
         (for actinic flux `generate_diff_act_flux_funcs` will automatically perform the reclassification).
     u(tau, phi) : function, optional
-        Intensity function with arguments `(tau, phi, return_Fourier_error=False)` of types `(array, array, bool)`.
+        Intensity function with arguments `(tau, phi, return_Fourier_error=False)` 
+        of types `(array or float, array or float, bool)`.
         Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
         The optional flag `return_Fourier_error` determines whether the function will also return
         the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.

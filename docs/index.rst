@@ -5,7 +5,7 @@
 
 Documentation for PythonicDISORT package
 ========================================
-Installation: pip `install PythonicDISORT`
+Installation: `pip install PythonicDISORT`
 
 Modules (Basic Documentation)
 =============================
@@ -16,7 +16,7 @@ Modules (Basic Documentation)
    
 Jupyter Notebook (Comprehensive Documentation)
 ==============================================
-We highly recommend reading the non-optional parts of sections 1 and 2 before use.
+It is highly recommended that new users read the non-optional parts of sections 1 and 2.
 
 .. toctree::
    :maxdepth: 4

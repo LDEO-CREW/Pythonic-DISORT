@@ -29,9 +29,9 @@ def _solve_for_coeffs(
     NLayers_to_use_sparse,                  # Number of layers above or equal which to use sparse matrices
 ):
     """
-    In this function the unknown coefficients of the general solution to the system
-    of ODEs for each Fourier mode is solved using the boundary conditions 
-    and the product of the coefficients and the eigenvectors is returned.
+    Uses the boundary conditions to solve for the unknown coefficients 
+    of the general solution to the system of ordinary differential equations for each Fourier mode. 
+    Returns the product of the coefficients and the eigenvectors.
     This function is wrapped by the `_assemble_intensity_and_fluxes` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
