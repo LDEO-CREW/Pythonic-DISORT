@@ -27,8 +27,10 @@ def pydisort(
     use_sparse_NLayers=6
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
-    of a multilayer atmosphere with the specified optical properties, boundary conditions
-    and sources. Optionally performs delta-M scaling and NT corrections.
+    of a multi-layer atmosphere with the specified optical properties, boundary conditions
+    and sources. Optionally performs delta-M scaling and NT corrections. 
+    See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters 
+    for a more detailed explanation of each parameter.
 
 
     Parameters
@@ -75,17 +77,14 @@ def pydisort(
         All mu (cosine of polar angle) quadrature nodes.
     function
         Flux function with argument tau (type: array) for positive (upward) mu values.
-        The tau inputs must be sorted in ascending order.
         Returns the diffuse flux magnitudes (type: array).
     function
         Flux function with argument tau (type: array)  for negative (downward) mu values.
-        The tau inputs must be sorted in ascending order.
         Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)).
     function, optional
         Intensity function with arguments (tau, phi, return_Fourier_error=False) of types (array, array, bool).
-        The tau inputs must be sorted in ascending order.
-        The first and primary output is an ndarray with axes corresponding to (mu, tau, phi) variation.
-        The optional flag `return_Fourier_error` determines whether the function will also output
+        Returns an ndarray with axes corresponding to (mu, tau, phi) variation.
+        The optional flag `return_Fourier_error` determines whether the function will also return
         the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
 
     """
