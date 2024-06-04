@@ -48,7 +48,7 @@ def pydisort(
     Leg_coeffs_all : ndarray
         All available unweighted phase function Legendre coefficients.
     mu0 : float
-        Polar angle of the incident beam.
+        Cosine of polar angle of the incident beam.
     I0 : float
         Intensity of the incident beam.
     phi0 : float

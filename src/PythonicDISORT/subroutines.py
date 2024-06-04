@@ -113,7 +113,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
 
 
 def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
-    """Generates Gauss-Legendre quadrature weights and zero points for integration from c to d.
+    """Generates Clenshaw_Curtis quadrature weights and zero points for integration from c to d.
 
     Parameters
     ----------
@@ -228,7 +228,7 @@ def atleast_2d_append(*arys):
 def generate_diff_act_flux_funcs(u0):
     """Generates respectively the up and down diffuse actinic flux functions.
     This a use case of the u0 function that is an output of pydisort.
-    Reclassification of delta-scaled flux is not performed and must be done manually.
+    The reclassification of delta-scaled actinic flux is automatically performed.
 
     Parameters
     ----------
@@ -251,7 +251,10 @@ def generate_diff_act_flux_funcs(u0):
 
     # Note that the zeroth axis of the array u0(tau) captures variation with mu
     flux_act_up = lambda tau: 2 * pi * GL_weights @ u0(tau)[:N]
-    flux_act_down_diffuse = lambda tau: 2 * pi * GL_weights @ u0(tau)[N:]
+    def flux_act_down_diffuse(tau):
+        u0_cache, act_dscale_reclassification = u0(tau, True)
+        result_without_reclassification = 2 * pi * GL_weights @ u0_cache[N:]
+        return result_without_reclassification + act_dscale_reclassification
     
     return flux_act_up, flux_act_down_diffuse
 

@@ -3,8 +3,9 @@ The PythonicDISORT package is a Discrete Ordinates Solver for the (1D) Radiative
 It is coded entirely in Python 3 and in as "Pythonic" a manner as possible: we vectorize as well as use list comprehension and `map` as much as possible. 
 
 PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]) and has its main features: 
-delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, isotropic internal sources (thermal source),
-Bi-Directional Reflectance Function (BDRF) and more.
+delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, isotropic internal sources (thermal source), 
+Dirichlet boundary conditions (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) for surface reflection, and more.
+In addition, we added a subroutine to calculate actinic fluxes, and we are open to further feature requests.
 
 This repository also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) in the `disort4.0.99_f2py` directory.
 The original was downloaded from http://www.rtatmocn.com/disort/. The wrapper was inspired by https://github.com/kconnour/pyRT_DISORT.

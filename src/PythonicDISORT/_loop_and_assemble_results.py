@@ -225,7 +225,7 @@ def _loop_and_assemble_results(
     
     # Construct u0
     # --------------------------------------------------------------------------------------------------------------------------
-    def u0(tau):
+    def u0(tau, return_act_dscale_reclassification=False):
         tau = np.atleast_1d(tau)
         assert np.all(tau >= 0)
         assert np.all(tau <= tau_arr[-1])
@@ -240,8 +240,14 @@ def _loop_and_assemble_results(
             tau_dist_from_top = tau_arr[l] - tau
             scaled_tau_dist_from_top = tau_dist_from_top * scale_tau[l]
             scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
+            # The following complements the function `subroutines.generate_diff_act_flux_funcs`
+            # in performing the reclassification of delta-scaled actinic flux
+            if return_act_dscale_reclassification: 
+                act_dscale_reclassification = I0 * np.exp(-scaled_tau / mu0) - I0 * np.exp(-tau / mu0)
         else:
             scaled_tau = tau
+            if return_act_dscale_reclassification:
+                act_dscale_reclassification = 0
 
         exponent = np.concatenate(
             [
@@ -272,7 +278,10 @@ def _loop_and_assemble_results(
             )
             u0 += _mathscr_v_contribution
         
-        return I0_orig * np.squeeze(u0)
+        if return_act_dscale_reclassification:
+            return I0_orig * np.squeeze(u0), act_dscale_reclassification
+        else:
+            return I0_orig * np.squeeze(u0)
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct the flux functions
