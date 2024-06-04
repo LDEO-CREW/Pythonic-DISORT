@@ -7,7 +7,7 @@ from math import pi
 
 
 def _solve_for_coefs(
-    NLoops,
+    NFourier,
     G_collect,
     K_collect,
     B_collect,
@@ -36,11 +36,11 @@ def _solve_for_coefs(
     """
     ################################## Solve for coefficients of homogeneous solution ##########################################
     
-    GC_collect = np.empty((NLoops, NLayers, NQuad, NQuad))
+    GC_collect = np.empty((NFourier, NLayers, NQuad, NQuad))
     use_sparse_framework = NLayers >= use_sparse_NLayers
     
     # The following loops can easily be parallelized, but the speed-up is unlikely to be worth the overhead
-    for m in range(NLoops):
+    for m in range(NFourier):
         m_equals_0 = (m == 0)
         BDRF_bool = m < NBDRF
         
