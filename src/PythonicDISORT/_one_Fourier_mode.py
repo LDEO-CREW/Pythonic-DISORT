@@ -1,6 +1,7 @@
 from PythonicDISORT.subroutines import _mathscr_v
 import numpy as np
 import scipy as sc
+from warnings import warn
 from math import pi
 
 
@@ -45,6 +46,7 @@ def _one_Fourier_mode(
     # Generate mathscr_D and mathscr_X (BDRF terms)
     # --------------------------------------------------------------------------------------------------------------------------
     # If h_\ell = 0 for all \ell \geq m, then there is no BDRF contribution
+    # We take precautions against overflow and underflow
     if m < NBDRF and np.all(np.isfinite(asso_leg_term_pos[:NBDRF, :])):
         weighted_asso_Leg_coeffs_BDRF = (
             weighted_Leg_coeffs_BDRF[ells[: (NBDRF - m)]] * fac[: (NBDRF - m)]
@@ -78,6 +80,7 @@ def _one_Fourier_mode(
         weighted_asso_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, :][ells] * fac
         scaled_omega_l = scaled_omega_arr[l]
         
+        # We take precautions against overflow and underflow
         if np.any(weighted_asso_Leg_coeffs_l > 0) and np.all(
             np.isfinite(asso_leg_term_pos)
         ):
@@ -109,6 +112,13 @@ def _one_Fourier_mode(
             # Diagonalization of coefficient matrix
             # --------------------------------------------------------------------------------------------------------------------------
             K_squared, eigenvecs_GpG = np.linalg.eig((alpha - beta) @ (alpha + beta))
+            if m == 0:
+                if np.any(np.isclose(K_squared, 0)):
+                    warn(
+                        "Single-scattering albedo for layer "
+                        + str(l)
+                        + " (counting from 0) is too close to 1. Results may be inaccurate."
+                    )
 
             # Eigenvalues arranged negative then positive, from largest to smallest magnitude
             K = np.concatenate([-np.sqrt(K_squared), np.sqrt(K_squared)])

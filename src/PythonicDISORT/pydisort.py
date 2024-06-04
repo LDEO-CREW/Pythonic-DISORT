@@ -90,6 +90,11 @@ def pydisort(
     function
         Flux function with argument tau (type: array)  for negative (downward) mu values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)).
+    function
+        Zeroth Fourier mode of the intensity with argument tau (type: array).
+        Returns an ndarray with axes corresponding to (mu, tau) variation.
+        This function is useful for calculating actinic flux and other quantities of interest
+        but reclassification of delta-scaled flux and other corrections must be done manually.
     function, optional
         Intensity function with arguments (tau, phi, return_Fourier_error=False) of types (array, array, bool).
         Returns an ndarray with axes corresponding to (mu, tau, phi) variation.
@@ -118,6 +123,7 @@ def pydisort(
     thickness_arr = np.concatenate([[tau_arr[0]], np.diff(tau_arr)])
     Nscoeffs = np.shape(s_poly_coeffs)[1]
     NLeg_all = np.shape(Leg_coeffs_all)[1]
+    N = NQuad // 2
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Input checks
@@ -131,6 +137,7 @@ def pydisort(
     # There must be a positive number of Legendre coefficients each with magnitude <= 1
     # The user must supply at least as many phase function Legendre coefficients as intended for use
     assert NLeg > 0
+    assert np.all(Leg_coeffs_all[:, 0] == 1)
     assert np.all(np.abs(Leg_coeffs_all) <= 1)
     assert np.all(np.abs(Leg_coeffs_BDRF) <= 1)
     assert NLeg <= NLeg_all
@@ -148,7 +155,6 @@ def pydisort(
     assert NLoops <= NLeg
     # Not strictly necessary but there will be tremendous inaccuracies if this is violated
     assert NQuad >= NLeg
-    N = NQuad // 2
     # We require principal angles and a downward incident beam
     assert I0 >= 0
     if I0 > 0:
@@ -213,7 +219,7 @@ def pydisort(
         ############################### Perform NT corrections on the intensity but not the flux ###################################
         
         # Delta-M scaled solution; no further corrections to the flux
-        flux_up, flux_down, u_star = _loop_and_assemble_results(
+        flux_up, flux_down, u0, u_star = _loop_and_assemble_results(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
@@ -420,7 +426,7 @@ def pydisort(
                 return u_star(tau, phi, False) + np.squeeze(NT_corrections)
         # --------------------------------------------------------------------------------------------------------------------------
 
-        return mu_arr, flux_up, flux_down, u_corrected
+        return mu_arr, flux_up, flux_down, u0, u_corrected
         
     else:
         return (mu_arr,) + _loop_and_assemble_results(
