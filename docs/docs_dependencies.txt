@@ -1,6 +1,5 @@
 numpy
 scipy
-parfor
 autograd
 ipython
 matplotlib

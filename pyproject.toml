@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+dependencies = [
+  'numpy>=1.12',
+  'scipy>=1.2.1',
+]
+name = "PyDISORT"
+version = "0.0.0"
+authors = [
+  { name="Dion Ho", email="dh3065@columbia.edu" },
+]
+description = "Solves the (1D) Radiative Transfer Equation for a multilayer atmospheric layer using the Discrete Ordinates Method."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+notebook_dependencies = [
+	'autograd>=1.5',
+	'jupyter>1.0.0',
+	'notebook>6.5.2',
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Maths2209/Pythonic-DISORT"
