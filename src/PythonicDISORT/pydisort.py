@@ -29,9 +29,11 @@ def pydisort(
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
     and sources. Optionally performs delta-M scaling and NT corrections. 
-    See https://pythonic-disort.readthedocs.io/en/latest/PythonicDISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters 
-    for a more detailed explanation of each parameter.
-
+    
+        See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters
+        for a more detailed explanation of each parameter.
+        See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#2.-PythonicDISORT-modules-and-outputs
+        for a more detailed explanation of each output.
 
     Parameters
     ----------
@@ -58,7 +60,7 @@ def pydisort(
     b_neg : optional, 2darray or float
         Dirichlet boundary condition for the downward direction.
     only_flux : optional, bool
-        Do NOT compute the intensity function?.
+        Do NOT compute the intensity function?
     f_arr : optional, array
         Fractional scattering into peak for each atmospheric layer.
     NT_cor : optional, bool
@@ -100,9 +102,9 @@ def pydisort(
     # Setup
     # --------------------------------------------------------------------------------------------------------------------------
     NLayers = len(tau_arr)
-    if NLeg == None:
+    if NLeg is None:
         NLeg = NQuad
-    if NLoops == None:
+    if NLoops is None:
         NLoops = NQuad
     scalar_b_pos = False
     scalar_b_neg = False
@@ -390,14 +392,16 @@ def pydisort(
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
             NT_corrections = TMS_correction(tau, phi)
-            
+
+            # We provide two options below, comment and uncomment as desired.
+            # Option 1 is more computationally efficient but would prevent the use of autograd for testing.
+
             NT_corrections = NT_corrections + np.concatenate(
                 [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
-            )
-            ## The line below is a more computationally efficient implementation of the
-            ## line above but would prevent the use of autograd for testing.
-            #NT_corrections[N:, :, :] += IMS_correction(tau, phi)
-            
+            )  # Option 1
+
+            #NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
+
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
                 return (

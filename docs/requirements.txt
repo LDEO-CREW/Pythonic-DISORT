@@ -1,5 +1,5 @@
-# Requirements for ReadTheDocs, not the PyDISORT package
-PyDISORT
+# Requirements for ReadTheDocs, not the PythonicDISORT package
+
 numpy
 scipy
 autograd

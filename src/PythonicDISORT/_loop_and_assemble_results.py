@@ -182,9 +182,8 @@ def _loop_and_assemble_results(
                     )
                 Fourier_error = np.max(
                     np.abs(
-                        (ulast[:, :, None]
-                        * np.cos((NLoops - 1) * (phi0 - phi))[None, None, :])
-                        / np.clip(intensities, a_min = 1e-15, a_max = None)
+                        (ulast[:, :, None] * np.cos((NLoops - 1) * (phi0 - phi))[None, None, :])
+                        / np.clip(intensities, a_min=1e-15, a_max=None)
                     )
                 )
                 return intensities, Fourier_error

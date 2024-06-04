@@ -1,10 +1,10 @@
 .. PythonicDISORT documentation master file, created by
-   sphinx-quickstart on Tue Mar 14 00:46:27 2023.
+   sphinx-quickstart on Tue Apr 18 10:49:27 2023.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Documentation for Pythonic DISORT package
-=========================================
+Documentation for PythonicDISORT package
+========================================
 
 Modules (Basic Documentation)
 =============================
@@ -20,5 +20,5 @@ We highly recommend reading the non-optional parts of sections 1 and 2 before us
 .. toctree::
    :maxdepth: 4
    
-   Pythonic DISORT
+   Pythonic-DISORT
   

@@ -150,8 +150,8 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
 
 def generate_FD_mat(Ntau, a, b):
     """Generates a sparse first derivative matrix in `csr` format with second-order accuracy
-    on [a,b] with Ntau grid points.
-    We use second order forward and backward differences at the boundaries.
+    on [a,b] with `Ntau` grid points.
+    We use second order forward or backward differences at the boundaries.
 
     Parameters
     ----------
@@ -188,7 +188,8 @@ def generate_FD_mat(Ntau, a, b):
   
 
 def atleast_2d_append(*arys):
-    """View inputs as arrays with at least two dimensions. Dimensions are added, when necessary, to the back of the shape tuple rather than to the front.
+    """View inputs as arrays with at least two dimensions. 
+    Dimensions are added, when necessary, to the back of the shape tuple rather than to the front.
         
         This is exactly NumPy's `atleast_2d` function but altered to add dimensions to the back of the shape tuple rather than to the front.
         View the documentation for NumPy's `atleast_2d` function at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
@@ -255,8 +256,8 @@ def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr):
     
     
 def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
-    """Performs the pointwise comparisons between results from Stamnes' DISORT
-    which are stored in .npz files against results from PythonicDISORT. Used in our PyTests.
+    """Performs pointwise comparisons between results from Stamnes' DISORT,
+    which are stored in .npz files, against results from PythonicDISORT. Used in our PyTests.
 
     """
     uu = results["uu"]
