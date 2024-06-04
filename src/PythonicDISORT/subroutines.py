@@ -107,7 +107,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
         Quadrature weights.
 
     """
-    mu_arr_pos, W = leggauss(N)
+    mu_arr_pos, W = leggauss(int(N))
 
     return transform_interval(mu_arr_pos, c, d), transform_weights(W, c, d)
 
@@ -273,20 +273,28 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
     # --------------------------------------------------------------------------------------------------
     print("Max pointwise differences")
     print()
-    
+
     # Upward (diffuse) fluxes
     print("Upward (diffuse) fluxes")
     diff_flux_up = np.abs(flup - flux_up(tau_test_arr))
-    ratio_flux_up = diff_flux_up / np.clip(flup, a_min=1e-6, a_max=None)
+    ratio_flux_up = np.divide(
+        diff_flux_up,
+        flup,
+        out=np.zeros_like(diff_flux_up),
+        where=~np.isclose(flup, 0),
+    )
     print("Difference =", np.max(diff_flux_up))
     print("Difference ratio =", np.max(ratio_flux_up))
     print()
-    
+
     # Downward (diffuse) fluxes
     print("Downward (diffuse) fluxes")
     diff_flux_down_diffuse = np.abs(rfldn - flux_down(tau_test_arr)[0])
-    ratio_flux_down_diffuse = diff_flux_down_diffuse / np.clip(
-        rfldn, a_min=1e-6, a_max=None
+    ratio_flux_down_diffuse = np.divide(
+        diff_flux_down_diffuse,
+        rfldn,
+        out=np.zeros_like(diff_flux_down_diffuse),
+        where=~np.isclose(rfldn, 0),
     )
     print("Difference =", np.max(diff_flux_down_diffuse))
     print(
@@ -294,21 +302,31 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
         np.max(ratio_flux_down_diffuse),
     )
     print()
-    
+
     # Direct (downward) fluxes
     print("Direct (downward) fluxes")
     diff_flux_down_direct = np.abs(rfldir - flux_down(tau_test_arr)[1])
-    ratio_flux_down_direct = diff_flux_down_direct / np.clip(rfldir, a_min=1e-6, a_max=None)
+    ratio_flux_down_direct = np.divide(
+        diff_flux_down_direct,
+        rfldir,
+        out=np.zeros_like(diff_flux_down_direct),
+        where=~np.isclose(rfldir, 0),
+    )
     print("Difference =", np.max(diff_flux_down_direct))
     print(
         "Difference ratio =",
         np.max(ratio_flux_down_direct),
-)
+    )
     print()
 
     # Intensity
     diff = np.abs(uu - u(tau_test_arr, phi_arr)[reorder_mu])[mu_to_compare]
-    diff_ratio = diff / np.clip(uu[mu_to_compare], a_min=1e-6, a_max=None)
+    diff_ratio = np.divide(
+        diff,
+        uu[mu_to_compare],
+        out=np.zeros_like(diff),
+        where=~np.isclose(uu[mu_to_compare], 0),
+    )
     max_diff_tau_index = np.argmax(np.max(np.max(diff, axis=0), axis=1))
     max_ratio_tau_index = np.argmax(np.max(np.max(diff_ratio, axis=0), axis=1))
     

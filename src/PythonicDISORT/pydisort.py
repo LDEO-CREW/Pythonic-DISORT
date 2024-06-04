@@ -93,7 +93,7 @@ def pydisort(
     function
         Zeroth Fourier mode of the intensity with argument tau (type: array).
         Returns an ndarray with axes corresponding to (mu, tau) variation.
-        This function is useful for calculating actinic flux and other quantities of interest
+        This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually.
     function, optional
         Intensity function with arguments (tau, phi, return_Fourier_error=False) of types (array, array, bool).
@@ -102,7 +102,7 @@ def pydisort(
         the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
 
     """
-    # Turn scalars to arrays
+    # Turn scalars into arrays
     # --------------------------------------------------------------------------------------------------------------------------
     tau_arr = np.atleast_1d(tau_arr)
     omega_arr = np.atleast_1d(omega_arr)
@@ -113,15 +113,26 @@ def pydisort(
     
     # Setup
     # --------------------------------------------------------------------------------------------------------------------------
-    NLayers = len(tau_arr)
     if NLeg is None:
         NLeg = NQuad
     if NLoops is None:
         NLoops = NQuad
+    if np.all(b_pos == 0):
+        b_pos = 0
+    if np.all(b_neg == 0):
+        b_neg = 0
+    if np.all(s_poly_coeffs == 0):
+        Nscoeffs = 0
+    else:
+        Nscoeffs = np.shape(s_poly_coeffs)[1]
+    if np.all(Leg_coeffs_BDRF == 0):
+        NBDRF = 0
+    else:
+        NBDRF = len(Leg_coeffs_BDRF)
+    NLayers = len(tau_arr)
     scalar_b_pos = False
     scalar_b_neg = False
     thickness_arr = np.concatenate([[tau_arr[0]], np.diff(tau_arr)])
-    Nscoeffs = np.shape(s_poly_coeffs)[1]
     NLeg_all = np.shape(Leg_coeffs_all)[1]
     N = NQuad // 2
     # --------------------------------------------------------------------------------------------------------------------------
@@ -177,10 +188,14 @@ def pydisort(
     
     # Some more setup
     # --------------------------------------------------------------------------------------------------------------------------
-    NBDRF = len(Leg_coeffs_BDRF)
     weighted_Leg_coeffs_BDRF = (2 * np.arange(NBDRF) + 1) * Leg_coeffs_BDRF
     weighted_Leg_coeffs_all = (2 * np.arange(NLeg_all) + 1) * Leg_coeffs_all
     Leg_coeffs = Leg_coeffs_all[:, :NLeg]
+    if (scalar_b_pos and b_pos == 0) and (scalar_b_neg and b_neg == 0) and Nscoeffs == 0 and I0 > 0:
+        I0_orig = I0
+        I0 = 1
+    else:
+        I0_orig = 1
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Generation of Double Gauss-Legendre quadrature weights and points
@@ -229,7 +244,7 @@ def pydisort(
             NLayers, NBDRF,
             weighted_scaled_Leg_coeffs,
             weighted_Leg_coeffs_BDRF,
-            mu0, I0, phi0,
+            mu0, I0, I0_orig, phi0,
             b_pos, b_neg,
             scalar_b_pos, scalar_b_neg,
             s_poly_coeffs,
@@ -415,15 +430,16 @@ def pydisort(
             #)  # Option 1
 
             NT_corrections[N:, :, :] += IMS_correction(tau, phi)  # Option 2
-
+               
+            NT_corrections[np.isclose(NT_corrections, 0)] = 0
             if return_Fourier_error:
                 u_star_outputs = u_star(tau, phi, True)
                 return (
-                    u_star_outputs[0] + np.squeeze(NT_corrections),
+                    u_star_outputs[0] + I0_orig * np.squeeze(NT_corrections),
                     u_star_outputs[1],
                 )
             else:
-                return u_star(tau, phi, False) + np.squeeze(NT_corrections)
+                return u_star(tau, phi, False) + I0_orig * np.squeeze(NT_corrections)
         # --------------------------------------------------------------------------------------------------------------------------
 
         return mu_arr, flux_up, flux_down, u0, u_corrected
@@ -439,7 +455,7 @@ def pydisort(
             NLayers, NBDRF,
             weighted_scaled_Leg_coeffs,
             weighted_Leg_coeffs_BDRF,
-            mu0, I0, phi0,
+            mu0, I0, I0_orig, phi0,
             b_pos, b_neg,
             scalar_b_pos, scalar_b_neg,
             s_poly_coeffs,
