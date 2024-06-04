@@ -1,10 +1,7 @@
+import numpy as np
 import scipy as sc
 from math import pi
 from numpy.polynomial.legendre import leggauss
-try:
-    import autograd.numpy as np
-except ImportError:
-    import numpy as np
 
 
 def transform_interval(arr, c, d, a=-1, b=1):
@@ -259,25 +256,51 @@ def generate_diff_act_flux_funcs(u0):
     return flux_act_up, flux_act_down_diffuse
 
 
-def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr):
+def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr, _is_compatible_with_autograd=False):
     """Particular solution for isotropic internal sources.
     It has many seemingly redundant arguments to maximize precomputation
     in the `pydisort` function which calls it.
 
     """
     n = Nscoeffs - 1
+    
+    if _is_compatible_with_autograd:
+        import autograd.numpy as np
+    
+        def mathscr_b(i):
+            j_arr = np.arange(i + 1)
+            s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
+            return np.sum(
+                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i))[None, None, :]
+                * K[:, :, None] ** -(i - j_arr + 1)[None, None, :]
+                * s_poly_coeffs_nj[:, None, :],
+                axis=-1,
+            )
+        mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
+    else:
+        import numpy as np
+        
+        shape = np.shape(K)
+        i_arr = np.arange(Nscoeffs)
+        i_arr_repeat = np.repeat(i_arr, i_arr + 1)
+        j_arr = np.concatenate([np.arange(i + 1) for i in range(Nscoeffs)])
+        s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
 
-    def mathscr_b(i):
-        j = np.arange(i + 1)
-        s_poly_coeffs_nj = s_poly_coeffs[:, n - j]
-        return np.sum(
-            (sc.special.factorial(n - j) / sc.special.factorial(n - i))[None, None, :]
-            * K[:, :, None] ** -(i - j + 1)[None, None, :]
-            * s_poly_coeffs_nj[:, None, :],
-            axis=-1,
+        mathscr_v_coeffs = np.zeros((Nscoeffs, shape[0], shape[1]))
+        np.add.at(
+            mathscr_v_coeffs,
+            i_arr_repeat,
+            np.moveaxis(
+                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i_arr_repeat))[
+                    None, None, :
+                ]
+                * K[:, :, None] ** -(i_arr_repeat - j_arr + 1)[None, None, :]
+                * s_poly_coeffs_nj[:, None, :],
+                -1,
+                0,
+            ),
         )
 
-    mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
     return np.einsum(
         "tik, tc, ctk, tkj, j -> it",
         G[l, :, :],
@@ -288,7 +311,15 @@ def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr):
         optimize=True,
     )
     
+def _nd_slice_to_indexes(nd_slice):
+    """Code taken from https://stackoverflow.com/questions/64097025/how-to-convert-n-d-slice-to-indexes-in-numpy.
+    This function is used to efficiently construct sparse COO matrices.
     
+    """
+    grid = np.mgrid[{tuple: nd_slice, slice: (nd_slice,)}[type(nd_slice)]]
+    return tuple(grid[i].ravel() for i in range(grid.shape[0]))
+    
+
 def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
     """Performs pointwise comparisons between results from Stamnes' DISORT,
     which are stored in .npz files, against results from PythonicDISORT. Used in our PyTests.

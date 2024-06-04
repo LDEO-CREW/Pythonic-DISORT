@@ -1,11 +1,9 @@
 from PythonicDISORT.subroutines import _mathscr_v
 from PythonicDISORT._diagonalize import _diagonalize
-from PythonicDISORT._solve_for_coefs import _solve_for_coefs 
+from PythonicDISORT._solve_for_coefs import _solve_for_coefs
+
+import numpy as np
 from math import pi
-try:
-    import autograd.numpy as np
-except ImportError:
-    import numpy as np
 
 def _assemble_solution_functions(
     scaled_omega_arr,
@@ -15,19 +13,20 @@ def _assemble_solution_functions(
     M_inv, W,
     N, NQuad, NLeg, NLoops,
     NLayers, NBDRF,
-    multilayer_bool,
+    atmos_is_multilayered,
     weighted_scaled_Leg_coeffs,
     BDRF_Fourier_modes,
     mu0, I0, I0_orig, phi0,
-    beam_source_bool,
+    there_is_beam_source,
     b_pos, b_neg,
-    scalar_b_pos, scalar_b_neg,
+    b_pos_is_scalar, b_neg_is_scalar,
     s_poly_coeffs,
     Nscoeffs,
-    iso_source_bool,
+    there_is_iso_source,
     scale_tau,
     only_flux,
     use_sparse_NLayers,
+    _is_compatible_with_autograd,
 ):  
     """This function is wrapped by the `pydisort` function.
     It should be called through `pydisort` and never directly.
@@ -37,6 +36,11 @@ def _assemble_solution_functions(
     documentation, explanation and derivation.
     
     """
+    if _is_compatible_with_autograd:
+        import autograd.numpy as np
+    else:
+        import numpy as np
+    
     ###################################### Assemble uncorrected solution functions #############################################
     
     # Compute all the necessary quantities
@@ -50,19 +54,19 @@ def _assemble_solution_functions(
         NLayers,
         weighted_scaled_Leg_coeffs,
         mu0, I0,
-        beam_source_bool,
+        there_is_beam_source,
         Nscoeffs,
-        iso_source_bool,
+        there_is_iso_source,
     )
-    if beam_source_bool:
-        if iso_source_bool:
+    if there_is_beam_source:
+        if there_is_iso_source:
             G_collect, K_collect, B_collect, G_inv_collect_0 = outputs
         else:
             G_collect, K_collect, B_collect = outputs
             G_inv_collect_0 = None
         B_collect_0 = B_collect[0, :, :]
     else:
-        if iso_source_bool:
+        if there_is_iso_source:
             G_collect, K_collect, G_inv_collect_0 = outputs
         else:
             G_collect, K_collect = outputs
@@ -80,15 +84,15 @@ def _assemble_solution_functions(
         mu_arr_pos, mu_arr_pos * W, mu_arr,
         N, NQuad,
         NLayers, NBDRF,
-        multilayer_bool,
+        atmos_is_multilayered,
         BDRF_Fourier_modes,
         mu0, I0,
-        beam_source_bool,
+        there_is_beam_source,
         b_pos, b_neg,
-        scalar_b_pos, scalar_b_neg,
+        b_pos_is_scalar, b_neg_is_scalar,
         s_poly_coeffs,
         Nscoeffs,
-        iso_source_bool,
+        there_is_iso_source,
         use_sparse_NLayers,
     )
     
@@ -127,7 +131,7 @@ def _assemble_solution_functions(
                 ],
                 axis=-1,
             )
-            if beam_source_bool:
+            if there_is_beam_source:
                 um = np.einsum(
                     "mtij, mtj -> mti", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
                 ) + B_collect[:, l, :] * np.exp(-scaled_tau[None, :, None] / mu0)
@@ -137,7 +141,7 @@ def _assemble_solution_functions(
                 )
             
             # Contribution from particular solution for isotropic internal sources
-            if iso_source_bool:
+            if there_is_iso_source:
                 _mathscr_v_contribution = _mathscr_v(
                     tau, l,
                     s_poly_coeffs,
@@ -146,9 +150,13 @@ def _assemble_solution_functions(
                     K_collect_0,
                     G_inv_collect_0,
                     mu_arr,
+                    _is_compatible_with_autograd,
                 )
-                # The following line must be implemented differently for autograd to work on `u` with isotropic sources
-                um[0, :, :] += _mathscr_v_contribution.T
+                
+                if _is_compatible_with_autograd:
+                    um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NLoops - 1, len(tau), NQuad))))
+                else:
+                    um[0, :, :] += _mathscr_v_contribution.T
                 
             intensities = np.einsum(
                 "mti, mp -> itp",
@@ -165,7 +173,7 @@ def _assemble_solution_functions(
                     ],
                     axis=-1,
                 )
-                if beam_source_bool:
+                if there_is_beam_source:
                     ulast = np.einsum(
                         "tij, tj -> it", GC_collect[-1, l, :, :], np.exp(exponent), optimize=True
                     ) + B_collect[-1, l, :].T * np.exp(-scaled_tau[None, :] / mu0)
@@ -218,7 +226,7 @@ def _assemble_solution_functions(
             ],
             axis=-1,
         )
-        if beam_source_bool:
+        if there_is_beam_source:
             u0 = np.einsum(
                 "tij, tj -> it", GC_collect_0[l, :, :], np.exp(exponent), optimize=True
             ) + B_collect_0[l, :].T * np.exp(-scaled_tau[None, :] / mu0)
@@ -228,7 +236,7 @@ def _assemble_solution_functions(
             )
         
         # Contribution from particular solution for isotropic internal sources
-        if iso_source_bool:
+        if there_is_iso_source:
             _mathscr_v_contribution = _mathscr_v(
                 tau, l,
                 s_poly_coeffs,
@@ -237,6 +245,7 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
+                _is_compatible_with_autograd,
             )
             u0 += _mathscr_v_contribution
         
@@ -250,7 +259,7 @@ def _assemble_solution_functions(
     # --------------------------------------------------------------------------------------------------------------------------
     GC_pos = GC_collect_0[:, :N, :]
     GC_neg = GC_collect_0[:, N:, :]
-    if beam_source_bool:
+    if there_is_beam_source:
         B_pos = B_collect_0[:, :N].T
         B_neg = B_collect_0[:, N:].T
 
@@ -273,7 +282,7 @@ def _assemble_solution_functions(
         else:
             scaled_tau = tau
 
-        if iso_source_bool:
+        if there_is_iso_source:
             _mathscr_v_contribution = _mathscr_v(
                 tau, l,
                 s_poly_coeffs,
@@ -282,11 +291,12 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
+                _is_compatible_with_autograd,
             )[:N, :]
         else:
             _mathscr_v_contribution = 0
 
-        if beam_source_bool:
+        if there_is_beam_source:
             direct_beam_contribution = B_pos[:, l] * np.exp(-scaled_tau[None, :] / mu0)
         else:
             direct_beam_contribution = 0
@@ -326,7 +336,7 @@ def _assemble_solution_functions(
         else:
             scaled_tau = tau
 
-        if iso_source_bool:
+        if there_is_iso_source:
             _mathscr_v_contribution = _mathscr_v(
                 tau, l,
                 s_poly_coeffs,
@@ -335,11 +345,12 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
+                _is_compatible_with_autograd,
             )[N:, :]
         else:
             _mathscr_v_contribution = 0
         
-        if beam_source_bool:
+        if there_is_beam_source:
             direct_beam_contribution = B_neg[:, l] * np.exp(-scaled_tau[None, :] / mu0)
             direct_beam = I0 * mu0 * np.exp(-tau / mu0)
             direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0)

@@ -8,7 +8,7 @@ dependencies = [
   "scipy>=1.8.0",
 ]
 name = "PythonicDISORT"
-version = "0.5.0"
+version = "0.6.0"
 authors = [
   { name="Dion HO Jia Xu", email="dh3065@columbia.edu" },
 ]
@@ -22,7 +22,6 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-joblib = ["joblib >= 1.0.0"]
 pytest = ["pytest >= 6.2.5"]
 notebook_dependencies = [
 	"autograd>=1.5",
@@ -31,4 +30,4 @@ notebook_dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/LDEO-CREW/PythonicDISORT"
+"Homepage" = "https://github.com/LDEO-CREW/Pythonic-DISORT"

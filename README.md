@@ -17,7 +17,8 @@ The original was downloaded from http://www.rtatmocn.com/disort/. The wrapper is
 # Documentation
 https://pythonic-disort.readthedocs.io/en/latest/
 
-Also see the accompanying Jupyter Notebook: `Pythonic-DISORT.ipynb` in the `docs` directory.
+Also see the accompanying Jupyter Notebook: `Pythonic-DISORT.ipynb` in the `docs` directory
+of our GitHub repository: https://github.com/LDEO-CREW/Pythonic-DISORT.
 The Jupyter Notebook provides comprehensive documentation, suggested inputs, explanations, 
 mathematical derivations and verification tests.
 We highly recommend reading the non-optional parts of sections 1 and 2 before use.
@@ -57,6 +58,11 @@ We do not guarantee that our Jupyter Notebook and F2PY-wrapped Stamnes' DISORT w
 The latter will almost certainly need user edits to work and in any case it requires FORTRAN compilers which
 are not included in this repository. Everything in this repository was built and tested on Windows 11 and 
 not yet tested on other systems.
+
+# Acknowledgements
+
+I acknowledge funding from NSF through the Learning the Earth with Artificial intelligence and Physics (LEAP) 
+Science and Technology Center (STC) (Award #2019625).
 
 # References
 1) S. Chandrasekhar. 1960. *Radiative Transfer.*
