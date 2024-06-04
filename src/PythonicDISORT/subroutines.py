@@ -30,7 +30,7 @@ def transform_interval(arr, c, d, a=-1, b=1):
 
 
 def transform_weights(weights, c, d, a=-1, b=1):
-    """Transforms quadrature weights from interval [a, b] to [c, d].
+    """Transforms an array of quadrature weights from interval [a, b] to [c, d].
 
     Parameters
     ----------
@@ -55,8 +55,8 @@ def transform_weights(weights, c, d, a=-1, b=1):
 
 
 def calculate_nu(mu, phi, mu_p, phi_p):
-    """Calculates the cosine of the scattering angle nu 
-    between incident angle (mu_p, phi_p) and scattering angle (mu, phi).
+    """Calculates the cosine of the scattering angle `nu` 
+    between incident angle `(mu_p, phi_p)` and scattering angle `(mu, phi)`.
 
     Parameters
     ----------
@@ -72,7 +72,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
     Returns
     -------
     ndarray
-        Cosine of scattering angles which axes capture variation with mu, phi, mu_p, phi_p respectively.
+        Cosine of scattering angles which axes capture variation with `mu, phi, mu_p, phi_p` respectively.
 
     """
     mu, phi, mu_p, phi_p = np.atleast_1d(mu, phi, mu_p, phi_p)
@@ -110,7 +110,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
 
 
 def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
-    """Generates Clenshaw_Curtis quadrature weights and zero points for integration from c to d.
+    """Generates Clenshaw-Curtis quadrature zero points and weights for integration from c to d.
 
     Parameters
     ----------
@@ -146,9 +146,9 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
 
 
 def generate_FD_mat(Ntau, a, b):
-    """Generates a sparse first derivative matrix in `csr` format with second-order accuracy
-    on [a,b] with `Ntau` grid points.
-    We use second order forward or backward differences at the boundaries.
+    """Generates a sparse first derivative central difference (second-order accuracy) 
+    matrix on [a,b] in `csr` format with `Ntau` grid points.
+    Second order forward or backward differences are used at the boundaries.
 
     Parameters
     ----------
@@ -181,15 +181,15 @@ def generate_FD_mat(Ntau, a, b):
     first_deriv[-1, -2] = -2 / h
     first_deriv[-1, -3] = 1 / (2 * h)
 
-    return tau_arr, first_deriv.asformat("csr")
+    return tau_arr, first_deriv.tocsr()
   
 
 def atleast_2d_append(*arys):
     """View inputs as arrays with at least two dimensions. 
-    Dimensions are added, when necessary, to the back of the shape tuple rather than to the front.
+    Dimensions are added as necessary to the back of the shape tuple rather than to the front.
         
-        This is exactly NumPy's `atleast_2d` function but altered to add dimensions to the back of the shape tuple rather than to the front.
-        View the documentation for NumPy's `atleast_2d` function at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
+        This is exactly NumPy's ``numpy.atleast_2d`` function but altered to add dimensions to the back of the shape tuple rather than to the front.
+        View the documentation for ``numpy.atleast_2d`` at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
 
     Parameters
     ----------
@@ -223,23 +223,23 @@ def atleast_2d_append(*arys):
         
         
 def generate_diff_act_flux_funcs(u0):
-    """Generates respectively the up and down diffuse actinic flux functions.
-    This a use case of the u0 function that is an output of pydisort.
+    """Generates the up and down diffuse actinic flux functions respectively.
+    This is a use case of the ``u0`` function that is an output of ``pydisort``.
     The reclassification of delta-scaled actinic flux is automatically performed.
 
     Parameters
     ----------
     u0 : func
         Zeroth Fourier mode of the intensity.
-        See the fourth "return" of the `pydisort` function.
+        See the fourth "return" of the ``pydisort`` function.
 
     Returns
     -------
     function
-        Actinic flux function with argument tau (type: array) for positive (upward) mu values.
+        Actinic flux function with argument `tau` (type: array) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (type: array).
     function
-        Actinic flux function with argument tau (type: array) for negative (downward) mu values.
+        Actinic flux function with argument `tau` (type: array) for negative (downward) `mu` values.
         Returns the diffuse flux magnitudes (type: array).
 
     """

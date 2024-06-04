@@ -11,25 +11,25 @@ In addition, upon the request of a user, we added a subroutine to calculate acti
 
 You may contact me, Dion, through dh3065@columbia.edu.
 
-This repository also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) in the `disort4.0.99_f2py` directory.
+Our **GitHub repository:** https://github.com/LDEO-CREW/Pythonic-DISORT also includes our F2PY-wrapped Stamnes DISORT (version 4.0.99) in the `disort4.0.99_f2py` directory.
 The original was downloaded from http://www.rtatmocn.com/disort/. The wrapper is inspired by https://github.com/kconnour/pyRT_DISORT.
 
 # Documentation
 https://pythonic-disort.readthedocs.io/en/latest/
 
-Also see the accompanying Jupyter Notebook: `Pythonic-DISORT.ipynb` in the `docs` directory
-of our GitHub repository: https://github.com/LDEO-CREW/Pythonic-DISORT.
+Also see the accompanying Jupyter Notebook `Pythonic-DISORT.ipynb` in the `docs` directory
+of our GitHub repository.
 The Jupyter Notebook provides comprehensive documentation, suggested inputs, explanations, 
 mathematical derivations and verification tests.
 We highly recommend reading the non-optional parts of sections 1 and 2 before use.
 
 ## PyTest and examples of how to use PythonicDISORT
 
-Separate from the verification tests in the Jupyter Notebook, we used PyTest to recreate most of the test problems in Stamnes' `disotest.f90`, 
-which is included in the `disort4.0.99_f2py` directory in this repository. In these tests, the solutions from PythonicDISORT are compared 
+Not only do we have verification tests in the Jupyter Notebook, we also used PyTest to recreate most of the test problems in Stamnes' `disotest.f90`; 
+`disotest.f90` is included in the `disort4.0.99_f2py` directory of our GitHub repository. In these tests, the solutions from PythonicDISORT are compared 
 against solutions from our F2PY-wrapped Stamnes' DISORT (version 4.0.99). With PyTest installed, execute the console command `pytest` 
 in the `pydisotest` directory to run these tests. The `pydisotest` directory also contains Jupyter Notebooks, one for each test, 
-to show how the test was implemented. These notebooks double up as examples of how to use PythonicDISORT.
+to show how the tests were implemented. These notebooks double up as examples of how to use PythonicDISORT.
 
 # Installation
 
@@ -53,16 +53,16 @@ must be set up to run the last section (section 6).
 
 ## Compatibility
 
-The PythonicDISORT package should be system agnostic given its minimal dependencies and pure Python code.
+The PythonicDISORT package *should* be system agnostic given its minimal dependencies and pure Python code.
 We do not guarantee that our Jupyter Notebook and F2PY-wrapped Stamnes' DISORT will work on other systems though.
 The latter will almost certainly need user edits to work and in any case it requires FORTRAN compilers which
-are not included in this repository. Everything in this repository was built and tested on Windows 11 and 
+are not included in our GitHub repository. Everything in the repository was built and tested on Windows 11 but 
 not yet tested on other systems.
 
 # Acknowledgements
 
 I acknowledge funding from NSF through the Learning the Earth with Artificial intelligence and Physics (LEAP) 
-Science and Technology Center (STC) (Award #2019625).
+Science and Technology Center (STC) (Award #2019625) under which this package was initially created.
 
 # References
 1) S. Chandrasekhar. 1960. *Radiative Transfer.*
