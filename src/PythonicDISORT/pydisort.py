@@ -34,6 +34,7 @@ def pydisort(
         for a more detailed explanation of each parameter.
         See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#2.-PythonicDISORT-modules-and-outputs
         for a more detailed explanation of each output.
+        The notebook also has numerous examples of this function being called.
 
     Parameters
     ----------
@@ -394,7 +395,7 @@ def pydisort(
             NT_corrections = TMS_correction(tau, phi)
 
             # We provide two options below, comment and uncomment as desired.
-            # Option 1 is more computationally efficient but would prevent the use of autograd for testing.
+            # Option 2 is more computationally efficient but would prevent the use of autograd for testing.
 
             NT_corrections = NT_corrections + np.concatenate(
                 [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
