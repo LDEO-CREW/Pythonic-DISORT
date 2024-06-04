@@ -1,4 +1,7 @@
-import numpy as np
+try:
+    import autograd.numpy as np
+except ImportError:
+    import numpy as np
 import scipy as sc
 from math import pi
 
@@ -24,7 +27,7 @@ def transform_weights(weights, c, d, a=-1, b=1):
     """Transform quadrature weights in interval [a, b] to similar weights in [c, d]
 
     :Input:
-     - *weights* (vector) - The weights to transform
+     - *weights* (float vector) - The weights to transform
      - *c* (float) - The beginning of interval [c, d]
      - *d* (float) - The end of interval [c, d]
      :Optional:
@@ -41,10 +44,10 @@ def calculate_nu(mu, phi, mu_p, phi_p):
     """Calculates the scattering angle nu between incident angle (mu_p, phi_p) and scattering angle (mu, phi)
     
     :Input:
-     - *mu* (vector / float) - The weights to transform
-     - *phi* (vector / float) - The beginning of interval [c, d]
-     - *mu_p* (vector / float) - The end of interval [c, d]
-     - *phi_p* (vector / float) - The beginning of interval [c, d]
+     - *mu* (float vector) - Cosine of scattering polar angles
+     - *phi* (float vector) - Scattering azimuthal angles
+     - *mu_p* (float vector) - Cosine of incident polar angles
+     - *phi_p* (float vector) - Incident azimuthal angles
      
      
     :Output:
@@ -64,16 +67,16 @@ def generate_Ds(m, Leg_coeffs, mu_arr_pos, w0, ells, degree_tile):
     
     :Input:
      - *m* (integer) - The Fourier mode
-     - *Leg_coeffs* (vector) - Vector of weighted phase function Legendre coefficients
-     - *mu_arr_pos* (vector) - Positive mu (quadrature) values
+     - *Leg_coeffs* (float vector) - Vector of weighted phase function Legendre coefficients
+     - *mu_arr_pos* (float vector) - Positive mu (quadrature) values
      - *w0* (float) - Single-scattering albedo
-     - *ells* (vector) - Vector of Legendre polynomial orders
-     - *degree_tile* (matrix) - Matrix of Associated Legendre polynomials orders and degrees
+     - *ells* (float vector) - Vector of Legendre polynomial orders
+     - *degree_tile* (float matrix) - Matrix of Associated Legendre polynomials orders and degrees
      
      
     :Output:
-     - *D_pos* (matrix) - D with only elements that correspond to positive mu values
-     - *D_neg* (matrix) - D with only elements that correspond to negative mu values
+     - *D_pos* (float matrix) - D with only elements that correspond to positive mu values
+     - *D_neg* (float matrix) - D with only elements that correspond to negative mu values
     """
     Dm_term = Leg_coeffs[ells] * (
         sc.special.factorial(ells - m) / sc.special.factorial(ells + m)
@@ -89,13 +92,12 @@ def generate_Ds(m, Leg_coeffs, mu_arr_pos, w0, ells, degree_tile):
     return D_pos, D_neg
 	
 
-# Generate the X term in the system of ODEs
 def generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile):
     """Generates the X term in the system of ODEs for each Fourier mode, see Section 3.2
     
     :Input:
      - *m* (integer) - The Fourier mode
-     - *Leg_coeffs* (vector) - Vector of weighted phase function Legendre coefficients
+     - *Leg_coeffs* (vector) - WEIGHTED phase function Legendre coefficients
      - *w0* (float) - Single-scattering albedo
      - *mu0* (float) - Polar angle of the direct beam
      - *I0* (float) - Intensity of the direct beam
@@ -105,8 +107,8 @@ def generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile):
      
      
     :Output:
-     - *X_pos* (vector) - X with only elements that correspond to positive mu values
-     - *X_neg* (vector) - X with only elements that correspond to negative mu values
+     - *X_pos* (float vector) - X with only elements that correspond to positive mu values
+     - *X_neg* (float vector) - X with only elements that correspond to negative mu values
     """
     if m == 0:
         prefactor = w0 * I0 / (4 * pi)
@@ -125,33 +127,39 @@ def generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile):
     return X_pos, X_neg
 	
 	
-# Create the up and down flux functions
 def generate_flux_functions(
     I0, mu0, tau0,
     GC_pos, GC_neg, 
     eigenvals, N,
     B_pos, B_neg, 
     mu_arr_pos, weights_mu, 
-    scale_tau, scale_beam,
+    scale_tau,
 ): 
     """Generates the flux functions with respect to the radiative transfer equation
     
     :Input:
      - *I0* (float) - Intensity of the direct beam
      - *mu0* (float) - Polar angle of the direct beam
-     - *GC_pos / neg* (matrix) - Product of eigenvectors and coefficients that correspond to positive / negative mu values
-     - *eigenvals* (vector) - Eigenvalues
-     - *B_pos / neg* (vector) - Coefficients of the inhomogenity that correspond to positive / negative mu values
-     - *mu_arr_pos / neg* (vector) - Positive / negative mu (quadrature) values
+     - *GC_pos / neg* (float matrix) - Product of eigenvectors and coefficients that correspond to positive / negative mu values
+     - *eigenvals* (float vector) - Eigenvalues
+     - *B_pos / neg* (float vector) - Coefficients of the inhomogenity that correspond to positive / negative mu values
+     - *mu_arr_pos / neg* (float vector) - Positive / negative mu (quadrature) values
      - *scale_tau* (float) - Delta-M scale factor for tau
-     - *scale_beam* (float) - Delta-M scale factor for the direct beam
      
      
     :Output:
      - *flux_up* (function) - Flux function with argument tau for positive (upward) mu values
-     - *flux_down* (vector) - Flux function with argument tau for negative (downward) mu values
+     - *flux_down* (function) - Flux function with argument tau for negative (downward) mu values
     """
     def flux_up(tau):
+        """Returns the magnitude of the upwards flux at the specified tau levels
+
+        :Input:
+        - *tau* (float vector) - Optical depth levels
+
+        :Output:
+        - (float) Magnitude of diffuse upwards flux, which is also the total upwards flux
+        """
         tau = scale_tau * np.atleast_1d(tau) # Delta-M scaling
         exponent = np.vstack(
             (
@@ -160,10 +168,22 @@ def generate_flux_functions(
             )
         )
         um = GC_pos @ np.exp(exponent) + B_pos[:, None] * np.exp(-tau[None, :] / mu0)
-        return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ um)
+        return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ um)[()]
 
     def flux_down(tau):
-        tau = scale_tau * np.atleast_1d(tau) # Delta-M scaling
+        """Returns the magnitude of the downwards fluxes at the specified tau levels
+
+        :Input:
+        - *tau* (float vector) - Optical depth levels
+
+        :Output:
+        - (float) Magnitude of diffuse downwards flux
+        - (float) Magnitude of direct downwards flux
+        """
+        direct_beam = I0 * mu0 * np.exp(-tau / mu0)
+
+        tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
+        direct_beam_scaled = I0 * mu0 * np.exp(-tau / mu0)
         exponent = np.vstack(
             (
                 eigenvals[:N, None] * tau[None, :],
@@ -171,18 +191,18 @@ def generate_flux_functions(
             )
         )
         um = GC_neg @ np.exp(exponent) + B_neg[:, None] * np.exp(-tau[None, :] / mu0)
-        return np.squeeze(
-            2 * pi * (mu_arr_pos * weights_mu) @ um
-            + scale_beam * I0 * mu0 * np.exp(-tau / mu0)
+        return (
+            np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ um + direct_beam_scaled - direct_beam)[()],
+            direct_beam,
         )
 
     return flux_up, flux_down
     
 
-# The following function is exactly NumPy's `atleast_2d` function but edited
+# The following function is exactly NumPy's `atleast_2d` function but altered
 # to add dimensions to the back of the shape tuple rather than to the front.
-# Documentation for `np.atleast_2d`: https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
-def atleast_2d_back(*arys):
+# Documentation for `np.atleast_2d` taken from https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
+def atleast_2d_append(*arys):
     """
     View inputs as arrays with at least two dimensions.
     Parameters
