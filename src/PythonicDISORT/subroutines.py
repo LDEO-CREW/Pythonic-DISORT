@@ -75,7 +75,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
     Returns
     -------
     ndarray
-        Cosine of scattering angles.
+        Cosine of scattering angles which axes capture variation with mu, phi, mu_p, phi_p respectively.
 
     """
     mu, phi, mu_p, phi_p = np.atleast_1d(mu, phi, mu_p, phi_p)
@@ -88,7 +88,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
 
 
 def Gauss_Legendre_quad(N, c=0, d=1):
-    """Generates Gauss-Legendre quadrature weights and zero points for integration from c to d.
+    """Generates Gauss-Legendre quadrature zero points and weights for integration from c to d.
 
     Parameters
     ----------

@@ -15,7 +15,7 @@ def _one_Fourier_mode(
     N, NQuad, NLeg,
     NLayers, NBDRF,
     weighted_scaled_Leg_coeffs,
-    weighted_Leg_coeffs_BDRF,
+    BDRF_Fourier_modes,
     mu0, I0,
     b_pos, b_neg,
     scalar_b_pos, scalar_b_neg,
@@ -45,45 +45,39 @@ def _one_Fourier_mode(
     
     # Generate mathscr_D and mathscr_X (BDRF terms)
     # --------------------------------------------------------------------------------------------------------------------------
-    # If h_\ell = 0 for all \ell \geq m, then there is no BDRF contribution
-    # We take precautions against overflow and underflow
-    if m < NBDRF and np.all(np.isfinite(asso_leg_term_pos[:NBDRF, :])):
-        weighted_asso_Leg_coeffs_BDRF = (
-            weighted_Leg_coeffs_BDRF[ells[: (NBDRF - m)]] * fac[: (NBDRF - m)]
-        )
-        mathscr_D_temp = (
-            weighted_asso_Leg_coeffs_BDRF[None, :] * asso_leg_term_pos.T[:, :NBDRF]
-        )
-        mathscr_D_neg = 2 * mathscr_D_temp @ asso_leg_term_neg[:NBDRF, :]
+    if m < NBDRF:
+        mathscr_D_neg = (1 + (m == 0) * 1) * BDRF_Fourier_modes[m](mu_arr_pos, -mu_arr_pos)
         R = mathscr_D_neg * (mu_arr_pos * W)[None, :]
 
         if I0 > 0:
-            mathscr_X_temp = (
-                (mu0 * I0 * (2 - (m == 0)) / pi)
-                * weighted_asso_Leg_coeffs_BDRF
-                * asso_leg_term_mu0[:NBDRF]
-            )
-            mathscr_X_pos = mathscr_X_temp @ asso_leg_term_pos[:NBDRF, :]
+            mathscr_X_pos = (mu0 * I0 / pi) * BDRF_Fourier_modes[m](
+                mu_arr_pos, -np.array([mu0])
+            )[:, 0]
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Loop over NLayers atmospheric layers
     # --------------------------------------------------------------------------------------------------------------------------
     if Nscoeffs > 0 and m == 0:
         G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
-    G_collect_m = np.empty((NLayers, NQuad, NQuad))
-    K_collect_m = np.empty((NLayers, NQuad))
     if I0 > 0:
         B_collect_m = np.zeros((NLayers, NQuad))
+        
+    G_collect_m = np.empty((NLayers, NQuad, NQuad))
+    K_collect_m = np.empty((NLayers, NQuad))
+    alpha_list = []
+    beta_list = []
+    X_tilde_list=[]
+    if_indices = []
 
     for l in range(NLayers):
         # More setup
         weighted_asso_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, :][ells] * fac
         scaled_omega_l = scaled_omega_arr[l]
         
-        # We take precautions against overflow and underflow
+        # We take precautions against overflow and underflow (this shouldn't happen though)
         if np.any(weighted_asso_Leg_coeffs_l > 0) and np.all(
             np.isfinite(asso_leg_term_pos)
-        ):
+        ):  
             # Generate mathscr_D and mathscr_X (BDRF terms)
             # --------------------------------------------------------------------------------------------------------------------------
             D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
@@ -104,63 +98,81 @@ def _one_Fourier_mode(
             # --------------------------------------------------------------------------------------------------------------------------
             alpha = M_inv[:, None] * (D_pos * W[None, :] - np.eye(N))
             beta = M_inv[:, None] * D_neg * W[None, :]
-            A = np.vstack([np.hstack([-alpha, -beta]), np.hstack([beta, alpha])])
             if I0 > 0:
-                X_tilde = np.concatenate([-M_inv * X_pos, M_inv * X_neg])
+                X_tilde_list.append(np.concatenate([-M_inv * X_pos, M_inv * X_neg]))
             # --------------------------------------------------------------------------------------------------------------------------
-
-            # Diagonalization of coefficient matrix
-            # --------------------------------------------------------------------------------------------------------------------------
-            K_squared, eigenvecs_GpG = np.linalg.eig((alpha - beta) @ (alpha + beta))
-            if m == 0:
-                if np.any(K_squared < 1e-9): # Then |K| < 1e-3
-                    warn(
-                        "Single-scattering albedo for layer "
-                        + str(l)
-                        + " (counting from 0) is too close to 1. Results may be inaccurate."
-                    )
-
-            # Eigenvalues arranged negative then positive, from largest to smallest magnitude
-            K = np.concatenate([-np.sqrt(K_squared), np.sqrt(K_squared)])
-            eigenvecs_GpG = np.hstack([eigenvecs_GpG, eigenvecs_GpG])
-            eigenvecs_GmG = (alpha + beta) @ eigenvecs_GpG / K
-
-            # Eigenvector matrix
-            G_pos = (eigenvecs_GpG - eigenvecs_GmG) / 2
-            G_neg = (eigenvecs_GpG + eigenvecs_GmG) / 2
-            G = np.vstack([G_pos, G_neg])
-            # We only need G^{-1} in special cases
-            if Nscoeffs > 0 and m == 0:
-                G_inv = np.linalg.inv(G)
-            # --------------------------------------------------------------------------------------------------------------------------
-
-            # Particular solution for the sunbeam source
-            # --------------------------------------------------------------------------------------------------------------------------
-            if I0 > 0:
-                if Nscoeffs > 0 and m == 0:
-                    B = -G / (1 / mu0 + K)[None, :] @ G_inv @ X_tilde
-                else:
-                    # This method is more numerically stable
-                    LHS = A.copy()
-                    np.fill_diagonal(LHS, 1 / mu0 + np.diag(A))
-                    B = np.linalg.solve(LHS, -X_tilde)
-
-                B_collect_m[l, :] = B
-            # --------------------------------------------------------------------------------------------------------------------------
+            
+            if_indices.append(l)
+            alpha_list.append(alpha)
+            beta_list.append(beta)
+            
         else:
-            # This is a shortcut to the same results
-            K = -1 / mu_arr
+            # This is a shortcut to the diagonalization results
             G = np.zeros((NQuad, NQuad))
             G[N:, :N] = np.eye(N)
             G[:N, N:] = np.eye(N)
+            
+            G_collect_m[l, :, :] = G
+            K_collect_m[l, :] = -1 / mu_arr
             if Nscoeffs > 0 and m == 0:
-                G_inv = G
+                G_inv_collect_0[l, :, :] = G
+            
+    if len(if_indices) > 0:       
+    
+        # Diagonalization of coefficient matrix
+        # --------------------------------------------------------------------------------------------------------------------------
+        alpha_list = np.atleast_3d(np.array(alpha_list))
+        beta_list = np.atleast_3d(np.array(beta_list))
 
-        G_collect_m[l, :, :] = G
-        K_collect_m[l, :] = K
+        K_squared_arr, eigenvecs_GpG_arr = np.linalg.eig(
+            np.einsum(
+                "lij, ljk -> lik", alpha_list - beta_list, alpha_list + beta_list, optimize=True
+            ),
+        )
+        if m == 0:
+            if np.any(K_squared_arr < 1e-9):  # Then |K| < 1e-3
+                warn(
+                    "Some single-scattering albedos are too close to 1. Results may be inaccurate."
+                )
+
+        # Eigenvalues arranged negative then positive, from largest to smallest magnitude
+        K_arr = np.concatenate((-np.sqrt(K_squared_arr), np.sqrt(K_squared_arr)), axis=1)
+        eigenvecs_GpG_arr = np.concatenate((eigenvecs_GpG_arr, eigenvecs_GpG_arr), axis=2)
+        eigenvecs_GmG_arr = (
+            np.einsum(
+                "lij, ljk -> lik", alpha_list + beta_list, eigenvecs_GpG_arr, optimize=True
+            )
+            / K_arr[:, None, :]
+        )
+
+        # Eigenvector matrix
+        G_arr = np.concatenate(
+            (
+                (eigenvecs_GpG_arr - eigenvecs_GmG_arr) / 2,
+                (eigenvecs_GpG_arr + eigenvecs_GmG_arr) / 2,
+            ),
+            axis=1,
+        )
+        G_inv_arr = np.linalg.inv(G_arr)
+        
+        G_collect_m[if_indices, :, :] = G_arr
+        K_collect_m[if_indices, :] = K_arr
         if Nscoeffs > 0 and m == 0:
-            G_inv_collect_0[l, :, :] = G_inv
-    # --------------------------------------------------------------------------------------------------------------------------
+            G_inv_collect_0[if_indices, :, :] = G_inv_arr
+        # --------------------------------------------------------------------------------------------------------------------------
+
+        # Particular solution for the sunbeam source
+        # --------------------------------------------------------------------------------------------------------------------------
+        if I0 > 0:
+            X_tilde_list = np.atleast_2d(np.array(X_tilde_list))
+            B_collect_m[if_indices, :] = np.einsum(
+                "lij, ljk, lk -> li",
+                -G_arr / (1 / mu0 + K_arr)[:, None, :],
+                G_inv_arr,
+                X_tilde_list,
+                optimize=True,
+            )
+        # --------------------------------------------------------------------------------------------------------------------------
 
     ################################## Solve for coefficients of homogeneous solution ##########################################
     
@@ -243,7 +255,6 @@ def _one_Fourier_mode(
     else:
         _mathscr_v_contribution = 0
     
-    # If h_\ell = 0 for all \ell >= m, then there is no BDRF contribution
     if I0 > 0:
         if m < NBDRF:
             BDRF_RHS_contribution = mathscr_X_pos + R @ B_collect_m[-1, N:]
@@ -279,11 +290,7 @@ def _one_Fourier_mode(
     
     # Assemble LHS
     # --------------------------------------------------------------------------------------------------------------------------
-    dim = NLayers * NQuad
-    if NLayers >= use_sparse_NLayers:
-        LHS = sc.sparse.lil_matrix((dim, dim))
-    else:
-        LHS = np.zeros((dim, dim))
+    LHS = np.zeros((NLayers * NQuad, NLayers * NQuad))
 
     G_0_nn = G_collect_m[0, N:, :N]
     G_0_np = G_collect_m[0, N:, N:]
@@ -343,7 +350,7 @@ def _one_Fourier_mode(
     # Solve the system and return computations
     # --------------------------------------------------------------------------------------------------------------------------
     if NLayers >= use_sparse_NLayers:
-        C_m = sc.sparse.linalg.spsolve(LHS.asformat("csr"), RHS).reshape(NLayers, NQuad)
+        C_m = sc.sparse.linalg.spsolve(sc.sparse.csr_matrix(LHS), RHS).reshape(NLayers, NQuad)
     else:
         C_m = np.linalg.solve(LHS, RHS).reshape(NLayers, NQuad)
     

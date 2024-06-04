@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 dependencies = [
-  "numpy>=1.17.3",
+  "numpy>=1.8.0",
   "scipy>=1.8.0",
 ]
 name = "PythonicDISORT"
-version = "0.3.0"
+version = "0.4.0"
 authors = [
   { name="Dion HO Jia Xu", email="dh3065@columbia.edu" },
 ]

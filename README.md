@@ -31,7 +31,7 @@ With PyTest installed, execute the console command `pytest` in the `pydisotest` 
 
 ## Requirements to run PythonicDISORT
 * Python 3.8+
-* `numpy >= 1.17.3`
+* `numpy >= 1.8.0`
 * `scipy >= 1.8.0`
 * (OPTIONAL) `joblib >= 1.0.0` (Required for parallelization)
 * (OPTIONAL) `pytest >= 6.2.5` (Required for non-Notebook tests)
