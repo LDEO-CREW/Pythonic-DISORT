@@ -25,7 +25,7 @@ We highly recommend reading the non-optional parts of sections 1 and 2 before us
 
 ## PyTest and examples of how to use PythonicDISORT
 
-Not only do we have verification tests in the Jupyter Notebook, we also used PyTest to recreate most of the test problems in Stamnes' `disotest.f90`; 
+Not only do we have verification tests in the Jupyter Notebook, we have also recreated most of the test problems in Stamnes' `disotest.f90`; 
 `disotest.f90` is included in the `disort4.0.99_f2py` directory of our GitHub repository. In these tests, the solutions from PythonicDISORT are compared 
 against solutions from our F2PY-wrapped Stamnes' DISORT (version 4.0.99). With PyTest installed, execute the console command `pytest` 
 in the `pydisotest` directory to run these tests. The `pydisotest` directory also contains Jupyter Notebooks, one for each test, 
@@ -35,13 +35,13 @@ to show how the tests were implemented. These notebooks double up as examples of
 
 * From PyPI: `pip install PythonicDISORT`
 * From Conda-forge: (TODO: we need to first publish on Conda-forge)
-* By cloning repository: `pip install .` in the `Pythonic-DISORT` directory; `pip install -r all_optional_dependencies.txt` to install all optional dependencies
+* By cloning repository: `pip install .` in the `Pythonic-DISORT` directory; `pip install -r all_optional_dependencies.txt` to install all optional dependencies (see *Requirements to run PythonicDISORT*)
 
 ## Requirements to run PythonicDISORT
 * Python 3.8+
 * `numpy >= 1.8.0`
 * `scipy >= 1.8.0`
-* (OPTIONAL) `pytest >= 6.2.5` (Required for non-Notebook tests)
+* (OPTIONAL) `pytest >= 6.2.5` (Required to use the command `pytest`, see *PyTest and examples of how to use PythonicDISORT*)
 
 ## Additional requirements to run the Jupyter Notebook
 * `autograd >= 1.5`

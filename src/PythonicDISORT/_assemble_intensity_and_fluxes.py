@@ -1,51 +1,107 @@
 from PythonicDISORT.subroutines import _mathscr_v
-from PythonicDISORT._diagonalize import _diagonalize
-from PythonicDISORT._solve_for_coefs import _solve_for_coefs
+from PythonicDISORT._solve_for_gen_and_part_sols import _solve_for_gen_and_part_sols
+from PythonicDISORT._solve_for_coeffs import _solve_for_coeffs
 
 import numpy as np
 from math import pi
 
-def _assemble_solution_functions(
-    scaled_omega_arr,
-    tau_arr,
-    scaled_tau_arr_with_0,
-    mu_arr_pos, mu_arr,
-    M_inv, W,
-    N, NQuad, NLeg, NFourier,
-    NLayers, NBDRF,
-    atmos_is_multilayered,
-    weighted_scaled_Leg_coeffs,
-    BDRF_Fourier_modes,
-    mu0, I0, I0_orig, phi0,
-    there_is_beam_source,
-    b_pos, b_neg,
-    b_pos_is_scalar, b_neg_is_scalar,
-    s_poly_coeffs,
-    Nscoeffs,
-    there_is_iso_source,
-    scale_tau,
-    only_flux,
-    use_sparse_NLayers,
-    _is_compatible_with_autograd,
+def _assemble_intensity_and_fluxes(
+    scaled_omega_arr,                   # Delta-scaled single-scattering albedos
+    tau_arr,                            # Lower boundary of layers
+    scaled_tau_arr_with_0,              # Delta-scaled lower boundary of layers with 0 inserted in front
+    mu_arr_pos, mu_arr,                 # Quadrature nodes for 1) upper 2) both hemispheres
+    M_inv, W,                           # 1) 1 / mu; 2) quadrature weights for each hemisphere
+    N, NQuad, NLeg,                     # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients 
+    NFourier, NLayers, NBDRF,           # Number of 1) intensity Fourier modes; 2) layers; 3) BDRF Fourier modes
+    is_atmos_multilayered,              # Is the atmosphere multilayered?
+    weighted_scaled_Leg_coeffs,         # Weighted and delta-scaled Legendre coefficients
+    BDRF_Fourier_modes,                 # BDRF Fourier modes
+    mu0, I0, I0_orig, phi0,             # Properties of direct beam. If I0 was rescaled to 1, I0_orig is the original I0
+    there_is_beam_source,               # Is there a beam source?
+    b_pos, b_neg,                       # Dirichlet BCs
+    b_pos_is_scalar, b_neg_is_scalar,   # Is each Dirichlet BCs scalar (isotropic)?
+    s_poly_coeffs,                      # Polynomial coefficients of isotropic source
+    Nscoeffs,                           # Number of isotropic source polynomial coefficients
+    there_is_iso_source,                # Is there an isotropic source?
+    scale_tau,                          # Delta-scale factor for tau
+    only_flux,                          # Only compute fluxes?
+    NLayers_to_use_sparse,              # Number of layers above or equal which to use sparse matrices
+    _autograd_compatible,               # Should the output functions be compatible with autograd?
 ):  
-    """This function is wrapped by the `pydisort` function.
+    """In this function the solution functions: intensity `u`, upward flux `flux_up`, downward flux `flux_down` 
+    are assembled from the eigenpairs and the coefficients which have been solved from the boundary conditions. 
+    These solution functions are then returned.
+    This function is wrapped by the `pydisort` function.
     It should be called through `pydisort` and never directly.
-    It has many seemingly redundant arguments to maximize precomputation in `pydisort`.
-    These arguments are passed on to the `_diagonalize` and `_solve_for_coefs` functions 
+    It has many seemingly redundant arguments, which are described below,
+    to maximize precomputation in `pydisort`
+    These arguments are passed on to the `_solve_for_gen_and_part_sols` and `_solve_for_coeffs` functions 
     which this function wraps. See the Jupyter Notebook, especially section 3, for 
     documentation, explanation and derivation.
     
+    Arguments of _assemble_intensity_and_fluxes
+    |            Variable            |            Type / Shape            |
+    | ------------------------------ | ---------------------------------- |
+    | `scaled_omega_arr`             | `NLayers`                          |
+    | `tau_arr`                      | `NLayers`                          |
+    | `scaled_tau_arr_with_0`        | `NLayers + 1`                      |
+    | `mu_arr_pos`                   | `NQuad/2`                          |
+    | `mu_arr`                       | `NQuad`                            |
+    | `M_inv`                        | `NQuad/2`                          |
+    | `W`                            | `NQuad/2`                          |
+    | `N`                            | scalar                             |
+    | `NQuad`                        | scalar                             |
+    | `NLeg`                         | scalar                             |
+    | `NFourier`                     | scalar                             |
+    | `NLayers`                      | scalar                             |
+    | `NBDRF`                        | scalar                             |
+    | `is_atmos_multilayered`        | boolean                            |
+    | `weighted_scaled_Leg_coeffs`   | `NLayers x NLeg`                   |
+    | `BDRF_Fourier_modes`           | `NBDRF`                            |
+    | `mu0`                          | scalar                             |
+    | `I0`                           | scalar                             |
+    | `I0_orig`                      | scalar                             |
+    | `phi0`                         | scalar                             |
+    | `there_is_beam_source`         | scalar                             |
+    | `b_pos`                        | `NQuad/2 x NFourier` or scalar     |
+    | `b_neg`                        | `NQuad/2 x NFourier` or scalar     |
+    | `b_pos_is_scalar`              | boolean                            |
+    | `b_neg_is_scalar`              | boolean                            |              
+    | `s_poly_coeffs`                | `NLayers x Nscoeffs` or `Nscoeffs` |
+    | `Nscoeffs`                     | scalar                             |
+    | `there_is_iso_source`          | boolean                            |
+    | `scale_tau`                    | `NLayers`                          |
+    | `only_flux`                    | boolean                            |
+    | `NLayers_to_use_sparse`        | scalar                             |
+    | `_autograd_compatible`         | boolean                            |
+    
+    Notable internal variables of _assemble_intensity_and_fluxes
+    |     Variable      |             Type / Shape               |
+    | ----------------- | -------------------------------------- |
+    | `G_collect`       | `NFourier x NLayers x NQuad x NQuad`   |
+    | `G_collect_0`     | `NLayers x NQuad x NQuad`              |
+    | `G_inv_collect_0` | `NLayers x NQuad x NQuad` or `None`    |
+    | `K_collect`       | `NFourier x NLayers x NQuad`           |
+    | `K_collect_0`     | `NLayers x NQuad`                      |
+    | `B_collect`       | `NFourier x NLayers x NQuad` or `None` |
+    | `B_collect_0`     | `NLayers x NQuad` or `None`            |
+    | `B_pos`           | `NLayers x NQuad/2` or `None`          |
+    | `B_neg`           | `NLayers x NQuad/2` or `None`          |
+    | `GC_collect`      | `NFourier x NLayers x NQuad x NQuad`   |
+    | `GC_collect_0`    | `NLayers x NQuad x NQuad`              |
+    | `GC_pos`          | `NLayers x NQuad/2 x NQuad`            |
+    | `GC_neg`          | `NLayers x NQuad/2 x NQuad`            |
     """
-    if _is_compatible_with_autograd:
+    if _autograd_compatible:
         import autograd.numpy as np
     else:
         import numpy as np
     
-    ###################################### Assemble uncorrected solution functions #############################################
+    ################################## Assemble uncorrected intensity and flux functions #######################################
     
     # Compute all the necessary quantities
     # --------------------------------------------------------------------------------------------------------------------------
-    outputs = _diagonalize(
+    outputs = _solve_for_gen_and_part_sols(
         NFourier,
         scaled_omega_arr,
         mu_arr_pos, mu_arr,
@@ -73,7 +129,7 @@ def _assemble_solution_functions(
             G_inv_collect_0 = None
         B_collect = None
             
-    GC_collect = _solve_for_coefs(
+    GC_collect = _solve_for_coeffs(
         NFourier,
         G_collect,
         K_collect,
@@ -81,10 +137,10 @@ def _assemble_solution_functions(
         G_inv_collect_0,
         tau_arr,
         scaled_tau_arr_with_0,
-        mu_arr_pos, mu_arr_pos * W, mu_arr,
+        mu_arr, mu_arr_pos, mu_arr_pos * W,
         N, NQuad,
         NLayers, NBDRF,
-        atmos_is_multilayered,
+        is_atmos_multilayered,
         BDRF_Fourier_modes,
         mu0, I0,
         there_is_beam_source,
@@ -93,7 +149,7 @@ def _assemble_solution_functions(
         s_poly_coeffs,
         Nscoeffs,
         there_is_iso_source,
-        use_sparse_NLayers,
+        NLayers_to_use_sparse,
     )
     
     G_collect_0 = G_collect[0, :, :, :]
@@ -103,7 +159,7 @@ def _assemble_solution_functions(
         
     if not only_flux:
  
-        # Construct the intensity function
+        # Construct the intensity function (refer to Section 3.7 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         def u(tau, phi, return_Fourier_error=False):
             tau = np.atleast_1d(tau)
@@ -150,10 +206,10 @@ def _assemble_solution_functions(
                     K_collect_0,
                     G_inv_collect_0,
                     mu_arr,
-                    _is_compatible_with_autograd,
+                    _autograd_compatible,
                 )
                 
-                if _is_compatible_with_autograd:
+                if _autograd_compatible:
                     um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NFourier - 1, len(tau), NQuad))))
                 else:
                     um[0, :, :] += _mathscr_v_contribution.T
@@ -245,7 +301,7 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _is_compatible_with_autograd,
+                _autograd_compatible,
             )
             u0 += _mathscr_v_contribution
         
@@ -255,7 +311,7 @@ def _assemble_solution_functions(
             return I0_orig * np.squeeze(u0)
     # --------------------------------------------------------------------------------------------------------------------------
     
-    # Construct the flux functions
+    # Construct the flux functions (refer to Section 3.8 of the Comprehensive Documentation)
     # --------------------------------------------------------------------------------------------------------------------------
     GC_pos = GC_collect_0[:, :N, :]
     GC_neg = GC_collect_0[:, N:, :]
@@ -291,7 +347,7 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _is_compatible_with_autograd,
+                _autograd_compatible,
             )[:N, :]
         else:
             _mathscr_v_contribution = 0
@@ -345,7 +401,7 @@ def _assemble_solution_functions(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _is_compatible_with_autograd,
+                _autograd_compatible,
             )[N:, :]
         else:
             _mathscr_v_contribution = 0

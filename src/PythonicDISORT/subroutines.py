@@ -4,7 +4,7 @@ from math import pi
 from numpy.polynomial.legendre import leggauss
 
 
-def transform_interval(arr, c, d, a=-1, b=1):
+def transform_interval(arr, c, d, a, b):
     """Affine transformation of an array from interval [a, b] to [c, d].
 
     Parameters
@@ -29,7 +29,7 @@ def transform_interval(arr, c, d, a=-1, b=1):
     return (((arr - a) * (d - c)) / (b - a)) + c
 
 
-def transform_weights(weights, c, d, a=-1, b=1):
+def transform_weights(weights, c, d, a, b):
     """Transforms an array of quadrature weights from interval [a, b] to [c, d].
 
     Parameters
@@ -106,7 +106,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
     """
     mu_arr_pos, W = leggauss(int(N))
 
-    return transform_interval(mu_arr_pos, c, d), transform_weights(W, c, d)
+    return transform_interval(mu_arr_pos, c, d, -1, 1), transform_weights(W, c, d, -1, 1)
 
 
 def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
@@ -142,7 +142,7 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     weights_phi_pos[0] /= 2
     full_weights_phi = np.hstack((weights_phi_pos, np.flip(weights_phi_pos[:-1])))
 
-    return transform_interval(phi_arr, c, d), transform_weights(full_weights_phi, c, d)
+    return transform_interval(phi_arr, c, d, -1, 1), transform_weights(full_weights_phi, c, d, -1, 1)
 
 
 def generate_FD_mat(Ntau, a, b):
@@ -256,18 +256,58 @@ def generate_diff_act_flux_funcs(u0):
     return flux_act_up, flux_act_down_diffuse
 
 
-def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr, _is_compatible_with_autograd=False):
+def _mathscr_v(tau,                         # Input optical depths
+                l,                          # Layer index of each input optical depth
+                s_poly_coeffs,              # Polynomial coefficients of isotropic source
+                Nscoeffs,                   # Number of isotropic source polynomial coefficients
+                G,                          # Eigenvector matrices
+                K,                          # Eigenvalues
+                G_inv,                      # Inverse of eigenvector matrix
+                mu_arr,                     # Quadrature nodes for both hemispheres
+                _autograd_compatible=False  # Should the output functions be compatible with autograd?
+                ):
     """Particular solution for isotropic internal sources.
-    It has many seemingly redundant arguments to maximize precomputation
-    in the `pydisort` function which calls it.
-
+    Refer to Section 3.6.1 of the Comprehensive Documentation.
+    It has many seemingly redundant arguments to maximize 
+    precomputation in the `_assemble_intensity_and_fluxes` 
+    and `_solve_for_coeffs` functions which call it.
+    
+    Arguments of _mathscr_v
+    |        Variable        |                 Shape                 |
+    | ---------------------- | ------------------------------------- |
+    | `tau`                  | `Ntau`                                |
+    | `l`                    | `Ntau`                                |
+    | `s_poly_coeffs`        | `NLayers x Nscoeffs` or `Nscoeffs`    |
+    | `G`                    | `NLayers<= x NQuad x NQuad`           |
+    | `K`                    | `NLayers<= x NQuad`                   |
+    | `G_inv`                | `NLayers<= x NQuad x NQuad` or `None` |
+    | `mu_arr`               | `NQuad`                               |
+    | `_autograd_compatible` | boolean                               |
+    
+    Notable internal variables of _mathscr_v
+    |     Variable     |                Shape                | 
+    | ---------------- | ----------------------------------- |
+    | i_arr            | `Nscoeffs`                          |
+    | i_arr_repeat     | `Nscoeffs*(Nscoeffs+1)/2`           | Using triangular number formula
+    | j_arr            | `Nscoeffs*(Nscoeffs+1)/2`           | Using triangular number formula
+    | s_poly_coeffs_nj | `NLayers x Nscoeffs*(Nscoeffs+1)/2` |
+    | OUTPUT           | `NQuad x Ntau`                      |
     """
     n = Nscoeffs - 1
     
-    if _is_compatible_with_autograd:
+    if _autograd_compatible:
         import autograd.numpy as np
     
         def mathscr_b(i):
+            """
+            Notable internal variables of mathscr_b
+            |     Variable     |                 Shape                 |
+            | ---------------- | ------------------------------------- |
+            | j_arr            | `i + 1`                               |
+            | s_poly_coeffs_nj | `i + 1`                               |
+            | OUTPUT           | `Nscoeffs x (i + 1) x NQuad`          |
+            """
+        
             j_arr = np.arange(i + 1)
             s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
             return np.sum(

@@ -1,5 +1,5 @@
 from PythonicDISORT import subroutines
-from PythonicDISORT._assemble_solution_functions import _assemble_solution_functions
+from PythonicDISORT._assemble_intensity_and_fluxes import _assemble_intensity_and_fluxes
 
 import numpy as np
 import scipy as sc
@@ -22,8 +22,8 @@ def pydisort(
     NT_cor=False,
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
-    use_sparse_NLayers=13,
-    _is_compatible_with_autograd = False,
+    NLayers_to_use_sparse=13,
+    _autograd_compatible = False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -37,14 +37,15 @@ def pydisort(
 
     Parameters
     ----------
-    tau_arr : array
+    tau_arr : array or float
         Optical depth of the lower boundary of each atmospheric layer.
-    omega_arr : array
+    omega_arr : array or float
         Single-scattering albedo of each atmospheric layer.
     NQuad : int
         Number of `mu` quadrature nodes.
-    Leg_coeffs_all : ndarray
-        All available unweighted phase function Legendre coefficients. 
+    Leg_coeffs_all : 2darray
+        All available unweighted phase function Legendre coefficients.
+        Each row of coefficients pertain to an atmospheric layer.
         Each coefficient should be between 0 and 1 inclusive.
     mu0 : float
         Cosine of polar angle of the incident beam.
@@ -53,9 +54,10 @@ def pydisort(
     phi0 : float
         Azimuthal angle of the incident beam.
     NLeg : optional, int
-        Number of phase function Legendre coefficients.
+        Number of phase function Legendre coefficients
+        to use in the pre-correction solver.
     NFourier : optional, int
-        Number of Fourier modes to use in the intensity function.
+        Number of Fourier modes to use to construct the intensity function.
     b_pos : optional, 2darray or float
         Dirichlet boundary condition for the upward direction.
     b_neg : optional, 2darray or float
@@ -72,33 +74,80 @@ def pydisort(
     s_poly_coeffs : optional, array
         Polynomial coefficients of isotropic internal sources.
         Arrange coefficients from lowest order term to highest.
-    use_sparse_NLayers : optional, int
+    NLayers_to_use_sparse : optional, int
         At or above how many atmospheric layers should SciPy's sparse matrix framework be used?
 
     Returns
     -------
-    array
+    mu_arr : array
         All `mu` (cosine of polar angle) quadrature nodes.
-    function
+    Fp(tau) : function, function
         (Energetic) Flux function with argument `tau` (type: array) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (type: array).
-    function
+    Fm(tau) : function
         (Energetic) Flux function with argument `tau` (type: array) for negative (downward) `mu` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)).
-    function
+    u0(tau) : function
         Zeroth Fourier mode of the intensity with argument `tau` (type: array).
         Returns an ndarray with axes corresponding to variation with `mu` and `tau` respectively.
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually
         (for actinic flux `generate_diff_act_flux_funcs` will automatically perform the reclassification).
-    function, optional
+    u(tau, phi) : function, optional
         Intensity function with arguments `(tau, phi, return_Fourier_error=False)` of types `(array, array, bool)`.
         Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
         The optional flag `return_Fourier_error` determines whether the function will also return
         the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
 
     """
-    if _is_compatible_with_autograd:
+    
+    """
+    Arguments of pydisort
+    |         Variable        |            Type / Shape            |
+    | ----------------------- | ---------------------------------- |
+    | `tau_arr`               | `NLayers`                          |
+    | `omega_arr`             | `NLayers`                          |
+    | `NQuad`                 | scalar                             |
+    | `Leg_coeffs_all`        | `NLeg_all`                         |
+    | `mu0`                   | scalar                             |
+    | `I0`                    | scalar                             |
+    | `phi0`                  | scalar                             |
+    | `NLeg`                  | scalar                             |
+    | `NFourier`              | scalar                             |
+    | `b_pos`                 | `NQuad/2 x NFourier` or scalar     |
+    | `b_neg`                 | `NQuad/2 x NFourier` or scalar     |              
+    | `only_flux`             | boolean                            |
+    | `f_arr`                 | `NLayers` or scalar                |
+    | `NT_cor`                | boolean                            |
+    | `BDRF_Fourier_modes`    | `NBDRF`                            |
+    | `s_poly_coeffs`         | `NLayers x Nscoeffs` or `Nscoeffs` |
+    | `NLayers_to_use_sparse` | scalar                             |
+    
+    Notable internal variables of pydisort
+    |          Variable            |     Type / Shape     |
+    | ---------------------------- | -------------------- |
+    | `I0_orig`                    | scalar               |
+    | `thickness_arr`              | `NLayers`            |
+    | `weighted_Leg_coeffs_all`    | `NLayers x NLeg_all` |
+    | `Leg_coeffs`                 | `NLayers x NLeg`     |
+    | `weighted_scaled_Leg_coeffs` | `NLayers x NLeg`     |
+    | `mu_arr_pos`                 | `NQuad/2`            |
+    | `W`                          | `NQuad/2`            |
+    | `mu_arr`                     | `NQuad`              |
+    | `M_inv`                      | `NQuad/2`            |
+    | `scale_tau`                  | `NLayers`            |
+    | `scaled_tau_arr_with_0`      | `NLayers + 1`        |
+    | `scaled_omega_arr`           | `NLayers`            |
+    | `sum1`                       | scalar               |
+    | `omega_avg`                  | scalar               |
+    | `sum2`                       | scalar               |
+    | `f_avg`                      | scalar               |
+    | `Leg_coeffs_residue`         | `NLayers x NLeg_all` |
+    | `Leg_coeffs_residue_avg`     | `NLeg_all`           |
+    | `scaled_mu0`                 | scalar               |
+    """
+
+    if _autograd_compatible:
         import autograd.numpy as np
     else:
         import numpy as np
@@ -134,10 +183,10 @@ def pydisort(
     N = NQuad // 2
     there_is_beam_source = I0 > 0
     there_is_iso_source = Nscoeffs > 0
-    atmos_is_multilayered = NLayers > 1
+    is_atmos_multilayered = NLayers > 1
     # --------------------------------------------------------------------------------------------------------------------------
 
-    # Input checks
+    # Input checks (refer to Section 1 of the Comprehensive Documentation)
     # --------------------------------------------------------------------------------------------------------------------------
     # Optical depths and thickness must be positive
     assert np.all(tau_arr > 0)
@@ -183,7 +232,7 @@ def pydisort(
     # The fractional scattering must be between 0 and 1
     assert np.all(0 <= f_arr) and np.all(f_arr <= 1)
     # The minimum threshold is the minimum numbers of layers: 1
-    assert(use_sparse_NLayers >= 1)
+    assert(NLayers_to_use_sparse >= 1)
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Some more setup
@@ -191,6 +240,7 @@ def pydisort(
     NBDRF = len(BDRF_Fourier_modes)
     weighted_Leg_coeffs_all = (2 * np.arange(NLeg_all) + 1) * Leg_coeffs_all
     Leg_coeffs = Leg_coeffs_all[:, :NLeg]
+    # The following is explained in Section 1.4 of the Comprehensive Documentation
     if (b_pos_is_scalar and b_pos == 0) and (b_neg_is_scalar and b_neg == 0) and not there_is_iso_source and there_is_beam_source:
         I0_orig = I0
         I0 = 1
@@ -198,7 +248,7 @@ def pydisort(
         I0_orig = 1
     # --------------------------------------------------------------------------------------------------------------------------
     
-    # Generation of Double Gauss-Legendre quadrature weights and points
+    # Generation of "double-Gauss" quadrature weights and points (refer to Section 3.4 of the Comprehensive Documentation)
     # --------------------------------------------------------------------------------------------------------------------------
     # For positive mu values (the weights are identical for both domains)
     mu_arr_pos, W = subroutines.Gauss_Legendre_quad(N)  # mu_arr_neg = -mu_arr_pos
@@ -210,6 +260,7 @@ def pydisort(
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Delta-M scaling; there is no scaling if f = 0
+    # Refer to Sections 1.3.1 and 3.3 of the Comprehensive Documentation
     # --------------------------------------------------------------------------------------------------------------------------
     if np.any(f_arr > 0):
         scale_tau = 1 - omega_arr * f_arr
@@ -231,18 +282,19 @@ def pydisort(
     
     if NT_cor and not only_flux and there_is_beam_source and np.any(f_arr > 0) and NLeg < NLeg_all:
         
-        ############################### Perform NT corrections on the intensity but not the flux ###################################
+        ############################### Perform NT corrections on the intensity but not the flux ###############################
+        ############################### Refer to Section 3.7.2 of the Comprehensive Documentation ##############################
         
         # Delta-M scaled solution; no further corrections to the flux
-        flux_up, flux_down, u0, u_star = _assemble_solution_functions(
+        flux_up, flux_down, u0, u_star = _assemble_intensity_and_fluxes(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
             mu_arr_pos, mu_arr,
             M_inv, W,
-            N, NQuad, NLeg, NFourier,
-            NLayers, NBDRF,
-            atmos_is_multilayered,
+            N, NQuad, NLeg,
+            NFourier, NLayers, NBDRF,
+            is_atmos_multilayered,
             weighted_scaled_Leg_coeffs,
             BDRF_Fourier_modes,
             mu0, I0, I0_orig, phi0,
@@ -254,8 +306,8 @@ def pydisort(
             there_is_iso_source,
             scale_tau,
             only_flux,
-            use_sparse_NLayers,
-            _is_compatible_with_autograd,
+            NLayers_to_use_sparse,
+            _autograd_compatible,
         )
         
         # TMS correction
@@ -324,16 +376,25 @@ def pydisort(
             # TODO: Despite being vectorized and despite many attempts at further optimization,
             # this block of code is slower than desired and is the bottleneck for the TMS correction.
             # --------------------------------------------------------------------------------------------------------------------------
-            if atmos_is_multilayered:
+            solution = (
+                mathscr_B[:, l, :] * np.vstack((TMS_correction_pos, TMS_correction_neg))[:, :, None]
+            )
+            
+            if is_atmos_multilayered:
                 layers_arr = np.arange(NLayers)[:, None]
                 pos_contribution_mask = (l[None, :] < layers_arr).ravel()
                 neg_contribution_mask = (l[None, :] > layers_arr).ravel()
+                any_pos_contribution = np.any(pos_contribution_mask)
+                any_neg_contribution = np.any(neg_contribution_mask)
+            
+                if not (any_pos_contribution or any_neg_contribution):
+                    return solution
 
                 layers_arr_repeat = np.repeat(layers_arr, Ntau)
                 scaled_tau_tile = np.tile(scaled_tau, NLayers)
                 scaled_tau_arr_with_0_repeat = np.repeat(scaled_tau_arr_with_0, Ntau)
 
-                if np.any(pos_contribution_mask):
+                if any_pos_contribution:
                     contribution_from_each_other_layer_pos = np.zeros((N, NLayers * Ntau, Nphi))
                     scaled_tau_l_tile_pos = scaled_tau_tile[pos_contribution_mask]
                     mathscr_B_l_repeat_posmasked = mathscr_B[
@@ -365,7 +426,7 @@ def pydisort(
                         contribution_from_each_other_layer_pos.reshape((N, NLayers, Ntau, Nphi)),
                         axis=1,
                     )
-                if np.any(neg_contribution_mask):
+                if any_neg_contribution:
                     contribution_from_each_other_layer_neg = np.zeros((N, NLayers * Ntau, Nphi))
                     scaled_tau_l_tile_neg = scaled_tau_tile[neg_contribution_mask]
                     mathscr_B_l_repeat_negmasked = mathscr_B[
@@ -398,30 +459,26 @@ def pydisort(
                         axis=1,
                     )
 
-                if _is_compatible_with_autograd:
-                    solution = (
-                        mathscr_B[:, l, :]
-                        * np.vstack((TMS_correction_pos, TMS_correction_neg))[:, :, None]
-                    )
-                    solution[:N, :, :] += contribution_from_other_layers_pos
-                    solution[N:, :, :] += contribution_from_other_layers_neg
-                    return solution
-
-                else:
-                    return mathscr_B[:, l, :] * np.vstack((TMS_correction_pos, TMS_correction_neg))[
-                        :, :, None
-                    ] + np.concatenate(
+                if _autograd_compatible:
+                    if not any_pos_contribution:
+                        TMS_correction_pos = np.zeros((N, Ntau, Nphi))
+                    if not any_neg_contribution:
+                        TMS_correction_neg = np.zeros((N, Ntau, Nphi))
+                    return solution + np.concatenate(
                         (contribution_from_other_layers_pos, contribution_from_other_layers_neg),
                         axis=0,
                     )
+                else:
+                    if any_pos_contribution:
+                        solution[:N, :, :] += contribution_from_other_layers_pos
+                    if any_neg_contribution:
+                        solution[N:, :, :] += contribution_from_other_layers_neg
+                    return solution
                     
             # --------------------------------------------------------------------------------------------------------------------------
             
             else:
-                return (
-                    mathscr_B[:, l, :]
-                    * np.vstack((TMS_correction_pos, TMS_correction_neg))[:, :, None]
-                )
+                return solution
         # --------------------------------------------------------------------------------------------------------------------------
 
         # IMS correction
@@ -466,7 +523,7 @@ def pydisort(
             phi = np.atleast_1d(phi)
             NT_corrections = TMS_correction(tau, phi)
 
-            if _is_compatible_with_autograd:
+            if _autograd_compatible:
                 NT_corrections = NT_corrections + np.concatenate(
                     [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
                 )
@@ -488,15 +545,15 @@ def pydisort(
     else:
         if only_flux:
             NFourier = 1 # We only need to solve for the 0th Fourier mode to compute the flux
-        return (mu_arr,) + _assemble_solution_functions(
+        return (mu_arr,) + _assemble_intensity_and_fluxes(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
             mu_arr_pos, mu_arr,
             M_inv, W,
-            N, NQuad, NLeg, NFourier,
-            NLayers, NBDRF,
-            atmos_is_multilayered,
+            N, NQuad, NLeg,
+            NFourier, NLayers, NBDRF,
+            is_atmos_multilayered,
             weighted_scaled_Leg_coeffs,
             BDRF_Fourier_modes,
             mu0, I0, I0_orig, phi0,
@@ -508,6 +565,6 @@ def pydisort(
             there_is_iso_source,
             scale_tau,
             only_flux,
-            use_sparse_NLayers,
-            _is_compatible_with_autograd,
+            NLayers_to_use_sparse,
+            _autograd_compatible,
         )

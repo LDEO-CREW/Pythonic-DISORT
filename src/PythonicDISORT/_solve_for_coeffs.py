@@ -6,38 +6,79 @@ import scipy as sc
 from math import pi
 
 
-def _solve_for_coefs(
-    NFourier,
-    G_collect,
-    K_collect,
-    B_collect,
-    G_inv_collect_0,
-    tau_arr,
-    scaled_tau_arr_with_0,
-    mu_arr_pos, mu_arr_pos_times_W, mu_arr,
-    N, NQuad,
-    NLayers, NBDRF,
-    atmos_is_multilayered,
-    BDRF_Fourier_modes,
-    mu0, I0,
-    there_is_beam_source,
-    b_pos, b_neg,
-    b_pos_is_scalar, b_neg_is_scalar,
-    s_poly_coeffs,
-    Nscoeffs,
-    there_is_iso_source,
-    use_sparse_NLayers,
+def _solve_for_coeffs(
+    NFourier,                               # Number of intensity Fourier modes
+    G_collect,                              # Eigenvector matrices
+    K_collect,                              # Eigenvalues
+    B_collect,                              # Coefficients vectors for particular solutions
+    G_inv_collect_0,                        # Inverse of eigenvector matrix for the 0th Fourier mode
+    tau_arr,                                # Lower boundary of layers
+    scaled_tau_arr_with_0,                  # Delta-scaled lower boundary of layers with 0 inserted in front
+    mu_arr, mu_arr_pos, mu_arr_pos_times_W, # Quadrature nodes for 1) both 2) upper hemispheres; 3) upper hemisphere quadrature nodes times weights
+    N, NQuad,                               # Number of 1) upper 2) both hemispheres quadrature nodes
+    NLayers, NBDRF,                         # Number of 1) intensity Fourier modes; 2) layers
+    is_atmos_multilayered,                  # Is the atmosphere multilayered?
+    BDRF_Fourier_modes,                     # BDRF Fourier modes
+    mu0, I0,                                # Properties of direct beam
+    there_is_beam_source,                   # Is there a beam source?
+    b_pos, b_neg,                           # Dirichlet BCs
+    b_pos_is_scalar, b_neg_is_scalar,       # Is each Dirichlet BCs scalar (isotropic)?
+    s_poly_coeffs,                          # Polynomial coefficients of isotropic source           
+    Nscoeffs,                               # Number of isotropic source polynomial coefficients
+    there_is_iso_source,                    # Is there an isotropic source?
+    NLayers_to_use_sparse,                  # Number of layers above or equal which to use sparse matrices
 ):
-    """This function is wrapped by the `_assemble_solution_functions` function.
+    """
+    In this function the unknown coefficients of the general solution to the system
+    of ODEs for each Fourier mode is solved using the boundary conditions 
+    and the product of the coefficients and the eigenvectors is returned.
+    This function is wrapped by the `_assemble_intensity_and_fluxes` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
     The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 4.
 
+    Arguments of _solve_for_coeffs
+    |            Variable            |              Type / Shape              |
+    | ------------------------------ | -------------------------------------- |
+    | `NFourier`                     | scalar                                 |
+    | `G_collect`                    | `NFourier x NLayers x NQuad x NQuad`   |
+    | `K_collect`                    | `NFourier x NLayers x NQuad`           |
+    | `B_collect`                    | `NFourier x NLayers x NQuad` or `None` |
+    | `G_inv_collect_0`              | `NLayers x NQuad x NQuad` or `None`    |
+    | `tau_arr`                      | `NLayers`                              |
+    | `scaled_tau_arr_with_0`        | `NLayers + 1`                          |
+    | `mu_arr`                       | `NQuad`                                |
+    | `mu_arr_pos`                   | `NQuad/2`                              |
+    | `mu_arr_pos_times_W`           | `NQuad/2`                              |
+    | `N`                            | scalar                                 |
+    | `NQuad`                        | scalar                                 |
+    | `NLayers`                      | scalar                                 |
+    | `NBDRF`                        | scalar                                 |
+    | `is_atmos_multilayered`        | boolean                                |
+    | `BDRF_Fourier_modes`           | `NBDRF`                                |
+    | `mu0`                          | scalar                                 |
+    | `I0`                           | scalar                                 |
+    | `there_is_beam_source`         | boolean                                |
+    | `b_pos`                        | `NQuad/2 x NFourier` or scalar         |
+    | `b_neg`                        | `NQuad/2 x NFourier` or scalar         |
+    | `b_pos_is_scalar`              | boolean                                |
+    | `b_neg_is_scalar`              | boolean                                |              
+    | `s_poly_coeffs`                | `NLayers x Nscoeffs` or `Nscoeffs`     |
+    | `Nscoeffs`                     | scalar                                 |
+    | `there_is_iso_source`          | boolean                                |
+    | `NLayers_to_use_sparse`        | scalar                                 |
+    
+    Notable internal variables of _solve_for_coeffs
+    |   Variable   |                 Shape                |
+    | ------------ | ------------------------------------ |
+    | `GC_collect` | `NFourier x NLayers x NQuad x NQuad` |
+
     """
     ################################## Solve for coefficients of homogeneous solution ##########################################
+    ############# Refer to Section 3.6.2 (single-layer) and 4 (multi-layer) of the Comprehensive Documentation #################
     
     GC_collect = np.empty((NFourier, NLayers, NQuad, NQuad))
-    use_sparse_framework = NLayers >= use_sparse_NLayers
+    use_sparse_framework = NLayers >= NLayers_to_use_sparse
     
     # The following loops can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     for m in range(NFourier):
@@ -50,6 +91,7 @@ def _solve_for_coefs(
             B_collect_m = B_collect[m, :, :]
             
         # Generate mathscr_D and mathscr_X (BDRF terms)
+        # Just for this part, refer to Section 3.4.2 of the Comprehensive Documentation 
         # --------------------------------------------------------------------------------------------------------------------------
         if BDRF_bool:
             mathscr_D_neg = (1 + m_equals_0 * 1) * BDRF_Fourier_modes[m](mu_arr_pos, -mu_arr_pos)
@@ -92,7 +134,7 @@ def _solve_for_coefs(
                     ).ravel()
         
             _mathscr_v_contribution_middle = np.array([])
-            if atmos_is_multilayered:
+            if is_atmos_multilayered:
                 indices = np.arange(NLayers - 1)
                 _mathscr_v_contribution_middle = (
                     _mathscr_v(
@@ -147,7 +189,7 @@ def _solve_for_coefs(
                 BDRF_RHS_contribution = 0
             
             RHS_middle = np.array([])
-            if atmos_is_multilayered:
+            if is_atmos_multilayered:
                 RHS_middle = np.array(
                     [
                         (B_collect_m[l + 1, :] - B_collect_m[l, :])
@@ -173,7 +215,7 @@ def _solve_for_coefs(
             RHS = np.concatenate([b_neg_m, RHS_middle, b_pos_m]) + _mathscr_v_contribution
         # --------------------------------------------------------------------------------------------------------------------------
         
-        # Assemble LHS
+        # Assemble LHS (much of this code is replicated in Section 4 of the Comprehensive Documentation)
         dim = NLayers * NQuad
 
         G_0_nn = G_collect_m[0, N:, :N]
@@ -193,8 +235,8 @@ def _solve_for_coefs(
             BDRF_LHS_contribution_pos = 0
         
         if use_sparse_framework:
-            N_squared = N**2
-            density = 4 * N_squared * (2 * NLayers - 1)
+            N_sq = N**2
+            density = 4 * N_sq * (2 * NLayers - 1)
             row_indices = np.empty(density)
             col_indices = np.empty(density)
             block_rows = np.empty(density)
@@ -203,35 +245,35 @@ def _solve_for_coefs(
             block_row_ind = np.arange(block_row_len).reshape(NQuad, 2 * NQuad)
             block_row_sort = np.empty(block_row_len, dtype='int')
             
-            block_row_sort[:N_squared] = block_row_ind[:N, :N].ravel()
-            block_row_sort[N_squared : 2 * N_squared] = block_row_ind[N : 2 * N, :N].ravel()
-            block_row_sort[2 * N_squared : 4 * N_squared] = block_row_ind[:2 * N, N : 2 * N].ravel()
-            block_row_sort[4 * N_squared : 6 * N_squared] = block_row_ind[:2 * N, 2 * N : 3 * N].ravel()
-            block_row_sort[6 * N_squared : 7 * N_squared] = block_row_ind[:N, 3 * N : 4 * N].ravel()
-            block_row_sort[7 * N_squared : 8 * N_squared] = block_row_ind[N : 2 * N, 3 * N : 4 * N].ravel()
+            block_row_sort[:N_sq] = block_row_ind[:N, :N].ravel()
+            block_row_sort[N_sq : 2 * N_sq] = block_row_ind[N : 2 * N, :N].ravel()
+            block_row_sort[2 * N_sq : 4 * N_sq] = block_row_ind[:2 * N, N : 2 * N].ravel()
+            block_row_sort[4 * N_sq : 6 * N_sq] = block_row_ind[:2 * N, 2 * N : 3 * N].ravel()
+            block_row_sort[6 * N_sq : 7 * N_sq] = block_row_ind[:N, 3 * N : 4 * N].ravel()
+            block_row_sort[7 * N_sq : 8 * N_sq] = block_row_ind[N : 2 * N, 3 * N : 4 * N].ravel()
 
             # BCs for the entire atmosphere
-            row_indices[:N_squared], col_indices[:N_squared] = _nd_slice_to_indexes(np.s_[:N, :N])
-            block_rows[:N_squared] = G_0_nn.ravel()
+            row_indices[:N_sq], col_indices[:N_sq] = _nd_slice_to_indexes(np.s_[:N, :N])
+            block_rows[:N_sq] = G_0_nn.ravel()
             (
-                row_indices[N_squared : 2 * N_squared],
-                col_indices[N_squared : 2 * N_squared],
+                row_indices[N_sq : 2 * N_sq],
+                col_indices[N_sq : 2 * N_sq],
             ) = _nd_slice_to_indexes(np.s_[:N, N:NQuad])
-            block_rows[N_squared : 2 * N_squared] = (
+            block_rows[N_sq : 2 * N_sq] = (
                 G_0_np * np.exp(K_collect_m[0, :N] * scaled_tau_arr_with_0[1])[None, :]
             ).ravel()
             (
-                row_indices[2 * N_squared : 3 * N_squared],
-                col_indices[2 * N_squared : 3 * N_squared],
+                row_indices[2 * N_sq : 3 * N_sq],
+                col_indices[2 * N_sq : 3 * N_sq],
             ) = _nd_slice_to_indexes(np.s_[dim - N : dim, dim - NQuad : dim - N])
-            block_rows[2 * N_squared : 3 * N_squared] = (
+            block_rows[2 * N_sq : 3 * N_sq] = (
                 (G_L_pn - BDRF_LHS_contribution_neg) * E_Lm1L[None, :]
             ).ravel()
             (
-                row_indices[3 * N_squared : 4 * N_squared],
-                col_indices[3 * N_squared : 4 * N_squared],
+                row_indices[3 * N_sq : 4 * N_sq],
+                col_indices[3 * N_sq : 4 * N_sq],
             ) = _nd_slice_to_indexes(np.s_[dim - N : dim, dim - N : dim])
-            block_rows[3 * N_squared : 4 * N_squared] = (
+            block_rows[3 * N_sq : 4 * N_sq] = (
                 G_L_pp - BDRF_LHS_contribution_pos
             ).ravel()
 
@@ -256,19 +298,19 @@ def _solve_for_coefs(
                     np.s_[N + l * NQuad : N + (l + 1) * NQuad, l * NQuad : (l + 2) * NQuad]
                 )
                 row_indices[
-                    4 * N_squared + l * block_row_len : 4 * N_squared + (l + 1) * block_row_len
+                    4 * N_sq + l * block_row_len : 4 * N_sq + (l + 1) * block_row_len
                 ] = row_indices_l[block_row_sort]
                 col_indices[
-                    4 * N_squared + l * block_row_len : 4 * N_squared + (l + 1) * block_row_len
+                    4 * N_sq + l * block_row_len : 4 * N_sq + (l + 1) * block_row_len
                 ] = col_indices_l[block_row_sort]
                 
-                starting_ind = 4 * N_squared + l * block_row_len
-                block_rows[starting_ind : N_squared + starting_ind] = (G_l_pn * E_lm1l[None, :]).ravel()
-                block_rows[starting_ind + N_squared : 2 * N_squared + starting_ind] = (G_l_nn * E_lm1l[None, :]).ravel()
-                block_rows[starting_ind + 2 * N_squared : 4 * N_squared + starting_ind] = G_l_ap.ravel()
-                block_rows[starting_ind + 4 * N_squared : 6 * N_squared + starting_ind] = -G_lp1_an.ravel()
-                block_rows[starting_ind + 6 * N_squared : 7 * N_squared + starting_ind] = -(G_lp1_pp * E_llp1[None, :]).ravel()
-                block_rows[starting_ind + 7 * N_squared : 8 * N_squared + starting_ind] = -(G_lp1_np * E_llp1[None, :]).ravel()
+                start_ind = 4 * N_sq + l * block_row_len
+                block_rows[start_ind : N_sq + start_ind] = (G_l_pn * E_lm1l[None, :]).ravel()
+                block_rows[start_ind + N_sq : 2 * N_sq + start_ind] = (G_l_nn * E_lm1l[None, :]).ravel()
+                block_rows[start_ind + 2 * N_sq : 4 * N_sq + start_ind] = G_l_ap.ravel()
+                block_rows[start_ind + 4 * N_sq : 6 * N_sq + start_ind] = -G_lp1_an.ravel()
+                block_rows[start_ind + 6 * N_sq : 7 * N_sq + start_ind] = -(G_lp1_pp * E_llp1[None, :]).ravel()
+                block_rows[start_ind + 7 * N_sq : 8 * N_sq + start_ind] = -(G_lp1_np * E_llp1[None, :]).ravel()
     
             LHS = sc.sparse.coo_matrix(
                 (
@@ -284,7 +326,7 @@ def _solve_for_coefs(
             # Solve the system
             C_m = sc.sparse.linalg.spsolve(LHS.tocsr(), RHS).reshape(NLayers, NQuad)
         
-        else:
+        else:            
             LHS = np.zeros((dim, dim))
 
             # BCs for the entire atmosphere
@@ -313,14 +355,14 @@ def _solve_for_coefs(
                 E_lm1l = np.exp(K_l_pos * (scaled_tau_arr_lm1 - scaled_tau_arr_l))
                 E_llp1 = np.exp(K_lp1_pos * (scaled_tau_arr_l - scaled_tau_arr_lp1))
                 
-                starting_row = N + l * NQuad
-                starting_col = l * NQuad
-                LHS[starting_row : N + starting_row, starting_col : N + starting_col] = G_l_pn * E_lm1l[None, :]
-                LHS[N + starting_row : 2 * N + starting_row, starting_col : N + starting_col] = G_l_nn * E_lm1l[None, :]
-                LHS[starting_row : 2 * N + starting_row, N + starting_col : 2 * N + starting_col] = G_l_ap
-                LHS[starting_row : 2 * N + starting_row, 2 * N + starting_col : 3 * N + starting_col] = -G_lp1_an
-                LHS[starting_row : N + starting_row, 3 * N + starting_col : 4 * N + starting_col] = -G_lp1_pp * E_llp1[None, :]
-                LHS[N + starting_row : 2 * N + starting_row, 3 * N + starting_col : 4 * N + starting_col] = -G_lp1_np * E_llp1[None, :]
+                start_row = N + l * NQuad
+                start_col = l * NQuad
+                LHS[start_row : N + start_row, start_col : N + start_col] = G_l_pn * E_lm1l[None, :]
+                LHS[N + start_row : 2 * N + start_row, start_col : N + start_col] = G_l_nn * E_lm1l[None, :]
+                LHS[start_row : 2 * N + start_row, N + start_col : 2 * N + start_col] = G_l_ap
+                LHS[start_row : 2 * N + start_row, 2 * N + start_col : 3 * N + start_col] = -G_lp1_an
+                LHS[start_row : N + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_pp * E_llp1[None, :]
+                LHS[N + start_row : 2 * N + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_np * E_llp1[None, :]
             
             # Solve the system
             C_m = np.linalg.solve(LHS, RHS).reshape(NLayers, NQuad)

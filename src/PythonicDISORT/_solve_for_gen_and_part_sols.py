@@ -3,26 +3,63 @@ import scipy as sc
 from math import pi
 
 
-def _diagonalize(
-    NFourier,
-    scaled_omega_arr,
-    mu_arr_pos, mu_arr,
-    M_inv, W,
-    N, NQuad, NLeg,
-    NLayers,
-    weighted_scaled_Leg_coeffs,
-    mu0, I0,
-    there_is_beam_source,
-    Nscoeffs,
-    there_is_iso_source,
+def _solve_for_gen_and_part_sols(
+    NFourier,                   # Number of intensity Fourier modes
+    scaled_omega_arr,           # Delta-scaled single-scattering albedos
+    mu_arr_pos, mu_arr,         # Quadrature nodes for 1) upper 2) both hemispheres
+    M_inv, W,                   # 1) 1 / mu; 2) quadrature weights for each hemisphere
+    N, NQuad, NLeg,             # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients 
+    NLayers,                    # Number of layers
+    weighted_scaled_Leg_coeffs, # Weighted and delta-scaled Legendre coefficients
+    mu0, I0,                    # Properties of direct beam
+    there_is_beam_source,       # Is there a beam source?
+    Nscoeffs,                   # Number of isotropic source polynomial coefficients
+    there_is_iso_source,        # Is there an isotropic source?
 ):
-    """This function is wrapped by the `_assemble_solution_functions` function.
+    """
+    In this function the coefficient matrix of the system of ODEs for each Fourier mode is diagonalized 
+    and the eigenpairs are returned; the general solution to each system of ODEs is determined up to unknown coefficients.
+    The particular solutions to each system of ODEs is also determined and its coefficient vector is returned.
+    This function is wrapped by the `_assemble_intensity_and_fluxes` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
     The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 4.
 
+    Arguments of _solve_for_gen_and_part_sols
+    |            Variable            |            Type / Shape            |
+    | ------------------------------ | ---------------------------------- |
+    | `NFourier`                     | scalar                             |
+    | `scaled_omega_arr`             | `NLayers`                          |
+    | `mu_arr_pos`                   | `NQuad/2`                          |
+    | `mu_arr`                       | `NQuad`                            |
+    | `M_inv`                        | `NQuad/2`                          |
+    | `W`                            | `NQuad/2`                          |
+    | `N`                            | scalar                             |
+    | `NQuad`                        | scalar                             |
+    | `NLeg`                         | scalar                             |
+    | `NLayers`                      | scalar                             |
+    | `weighted_scaled_Leg_coeffs`   | `NLayers x NLeg`                   |
+    | `mu0`                          | scalar                             |
+    | `I0`                           | scalar                             |
+    | `there_is_beam_source`         | boolean                            |
+    | `Nscoeffs`                     | scalar                             |
+    | `there_is_iso_source`          | boolean                            |
+    
+    Notable internal variables of _solve_for_gen_and_part_sols
+    |      Variable     |             Type / Shape               |
+    | ----------------- | -------------------------------------- |
+    | `ells_all`        | `NLeg`                                 |
+    | `G_collect`       | `NFourier*NLayers x NQuad x NQuad`     | Reshaped to NFourier x NLayers x NQuad x NQuad
+    | `K_collect`       | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
+    | `alpha_arr`       | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
+    | `beta_arr`        | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
+    | `X_tilde_arr`     | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
+    | `B_collect`       | `NFourier*NLayers x NQuad` or `None`   | Reshaped to NFourier x NLayers x NQuad
+    | `G_inv_collect_0` | `NLayers x NQuad x NQuad` or `None`    |
+
     """
     ############################### Assemble system and diagonalize coefficient matrix #########################################
+    ########################### Refer to Section 3.4.2 of the Comprehensive Documentation  #####################################
     
     # Initialization
     # --------------------------------------------------------------------------------------------------------------------------
@@ -116,7 +153,7 @@ def _diagonalize(
                 
     if len(no_shortcut_indices) > 0:
     
-        # Diagonalization of coefficient matrix
+        # Diagonalization of coefficient matrix (refer to Section 3.4.2 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         alpha_arr = alpha_arr[: len(no_shortcut_indices), :, :]
         beta_arr = beta_arr[: len(no_shortcut_indices), :, :]
@@ -153,7 +190,7 @@ def _diagonalize(
             G_inv_collect_0[no_shortcut_indices_0, :, :] = G_inv_arr[: len(no_shortcut_indices_0), :, :]
         # --------------------------------------------------------------------------------------------------------------------------
 
-        # Particular solution for the sunbeam source
+        # Particular solution for the sunbeam source (refer to Section 3.6.1 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         if there_is_beam_source:
             X_tilde_arr = X_tilde_arr[: len(no_shortcut_indices), :]
