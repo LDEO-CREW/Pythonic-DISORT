@@ -1,0 +1,7 @@
+sphinx
+nbsphinx
+python_docs_theme
+numpy
+scipy
+parfor # Optional; comment out if desired
+autograd # Optional; comment out if desired

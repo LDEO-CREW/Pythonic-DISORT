@@ -4,54 +4,77 @@ except ImportError:
     import numpy as np
 import scipy as sc
 from math import pi
+from numpy.polynomial.legendre import leggauss
+
 
 def transform_interval(arr, c, d, a=-1, b=1):
-    """Transforms a vector in interval [a, b] to a similar vector in [c, d]
+    """Affine transformation of an array from interval [a, b] to [c, d].
 
-    :Input:
-     - *arr* (vector) - The vector to transform
-     - *c* (float) - The beginning of interval [c, d]
-     - *d* (float) - The end of interval [c, d]
-     :Optional:
-     - *a* (float) - The beginning of interval [a, b]
-     - *b* (float) - The end of interval [a, b]
+    Parameters
+    ----------
+    arr : array
+        The 1D array to transform.
+    c : float
+        The beginning of interval [c, d].
+    d : float
+        The end of interval [c, d].
+    a : float, optional
+        The beginning of interval [a, b].
+    b : float, optional
+        The end of interval [a, b].
 
+    Returns
+    -------
+    array
+        The transformed 1D array.
 
-    :Output:
-     - (vector) - The transformed vector
     """
     return (((arr - a) * (d - c)) / (b - a)) + c
 
-
 def transform_weights(weights, c, d, a=-1, b=1):
-    """Transform quadrature weights in interval [a, b] to similar weights in [c, d]
+    """Transforms quadrature weights from interval [a, b] to [c, d].
 
-    :Input:
-     - *weights* (float vector) - The weights to transform
-     - *c* (float) - The beginning of interval [c, d]
-     - *d* (float) - The end of interval [c, d]
-     :Optional:
-     - *a* (float) - The beginning of interval [a, b]
-     - *b* (float) - The end of interval [a, b]
+    Parameters
+    ----------
+    weights : array
+        The weights to transform.
+    c : float
+        The beginning of interval [c, d].
+    d : float
+        The end of interval [c, d].
+    a : float, optional
+        The beginning of interval [a, b].
+    b : float, optional
+        The end of interval [a, b].
 
-    :Output:
-     - *weights* (vector) - The transformed weights
+    Returns
+    -------
+    array
+        The transformed weights.
+
     """
     return weights * (d - c) / (b - a)
 	
 	
 def calculate_nu(mu, phi, mu_p, phi_p):
-    """Calculates the scattering angle nu between incident angle (mu_p, phi_p) and scattering angle (mu, phi)
-    
-    :Input:
-     - *mu* (float vector) - Cosine of scattering polar angles
-     - *phi* (float vector) - Scattering azimuthal angles
-     - *mu_p* (float vector) - Cosine of incident polar angles
-     - *phi_p* (float vector) - Incident azimuthal angles
-     
-     
-    :Output:
-     - *nu* (tensor / float) - The transformed weights 
+    """Calculates the scattering angle nu between incident angle (mu_p, phi_p) and scattering angle (mu, phi).
+
+    Parameters
+    ----------
+    mu : array
+        Cosine of outgoing polar angles.
+    phi : array
+        Outgoing azimuthal angles.
+    mu_p : array
+        Cosine of incident polar angles.
+    phi_p : array
+        Incident azimuthal angles.
+
+    Returns
+    -------
+    nu_arr : ndarray
+        Cosine of scattering angles.
+
     """
     mu, phi, mu_p, phi_p = np.atleast_1d(mu, phi, mu_p, phi_p)
     nu = mu_p[None, None, :, None] * mu[:, None, None, None] + np.sqrt(1 - mu_p**2)[
@@ -60,126 +83,67 @@ def calculate_nu(mu, phi, mu_p, phi_p):
         phi_p[None, None, None, :] - phi[None, :, None, None]
     )
     return np.squeeze(nu)
-
-
-def generate_Ds(m, Leg_coeffs, mu_arr_pos, w0, ells, degree_tile):
-    """Generates the D term in the system of ODEs for each Fourier mode, see Section 3.2
+	
     
-    :Input:
-     - *m* (integer) - The Fourier mode
-     - *Leg_coeffs* (float vector) - Vector of weighted phase function Legendre coefficients
-     - *mu_arr_pos* (float vector) - Positive mu (quadrature) values
-     - *w0* (float) - Single-scattering albedo
-     - *ells* (float vector) - Vector of Legendre polynomial orders
-     - *degree_tile* (float matrix) - Matrix of Associated Legendre polynomials orders and degrees
-     
-     
-    :Output:
-     - *D_pos* (float matrix) - D with only elements that correspond to positive mu values
-     - *D_neg* (float matrix) - D with only elements that correspond to negative mu values
-    """
-    Dm_term = Leg_coeffs[ells] * (
-        sc.special.factorial(ells - m) / sc.special.factorial(ells + m)
-    )
-
-    asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
-    asso_leg_term_neg = sc.special.lpmv(m, degree_tile, -mu_arr_pos)
-    D_temp = (Dm_term)[None, :] * asso_leg_term_pos.T
-
-    D_pos = (w0 / 2) * D_temp @ asso_leg_term_pos
-    D_neg = (w0 / 2) * D_temp @ asso_leg_term_neg
-
-    return D_pos, D_neg
-	
-
-def generate_Xs(m, Leg_coeffs, w0, mu0, I0, mu_arr_pos, ells, degree_tile):
-    """Generates the X term in the system of ODEs for each Fourier mode, see Section 3.2
-    
-    :Input:
-     - *m* (integer) - The Fourier mode
-     - *Leg_coeffs* (vector) - WEIGHTED phase function Legendre coefficients
-     - *w0* (float) - Single-scattering albedo
-     - *mu0* (float) - Polar angle of the direct beam
-     - *I0* (float) - Intensity of the direct beam
-     - *mu_arr_pos* (vector) - Positive mu (quadrature) values
-     - *ells* (vector) - Vector of Legendre polynomial orders
-     - *degree_tile* (matrix) - Matrix of Associated Legendre polynomial orders and degrees
-     
-     
-    :Output:
-     - *X_pos* (float vector) - X with only elements that correspond to positive mu values
-     - *X_neg* (float vector) - X with only elements that correspond to negative mu values
-    """
-    if m == 0:
-        prefactor = w0 * I0 / (4 * pi)
-    else:
-        prefactor = w0 * I0 / (2 * pi)
-
-    Xm_term = Leg_coeffs[ells] * (
-        sc.special.factorial(ells - m) / sc.special.factorial(ells + m)
-    )
-    Xm_term2 = sc.special.lpmv(m, ells, -mu0)
-    X_temp = prefactor * Xm_term * Xm_term2
-
-    X_pos = X_temp @ sc.special.lpmv(m, degree_tile, mu_arr_pos)
-    X_neg = X_temp @ sc.special.lpmv(m, degree_tile, -mu_arr_pos)
-
-    return X_pos, X_neg
-	
-	
 def generate_flux_functions(
-    I0, mu0, tau0,
+    tau_arr, I0, mu0,
     GC_pos, GC_neg, 
     eigenvals, N,
     B_pos, B_neg, 
     mu_arr_pos, weights_mu, 
     scale_tau,
 ): 
-    """Generates the flux functions with respect to the radiative transfer equation
-    
-    :Input:
-     - *I0* (float) - Intensity of the direct beam
-     - *mu0* (float) - Polar angle of the direct beam
-     - *GC_pos / neg* (float matrix) - Product of eigenvectors and coefficients that correspond to positive / negative mu values
-     - *eigenvals* (float vector) - Eigenvalues
-     - *B_pos / neg* (float vector) - Coefficients of the inhomogenity that correspond to positive / negative mu values
-     - *mu_arr_pos / neg* (float vector) - Positive / negative mu (quadrature) values
-     - *scale_tau* (float) - Delta-M scale factor for tau
-     
-     
-    :Output:
-     - *flux_up* (function) - Flux function with argument tau for positive (upward) mu values
-     - *flux_down* (function) - Flux function with argument tau for negative (downward) mu values
+    """Generates the flux functions with respect to the radiative transfer equation.
+
+    Parameters
+    ----------
+    tau_arr : array
+        Optical depth of the lower boundary of each atmospheric layer.
+    I0 : float
+        Intensity of the incident beam.
+    mu0 : float
+        Polar angle of the incident beam.
+    GC_pos : 2darray
+        Product of eigenvectors and coefficients that correspond to positive mu values.
+    GC_neg : 2darray
+        Product of eigenvectors and coefficients that correspond to negative mu values.
+    eigenvals : array
+        Eigenvalues arranged negative then positive, from largest to smallest magnitude.
+    N : int
+        Half the number of quadrature points.
+    B_pos : array
+        Coefficients of the incident beam inhomogeneity that correspond to positive mu values.
+    B_neg : array
+        Coefficients of the incident beam inhomogeneity that correspond to negative mu values.
+    mu_arr_pos : array
+        Positive mu quadrature nodes.
+    weights_mu : array
+        mu quadrature weights for positive mu nodes.
+    scale_tau : array
+        Delta-M scale factors for tau.
+
+    Returns
+    -------
+    flux_up : function
+        Flux function with argument tau (type: array) for positive (upward) mu values.
+        Returns the diffuse flux magnitudes (type: array).
+    flux_down : function
+        Flux function with argument tau (type: array)  for negative (downward) mu values.
+        Returns a tuple of the diffuse and direct flux magnitudes respectively (type: (array, array)). 
+
     """
     def flux_up(tau):
-        """Returns the magnitude of the upwards flux at the specified tau levels
-
-        :Input:
-        - *tau* (float vector) - Optical depth levels
-
-        :Output:
-        - (float) Magnitude of diffuse upwards flux, which is also the total upwards flux
-        """
         tau = scale_tau * np.atleast_1d(tau) # Delta-M scaling
         exponent = np.vstack(
             (
                 eigenvals[:N, None] * tau[None, :],
-                eigenvals[N:, None] * (tau - tau0)[None, :],
+                eigenvals[N:, None] * (tau - taul)[None, :],
             )
         )
-        um = GC_pos @ np.exp(exponent) + B_pos[:, None] * np.exp(-tau[None, :] / mu0)
-        return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ um)[()]
+        u0_pos = GC_pos @ np.exp(exponent) + B_pos[:, None] * np.exp(-tau[None, :] / mu0)
+        return np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ u0_pos)[()]
 
-    def flux_down(tau):
-        """Returns the magnitude of the downwards fluxes at the specified tau levels
-
-        :Input:
-        - *tau* (float vector) - Optical depth levels
-
-        :Output:
-        - (float) Magnitude of diffuse downwards flux
-        - (float) Magnitude of direct downwards flux
-        """
+    def flux_down(tau):   
         direct_beam = I0 * mu0 * np.exp(-tau / mu0)
 
         tau = scale_tau * np.atleast_1d(tau)  # Delta-M scaling
@@ -187,36 +151,141 @@ def generate_flux_functions(
         exponent = np.vstack(
             (
                 eigenvals[:N, None] * tau[None, :],
-                eigenvals[N:, None] * (tau - tau0)[None, :],
+                eigenvals[N:, None] * (tau - taul)[None, :],
             )
         )
-        um = GC_neg @ np.exp(exponent) + B_neg[:, None] * np.exp(-tau[None, :] / mu0)
+        u0_neg = GC_neg @ np.exp(exponent) + B_neg[:, None] * np.exp(-tau[None, :] / mu0)
         return (
-            np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ um + direct_beam_scaled - direct_beam)[()],
+            np.squeeze(2 * pi * (mu_arr_pos * weights_mu) @ u0_neg + direct_beam_scaled - direct_beam)[()],
             direct_beam,
         )
 
     return flux_up, flux_down
     
 
+def Gauss_Legendre_quad(N, c=0, d=1):
+    """Generates Gauss-Legendre quadrature weights and points for integration from c to d. Only the positive (top) half of mu_arr is generated.
+
+    Parameters
+    ----------
+    N : int
+        Number of quadrature nodes.
+    c : float, optional
+        Start of integration interval.
+    d : float, optional
+        End of integration interval.
+
+    Returns
+    -------
+    mu_arr_pos : array
+        Quadrature points.
+    full_weights_mu : array
+        Quadrature weights.
+
+    """    
+    mu_arr_pos, weights_mu = leggauss(N)
+
+    return transform_interval(
+        mu_arr_pos, c, d
+    ),transform_weights(weights_mu, c, d)
+
+
+def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
+    """Generates Gauss-Legendre quadrature weights and points for integration from c to d.
+
+    Parameters
+    ----------
+    Nphi : int
+        Number of quadrature nodes.
+    c : float, optional
+        Start of integration interval.
+    d : float, optional
+        End of integration interval.
+
+    Returns
+    -------
+    phi_arr : array
+        Quadrature points.
+    full_weights_phi : array
+        Quadrature weights.
+
+    """   
+    # Ensure that the number of nodes is odd and greater than 2
+    assert Nphi > 2
+    assert Nphi % 2 == 1
+
+    Nphi -= 1  # The extra index corresponds to the point 0 which we will add later
+    Nphi_pos = Nphi // 2
+    phi_arr_pos = np.cos(pi * np.arange(Nphi_pos) / Nphi)
+    phi_arr = np.hstack((-phi_arr_pos, 0, np.flip(phi_arr_pos)))
+    diff = np.hstack((2, 2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2)))
+    weights_phi_pos = sc.fft.idct(diff, type=1)
+    weights_phi_pos[0] /= 2
+    full_weights_phi = np.hstack((weights_phi_pos, np.flip(weights_phi_pos[:-1])))
+
+    return transform_interval(
+        phi_arr, c, d
+    ), transform_weights(full_weights_phi, c, d)
+    
+ 
+def generate_FD_mat(Ntau, a, b):
+    """Generates diagonal storage sparse first derivative matrix with second-order accuracy 
+    on [a,b] with Ntau grid points. We use second order forward and backward differences at the edges.
+
+    Parameters
+    ----------
+    Nphi : int
+        Number of grid nodes.
+    a : float, optional
+        Start of diffentiation interval.
+    b : float, optional
+        End of diffentiation interval.
+
+    Returns
+    -------
+    array
+        The differentiation grid.
+    sparse 2darray
+        The finite difference matrix.
+
+    """
+    tau_arr = np.linspace(a, b, Ntau)
+    h = tau_arr[1] - tau_arr[0]
+
+    diagonal = np.ones(Ntau) / (2 * h)
+    first_deriv = sc.sparse.diags(diagonal[:-1], 1, format = "lil")
+    first_deriv.setdiag(-diagonal[:-1], -1)
+    
+    first_deriv[0, 0] = -3 / (2 * h)
+    first_deriv[0, 1] = 2 / h
+    first_deriv[0, 2] = -1 / (2 * h)
+    first_deriv[-1, -1] = 3 / (2 * h)
+    first_deriv[-1, -2] = -2 / h
+    first_deriv[-1, -3] = 1 / (2 * h)
+    
+    return tau_arr, first_deriv.asformat("dia")
+    
+    
 # The following function is exactly NumPy's `atleast_2d` function but altered
 # to add dimensions to the back of the shape tuple rather than to the front.
-# Documentation for `np.atleast_2d` taken from https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html.
+# Documentation for `np.atleast_2d` at https://numpy.org/doc/stable/reference/generated/numpy.atleast_2d.html but reformatted
 def atleast_2d_append(*arys):
-    """
-    View inputs as arrays with at least two dimensions.
+    """View inputs as arrays with at least two dimensions. Dimensions are added, when necessary, to the back of the shape tuple rather than to the front.
+
     Parameters
     ----------
     arys1, arys2, ... : array_like
         One or more array-like sequences.  Non-array inputs are converted
         to arrays.  Arrays that already have two or more dimensions are
         preserved.
+
     Returns
     -------
     res, res2, ... : ndarray
         An array, or list of arrays, each with ``a.ndim >= 2``.
         Copies are avoided where possible, and views with two or more
         dimensions are returned.
+
     """
     res = []
     for ary in arys:

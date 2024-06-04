@@ -3,42 +3,29 @@ try:
     import autograd.numpy as np
 except ImportError:
     import numpy as np
+try:
+    import parfor
+except ImportError:
+    None
 
-def basic_solver(
+def _basic_solver(
+    tau_arr, omega_arr,
+    N, NQuad, NLeg, NLoops,
+    weighted_Leg_coeffs,
+    I0, mu0, phi0,
     b_pos, b_neg,
     only_flux,
-    N, NQuad, NLeg, NLoops,
-    Leg_coeffs,
+    BDRF_Leg_coeffs,
     mu_arr_pos, weights_mu,
-    tau0, w0,
-    mu0, phi0, I0, 
-    scale_tau,
-):  # This function has many redundant arguments to maximize precomputation in the wrapper function
-    """Basic radiative transfer solver which performs no corrections
+    scale_tau
+):  
+    """Radiative transfer solver for a multi-layer atmosphere but excludes corrections and input checks.
     
-    :Input:
-     - *b_pos / neg* (float matrix) - Boundary conditions for the upward / downward directions
-     - *only_flux* (boolean) - Flag for whether to compute the intensity function
-     - *N* (integer) - Equals NQuad // 2
-     - *NQuad* (integer) - Number of mu quadrature points
-     - *NLeg* (integer) - Number of phase function Legendre coefficients
-     - *NLoops* (integer) - Number of loops, also number of Fourier modes in the numerical solution
-     - *Leg_coeffs* (float vector) - WEIGHTED phase function Legendre coefficients
-     - *mu_arr_pos* (float vector) - Positive mu (quadrature) values
-     - *weights_mu* (float vector) - Weights for mu quadrature
-     - *tau0* (float) - Optical depth
-     - *w0* (float) - Single-scattering albedo
-     - *mu0* (float) - Polar angle of the direct beam
-     - *phi0* (float) - Azimuthal angle of the direct beam
-     - *I0* (float) - Intensity of the direct beam
-     - *scale_tau* (float) - Delta-M scale factor for tau
-     
-     
-    :Output:
-     - *flux_up* (function) - Flux function with argument tau for positive (upward) mu values
-     - *flux_down* (function) - Flux function with argument tau for negative (downward) mu values
-     :Optional:
-     - *u* (function) - Intensity function with arguments (tau, phi); the output is in the order (mu, tau, phi)
+    This function is wrapped by the `pydisort` function and should be called through `pydisort`,
+    it has many seemingly redundant arguments to maximize precomputation in `pydisort`.
+    We do not have an indepth docstring for this function but documentation can be found in the accompanying Jupyter Notebook,
+    and many of its arguments are shared with  the `pydisort` function.
+    
     """
     # If we want to solve for the intensity we need to solve for NLeg Fourier modes
     # If we only want to solve for the flux we only need to solve for the 0th Fourier mode
@@ -82,7 +69,7 @@ def basic_solver(
         B_pos, B_neg = B[:N], B[N:]
         K_tau0_neg = np.exp(eigenvals[:N] * tau0)
 
-        LHS = np.vstack((G_neg, G_pos))
+        LHS = np.vstack((G_neg, G_pos)) # LHS is a re-arranged COPY of matrix G
         LHS[:N, N:] *= K_tau0_neg[None, :]
         LHS[N:, :N] *= K_tau0_neg[None, :]
         RHS = np.concatenate((b_neg[:, m] - B_neg, b_pos[:, m] - B_pos * np.exp(-tau0 / mu0)))
@@ -90,7 +77,7 @@ def basic_solver(
 
         if only_flux:
             return PyDISORT.subroutines.generate_flux_functions(
-                I0, mu0, tau0,
+                mu0, I0, tau0,
                 G_pos * C[None, :], G_neg * C[None, :],
                 eigenvals, N,
                 B_pos, B_neg,
@@ -125,11 +112,11 @@ def basic_solver(
                 )
             )
 
-    return (u, ) + PyDISORT.subroutines.generate_flux_functions(
-        I0, mu0, tau0,
+    return PyDISORT.subroutines.generate_flux_functions(
+        mu0, I0, tau0,
         GC_collect[:N, 0, :], GC_collect[N:, 0, :],
         eigenvals_collect[:, 0], N,
         B_collect[:N, 0], B_collect[N:, 0],
         mu_arr_pos, weights_mu,
         scale_tau,
-    )
+    ) + (u, )
