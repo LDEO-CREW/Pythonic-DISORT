@@ -188,15 +188,13 @@ def _loop_and_assemble_results(
                 # The following line must be implemented differently for autograd to work on `u` with isotropic sources
                 um[0, :, :] += _mathscr_v_contribution.T
                 
-            intensities = np.squeeze(
-                np.einsum(
-                    "mti, mp -> itp",
-                    um,
-                    np.cos(np.arange(NLoops)[:, None] * (phi0 - phi)[None, :]),
-                    optimize=True,
-                )
+            intensities = np.einsum(
+                "mti, mp -> itp",
+                um,
+                np.cos(np.arange(NLoops)[:, None] * (phi0 - phi)[None, :]),
+                optimize=True,
             )
-            intensities[np.isclose(intensities, 0)] = 0
+            intensities = np.where(np.isclose(intensities, 0), 0, intensities)
 
             if return_Fourier_error:
                 exponent = np.concatenate(
@@ -220,9 +218,9 @@ def _loop_and_assemble_results(
                         / np.clip(intensities, a_min=1e-15, a_max=None)
                     )
                 )
-                return I0_orig * intensities, Fourier_error
+                return I0_orig * np.squeeze(intensities), Fourier_error
             else:
-                return I0_orig * intensities
+                return I0_orig * np.squeeze(intensities)
         # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct u0
@@ -274,7 +272,7 @@ def _loop_and_assemble_results(
             )
             u0 += _mathscr_v_contribution
         
-        u0[np.isclose(u0, 0)] = 0
+        u0 = np.where(np.isclose(u0, 0), 0, u0)
         return I0_orig * np.squeeze(u0)
     # --------------------------------------------------------------------------------------------------------------------------
     
@@ -336,9 +334,9 @@ def _loop_and_assemble_results(
             + _mathscr_v_contribution
         )
         
-        flux = np.squeeze(2 * pi * (mu_arr_pos * W) @ u0_pos)[()]
-        flux[np.isclose(flux, 0)] = 0
-        return I0_orig * flux
+        flux = 2 * pi * (mu_arr_pos * W) @ u0_pos
+        flux = np.where(np.isclose(flux, 0), 0, flux)
+        return I0_orig * np.squeeze(flux)[()]
 
 
     def flux_down(tau):
@@ -377,7 +375,7 @@ def _loop_and_assemble_results(
             direct_beam = I0 * mu0 * np.exp(-tau / mu0)
             direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0)
             direct_beam_ignoreI0 = mu0 * np.exp(-tau / mu0)
-            direct_beam_ignoreI0[np.isclose(direct_beam_ignoreI0, 0)] = 0
+            direct_beam_ignoreI0 = np.where(np.isclose(direct_beam_ignoreI0, 0), 0, direct_beam_ignoreI0)
         else:
             direct_beam_contribution = 0
             direct_beam = 0
@@ -397,12 +395,10 @@ def _loop_and_assemble_results(
             + _mathscr_v_contribution
         )
         
-        diffuse_flux = np.squeeze(
-            2 * pi * (mu_arr_pos * W) @ u0_neg + direct_beam_scaled - direct_beam
-        )[()]
-        diffuse_flux[np.isclose(diffuse_flux, 0)] = 0
+        diffuse_flux = 2 * pi * (mu_arr_pos * W) @ u0_neg + direct_beam_scaled - direct_beam
+        diffuse_flux = np.where(np.isclose(diffuse_flux, 0), 0, diffuse_flux)
         return (
-            I0_orig * diffuse_flux,
+            I0_orig * np.squeeze(diffuse_flux)[()],
             I0_orig * I0 * np.squeeze(direct_beam_ignoreI0)[()],
         )
         # --------------------------------------------------------------------------------------------------------------------------
