@@ -1,4 +1,4 @@
-from PyDISORT.subroutines import _mathscr_v
+from PythonicDISORT.subroutines import _mathscr_v
 import numpy as np
 import scipy as sc
 from math import pi

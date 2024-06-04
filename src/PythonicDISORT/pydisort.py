@@ -1,5 +1,5 @@
-from PyDISORT import subroutines
-from PyDISORT._loop_and_assemble_results import _loop_and_assemble_results
+from PythonicDISORT import subroutines
+from PythonicDISORT._loop_and_assemble_results import _loop_and_assemble_results
 import scipy as sc
 from math import pi
 from numpy.polynomial.legendre import Legendre
@@ -29,7 +29,7 @@ def pydisort(
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
     and sources. Optionally performs delta-M scaling and NT corrections. 
-    See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters 
+    See https://pythonic-disort.readthedocs.io/en/latest/PythonicDISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters 
     for a more detailed explanation of each parameter.
 
 

@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 dependencies = [
-  "numpy>=1.12",
-  "scipy>=1.2.1",
+  "numpy>=1.17.3",
+  "scipy>=1.8.0",
 ]
-name = "PyDISORT"
+name = "PythonicDISORT"
 version = "0.0.1"
 authors = [
   { name="Dion Ho", email="dh3065@columbia.edu" },
 ]
 description = "Discrete Ordinates Solver for the (1D) Radiative Transfer Equation in a single or multi-layer atmosphere."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -31,4 +31,4 @@ notebook_dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/LDEO-CREW/Pythonic-DISORT"
+"Homepage" = "https://github.com/LDEO-CREW/PythonicDISORT"

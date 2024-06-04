@@ -256,7 +256,7 @@ def _mathscr_v(tau, l, s_poly_coeffs, Nscoeffs, G, K, G_inv, mu_arr):
     
 def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
     """Performs the pointwise comparisons between results from Stamnes' DISORT
-    which are stored in .npz files against results from PyDISORT. Used in our PyTests.
+    which are stored in .npz files against results from PythonicDISORT. Used in our PyTests.
 
     """
     uu = results["uu"]

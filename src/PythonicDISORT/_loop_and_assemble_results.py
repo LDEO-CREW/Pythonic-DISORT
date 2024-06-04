@@ -1,6 +1,6 @@
-from PyDISORT import subroutines
-from PyDISORT.subroutines import _mathscr_v
-from PyDISORT._one_Fourier_mode import _one_Fourier_mode 
+from PythonicDISORT import subroutines
+from PythonicDISORT.subroutines import _mathscr_v
+from PythonicDISORT._one_Fourier_mode import _one_Fourier_mode 
 from math import pi
 try:
     import autograd.numpy as np
@@ -78,8 +78,9 @@ def _loop_and_assemble_results(
         if I0 > 0:
             B_collect = np.empty((NLoops, NLayers, NQuad))
             B_collect[0, :, :] = B_collect_0
-        # These loops are relatively easy to PARALLELIZE, but we have not implemented the parallelization (TODO)
-        for m in range(1, NLoops):
+        # TODO: Look into the "xarray.apply_ufunc" method or "dask delayed / bag" to parallelize this
+        # May need to code an xarray wrapper. Dask works with Python code.
+        for m in range(1, NLoops): 
             outputs = _one_Fourier_mode(
                 m,
                 scaled_omega_arr,
