@@ -1,0 +1,10 @@
+numpy
+scipy
+parfor
+autograd
+ipython
+matplotlib
+sphinx
+nbsphinx
+python_docs_theme
+

@@ -3,9 +3,12 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-dynamic = ["dependencies"]
+dependencies = [
+  'numpy>=1.12',
+  'scipy>=1.2.1',
+]
 name = "PyDISORT"
-version = "1.0"
+version = "0.0.0"
 authors = [
   { name="Dion Ho", email="dh3065@columbia.edu" },
 ]
@@ -18,8 +21,13 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-[tool.setuptools.dynamic]
-dependencies = {file = ["docs\requirements.txt"]}
+[project.optional-dependencies]
+notebook_dependencies = [
+	'autograd>=1.5',
+	'parfor>2022.6.0',
+	'jupyter>1.0.0',
+	'notebook>6.5.2',
+]
 
 [project.urls]
 "Homepage" = "https://github.com/Maths2209/Pythonic-DISORT"
