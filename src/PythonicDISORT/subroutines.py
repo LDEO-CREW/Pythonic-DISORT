@@ -238,33 +238,40 @@ def generate_diff_act_flux_funcs(u0):
     function
         Actinic flux function with argument `tau` (type: array) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (type: array).
+        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
+        to switch to an antiderivative of the function with respect to `tau`.
     function
         Actinic flux function with argument `tau` (type: array) for negative (downward) `mu` values.
         Returns the diffuse flux magnitudes (type: array).
+        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
+        to switch to an antiderivative of the function with respect to `tau`.
 
     """
     N = np.shape(u0(0))[0] // 2
     GL_weights = Gauss_Legendre_quad(N, 0, 1)[1]
 
     # Note that the zeroth axis of the array u0(tau) captures variation with mu
-    flux_act_up = lambda tau: 2 * pi * GL_weights @ u0(tau)[:N]
-    def flux_act_down_diffuse(tau):
-        u0_cache, act_dscale_reclassification = u0(tau, True)
+    def flux_act_up(tau, is_antiderivative_wrt_tau=False):
+        return 2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[:N]
+        
+    def flux_act_down_diffuse(tau, is_antiderivative_wrt_tau=False):
+        u0_cache, act_dscale_reclassification = u0(tau, is_antiderivative_wrt_tau, _return_act_dscale_for_reclass=True)
         result_without_reclassification = 2 * pi * GL_weights @ u0_cache[N:]
         return result_without_reclassification + act_dscale_reclassification
     
     return flux_act_up, flux_act_down_diffuse
 
 
-def _mathscr_v(tau,                         # Input optical depths
-                l,                          # Layer index of each input optical depth
-                s_poly_coeffs,              # Polynomial coefficients of isotropic source
-                Nscoeffs,                   # Number of isotropic source polynomial coefficients
-                G,                          # Eigenvector matrices
-                K,                          # Eigenvalues
-                G_inv,                      # Inverse of eigenvector matrix
-                mu_arr,                     # Quadrature nodes for both hemispheres
-                _autograd_compatible=False  # Should the output functions be compatible with autograd?
+def _mathscr_v(tau,                             # Input optical depths
+                l,                              # Layer index of each input optical depth
+                s_poly_coeffs,                  # Polynomial coefficients of isotropic source
+                Nscoeffs,                       # Number of isotropic source polynomial coefficients
+                G,                              # Eigenvector matrices
+                K,                              # Eigenvalues
+                G_inv,                          # Inverse of eigenvector matrix
+                mu_arr,                         # Quadrature nodes for both hemispheres
+                _autograd_compatible=False,      # Should the output functions be compatible with autograd?
+                is_antiderivative_wrt_tau=False # Switch to an antiderivative of the function?
                 ):
     """Particular solution for isotropic internal sources.
     Refer to Section 3.6.1 of the Comprehensive Documentation.
@@ -273,16 +280,17 @@ def _mathscr_v(tau,                         # Input optical depths
     and `_solve_for_coeffs` functions which call it.
     
     Arguments of _mathscr_v
-    |        Variable        |                 Shape                 |
-    | ---------------------- | ------------------------------------- |
-    | `tau`                  | `Ntau`                                |
-    | `l`                    | `Ntau`                                |
-    | `s_poly_coeffs`        | `NLayers x Nscoeffs` or `Nscoeffs`    |
-    | `G`                    | `NLayers<= x NQuad x NQuad`           |
-    | `K`                    | `NLayers<= x NQuad`                   |
-    | `G_inv`                | `NLayers<= x NQuad x NQuad` or `None` |
-    | `mu_arr`               | `NQuad`                               |
-    | `_autograd_compatible` | boolean                               |
+    |          Variable           |                 Shape                 |
+    | --------------------------- | ------------------------------------- |
+    | `tau`                       | `Ntau`                                |
+    | `l`                         | `Ntau`                                |
+    | `s_poly_coeffs`             | `NLayers x Nscoeffs` or `Nscoeffs`    |
+    | `G`                         | `NLayers<= x NQuad x NQuad`           |
+    | `K`                         | `NLayers<= x NQuad`                   |
+    | `G_inv`                     | `NLayers<= x NQuad x NQuad` or `None` |
+    | `mu_arr`                    | `NQuad`                               |
+    | `_autograd_compatible`      | boolean                               |
+    | `is_antiderivative_wrt_tau` | boolean                               |
     
     Notable internal variables of _mathscr_v
     |     Variable     |                Shape                | 
@@ -340,11 +348,17 @@ def _mathscr_v(tau,                         # Input optical depths
                 0,
             ),
         )
-
+    
+    powers = np.flip(np.arange(Nscoeffs))[None, :]
+    if is_antiderivative_wrt_tau:
+        tau_poly = tau[:, None] ** (powers + 1) / (powers + 1)
+    else:
+        tau_poly = tau[:, None] ** powers
+        
     return np.einsum(
         "tik, tc, ctk, tkj, j -> it",
         G[l, :, :],
-        tau[:, None] ** np.flip(np.arange(Nscoeffs))[None, :],
+        tau_poly,
         mathscr_v_coeffs[:, l, :],
         G_inv[l, :, :],
         1 / mu_arr,

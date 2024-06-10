@@ -76,7 +76,7 @@ and $\mu=\cos\theta$ for the polar direction ($\theta$ is the polar angle measur
 with $\mu > 0$ pointing up following the convention of [@STWJ1988].
 Given three possible sources: 
 blackbody emission from the atmosphere $s(\tau)$, 
-scattering from a direct beam (of sunlight) with intensity $I_0$ and incident cosine polar and azimuthal angles $\mu_0, \phi_0$,
+scattering from a collimated beam of starlight with intensity $I_0$ and incident cosine polar and azimuthal angles $\mu_0, \phi_0$,
 and/or radiation from other atmospheric layers or the Earth's surface which is modeled by Dirichlet boundary conditions,
 the diffuse intensity $u(\tau, \mu, \phi)$ propagating in direction $(\mu, \phi)$ 
 is described by the 1D RTE [@Cha1960; @STWJ1988]:

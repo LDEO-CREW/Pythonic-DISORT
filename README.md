@@ -83,6 +83,8 @@ Science and Technology Center (STC) (Award #2019625) under which this package wa
 
 10) Trefethen, L. N.. 1996. *Finite difference and spectral methods for ordinary and partial differential equations.* https://people.maths.ox.ac.uk/trefethen/pdetext.html.
 
-11) T. Nakajima and M. Tanaka. 1988. *Algorithms for radiative intensity calculations in moderately thick atmospheres using a truncation approximation.* https://www.sciencedirect.com/science/article/pii/0022407388900313.
+11) Knut Stamnes. 1982. *On the computation of angular distributions of radiation in planetary atmospheres.* https://www.sciencedirect.com/science/article/pii/0022407382900966.
 
-12) Connour, Kyle and Wolff, Michael. 2020. *pyRT_DISORT: A pre-processing front-end to help make DISORT simulations easier in Python.* https://github.com/kconnour/pyRT_DISORT.
+12) T. Nakajima and M. Tanaka. 1988. *Algorithms for radiative intensity calculations in moderately thick atmospheres using a truncation approximation.* https://www.sciencedirect.com/science/article/pii/0022407388900313.
+
+13) Connour, Kyle and Wolff, Michael. 2020. *pyRT_DISORT: A pre-processing front-end to help make DISORT simulations easier in Python.* https://github.com/kconnour/pyRT_DISORT.

@@ -85,22 +85,29 @@ def pydisort(
     Fp(tau) : function, function
         (Energetic) Flux function with argument `tau` (type: array or float) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (same type and size as `tau`).
+        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
+        to switch to an antiderivative of the function with respect to `tau`.
     Fm(tau) : function
         (Energetic) Flux function with argument `tau` (type: array or float) for negative (downward) `mu` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
         same type and size as `tau`.
+        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
+        to switch to an antiderivative of the function with respect to `tau`.
     u0(tau) : function
         Zeroth Fourier mode of the intensity with argument `tau` (type: array or float).
         Returns an ndarray with axes corresponding to variation with `mu` and `tau` respectively.
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually
         (for actinic flux `generate_diff_act_flux_funcs` will automatically perform the reclassification).
+        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
+        to switch to an antiderivative of the function with respect to `tau`.
     u(tau, phi) : function, optional
-        Intensity function with arguments `(tau, phi, return_Fourier_error=False)` 
-        of types `(array or float, array or float, bool)`.
+        Intensity function with arguments `(tau, phi)` of types `(array or float, array or float)`.
         Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
-        The optional flag `return_Fourier_error` determines whether the function will also return
-        the Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
+        Pass `return_Fourier_error = True` (defaults to `False`) to return the 
+        Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
+        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
+        to switch to an antiderivative of the function with respect to `tau`.
 
     """
     
@@ -313,9 +320,9 @@ def pydisort(
             _autograd_compatible,
         )
         
-        # TMS correction
+        # TMS correction for the intensity (see Section 3.7.2)
         # --------------------------------------------------------------------------------------------------------------------------
-        def TMS_correction(tau, phi):
+        def TMS_correction(tau, phi, is_antiderivative_wrt_tau):
             Ntau = len(tau)
             Nphi = len(phi)
             # Atmospheric layer indices
@@ -360,20 +367,36 @@ def pydisort(
             )
             # --------------------------------------------------------------------------------------------------------------------------
             
-            TMS_correction_pos = (
-                np.exp(-scaled_tau / mu0)[None, :]
-                - np.exp(
-                    (scaled_tau - scaled_tau_arr_l)[None, :] / mu_arr_pos[:, None]
-                    - scaled_tau_arr_l[None, :] / mu0
+            if is_antiderivative_wrt_tau:
+                TMS_correction_pos = (
+                    np.exp(-scaled_tau / mu0)[None, :] / (-scale_tau[None, l] / mu0)
+                    - np.exp(
+                        (scaled_tau - scaled_tau_arr_l)[None, :] / mu_arr_pos[:, None]
+                        - scaled_tau_arr_l[None, :] / mu0
+                    ) / (scale_tau[None, l] / mu_arr_pos[:, None])
                 )
-            )
-            TMS_correction_neg = (
-                np.exp(-scaled_tau / mu0)[None, :]
-                - np.exp(
-                    (scaled_tau_arr_lm1 - scaled_tau)[None, :] / mu_arr_pos[:, None]
-                    - scaled_tau_arr_lm1[None, :] / mu0
+                TMS_correction_neg = (
+                    np.exp(-scaled_tau / mu0)[None, :] / (-scale_tau[None, l] / mu0)
+                    - np.exp(
+                        (scaled_tau_arr_lm1 - scaled_tau)[None, :] / mu_arr_pos[:, None]
+                        - scaled_tau_arr_lm1[None, :] / mu0
+                    ) / (-scale_tau[None, l] / mu_arr_pos[:, None])
                 )
-            )
+            else:
+                TMS_correction_pos = (
+                    np.exp(-scaled_tau / mu0)[None, :]
+                    - np.exp(
+                        (scaled_tau - scaled_tau_arr_l)[None, :] / mu_arr_pos[:, None]
+                        - scaled_tau_arr_l[None, :] / mu0
+                    )
+                )
+                TMS_correction_neg = (
+                    np.exp(-scaled_tau / mu0)[None, :]
+                    - np.exp(
+                        (scaled_tau_arr_lm1 - scaled_tau)[None, :] / mu_arr_pos[:, None]
+                        - scaled_tau_arr_lm1[None, :] / mu0
+                    )
+                )
             
             ## Contribution from other layers
             # TODO: Despite being vectorized and despite many attempts at further optimization,
@@ -395,72 +418,114 @@ def pydisort(
 
                 layers_arr_repeat = np.repeat(layers_arr, Ntau)
                 scaled_tau_tile = np.tile(scaled_tau, NLayers)
-                scaled_tau_arr_with_0_repeat = np.repeat(scaled_tau_arr_with_0, Ntau)
 
                 if any_pos_contribution:
                     contribution_from_each_other_layer_pos = np.zeros((N, NLayers * Ntau, Nphi))
-                    scaled_tau_l_tile_pos = scaled_tau_tile[pos_contribution_mask]
-                    mathscr_B_l_repeat_posmasked = mathscr_B[
-                        :N, layers_arr_repeat[pos_contribution_mask], :
-                    ]
-                    scaled_tau_arr_with_0_l_tile_posmasked = scaled_tau_arr_with_0_repeat[:-Ntau][
-                        pos_contribution_mask
-                    ]
-                    scaled_tau_arr_with_0_lp1_tile_posmasked = scaled_tau_arr_with_0_repeat[Ntau:][
-                        pos_contribution_mask
-                    ]
-
-                    contribution_from_each_other_layer_pos[:, pos_contribution_mask, :] = (
-                        mathscr_B_l_repeat_posmasked
-                        * (
-                            np.exp(
-                                (scaled_tau_l_tile_pos - scaled_tau_arr_with_0_l_tile_posmasked)
-                                / mu_arr_pos[:, None]
-                                - scaled_tau_arr_with_0_l_tile_posmasked / mu0
-                            )
-                            - np.exp(
-                                (scaled_tau_l_tile_pos - scaled_tau_arr_with_0_lp1_tile_posmasked)
-                                / mu_arr_pos[:, None]
-                                - scaled_tau_arr_with_0_lp1_tile_posmasked / mu0
-                            )
-                        )[:, :, None]
-                    )
-                    contribution_from_other_layers_pos = np.sum(
-                        contribution_from_each_other_layer_pos.reshape((N, NLayers, Ntau, Nphi)),
-                        axis=1,
-                    )
+                    scaled_tau_tile_pos = scaled_tau_tile[pos_contribution_mask]
+                    
+                    layers_arr_repeat_pos = layers_arr_repeat[pos_contribution_mask]
+                    mathscr_B_repeat_pos = mathscr_B[:N, layers_arr_repeat_pos, :]
+                    scaled_tau_arr_with_0_l_repeat_pos = scaled_tau_arr_with_0[:-1][layers_arr_repeat_pos]
+                    scaled_tau_arr_with_0_lp1_repeat_pos = scaled_tau_arr_with_0[1:][layers_arr_repeat_pos]
+                    
+                    if is_antiderivative_wrt_tau:
+                        scale_tau_repeat_pos = scale_tau[layers_arr_repeat_pos]
+                        contribution_from_each_other_layer_pos[:, pos_contribution_mask, :] = (
+                            mathscr_B_repeat_pos
+                            * (
+                                (
+                                    np.exp(
+                                        (scaled_tau_tile_pos - scaled_tau_arr_with_0_l_repeat_pos)
+                                        / mu_arr_pos[:, None]
+                                        - scaled_tau_arr_with_0_l_repeat_pos / mu0
+                                    )
+                                    - np.exp(
+                                        (scaled_tau_tile_pos - scaled_tau_arr_with_0_lp1_repeat_pos)
+                                        / mu_arr_pos[:, None]
+                                        - scaled_tau_arr_with_0_lp1_repeat_pos / mu0
+                                    )
+                                )
+                                / (scale_tau_repeat_pos / mu_arr_pos[:, None])
+                            )[:, :, None]
+                        )
+                        contribution_from_other_layers_pos = np.sum(
+                            contribution_from_each_other_layer_pos.reshape((N, NLayers, Ntau, Nphi)),
+                            axis=1,
+                        )
+                    else:
+                        contribution_from_each_other_layer_pos[:, pos_contribution_mask, :] = (
+                            mathscr_B_repeat_pos
+                            * (
+                                np.exp(
+                                    (scaled_tau_tile_pos - scaled_tau_arr_with_0_l_repeat_pos)
+                                    / mu_arr_pos[:, None]
+                                    - scaled_tau_arr_with_0_l_repeat_pos / mu0
+                                )
+                                - np.exp(
+                                    (scaled_tau_tile_pos - scaled_tau_arr_with_0_lp1_repeat_pos)
+                                    / mu_arr_pos[:, None]
+                                    - scaled_tau_arr_with_0_lp1_repeat_pos / mu0
+                                )
+                            )[:, :, None]
+                        )
+                        contribution_from_other_layers_pos = np.sum(
+                            contribution_from_each_other_layer_pos.reshape((N, NLayers, Ntau, Nphi)),
+                            axis=1,
+                        )
+                        
                 if any_neg_contribution:
                     contribution_from_each_other_layer_neg = np.zeros((N, NLayers * Ntau, Nphi))
-                    scaled_tau_l_tile_neg = scaled_tau_tile[neg_contribution_mask]
-                    mathscr_B_l_repeat_negmasked = mathscr_B[
-                        N:, layers_arr_repeat[neg_contribution_mask], :
-                    ]
-                    scaled_tau_arr_with_0_l_tile_negmasked = scaled_tau_arr_with_0_repeat[:-Ntau][
-                        neg_contribution_mask
-                    ]
-                    scaled_tau_arr_with_0_lp1_tile_negmasked = scaled_tau_arr_with_0_repeat[Ntau:][
-                        neg_contribution_mask
-                    ]
+                    scaled_tau_tile_neg = scaled_tau_tile[neg_contribution_mask]
+                    
+                    layers_arr_repeat_neg = layers_arr_repeat[neg_contribution_mask]
+                    mathscr_B_repeat_neg = mathscr_B[N:, layers_arr_repeat_neg, :]
+                    scaled_tau_arr_with_0_l_repeat_neg = scaled_tau_arr_with_0[:-1][layers_arr_repeat_neg]
+                    scaled_tau_arr_with_0_lp1_repeat_neg = scaled_tau_arr_with_0[1:][layers_arr_repeat_neg]
 
-                    contribution_from_each_other_layer_neg[:, neg_contribution_mask, :] = (
-                        mathscr_B_l_repeat_negmasked
-                        * (
-                            np.exp(
-                                (scaled_tau_arr_with_0_lp1_tile_negmasked - scaled_tau_l_tile_neg)
-                                / mu_arr_pos[:, None]
-                                - scaled_tau_arr_with_0_lp1_tile_negmasked / mu0
-                            )
-                            - np.exp(
-                                (scaled_tau_arr_with_0_l_tile_negmasked - scaled_tau_l_tile_neg)
-                                / mu_arr_pos[:, None]
-                                - scaled_tau_arr_with_0_l_tile_negmasked / mu0
-                            )
-                        )[:, :, None]
-                    )
-                    contribution_from_other_layers_neg = np.sum(
-                        contribution_from_each_other_layer_neg.reshape((N, NLayers, Ntau, Nphi)),
-                        axis=1,
-                    )
+                    if is_antiderivative_wrt_tau:
+                        scale_tau_repeat_neg = scale_tau[layers_arr_repeat_neg]
+                        contribution_from_each_other_layer_neg[:, neg_contribution_mask, :] = (
+                            mathscr_B_repeat_neg
+                            * (
+                                (
+                                    np.exp(
+                                        (scaled_tau_arr_with_0_lp1_repeat_neg - scaled_tau_tile_neg)
+                                        / mu_arr_pos[:, None]
+                                        - scaled_tau_arr_with_0_lp1_repeat_neg / mu0
+                                    )
+                                    - np.exp(
+                                        (scaled_tau_arr_with_0_l_repeat_neg - scaled_tau_tile_neg)
+                                        / mu_arr_pos[:, None]
+                                        - scaled_tau_arr_with_0_l_repeat_neg / mu0
+                                    )
+                                )
+                                / (-scale_tau_repeat_pos / mu_arr_pos[:, None])
+                            )[:, :, None]
+                        )
+                        contribution_from_other_layers_neg = np.sum(
+                            contribution_from_each_other_layer_neg.reshape((N, NLayers, Ntau, Nphi)),
+                            axis=1,
+                        )
+                    else:
+                        contribution_from_each_other_layer_neg[:, neg_contribution_mask, :] = (
+                            mathscr_B_repeat_neg
+                            * (
+                                np.exp(
+                                    (scaled_tau_arr_with_0_lp1_repeat_neg - scaled_tau_tile_neg)
+                                    / mu_arr_pos[:, None]
+                                    - scaled_tau_arr_with_0_lp1_repeat_neg / mu0
+                                )
+                                - np.exp(
+                                    (scaled_tau_arr_with_0_l_repeat_neg - scaled_tau_tile_neg)
+                                    / mu_arr_pos[:, None]
+                                    - scaled_tau_arr_with_0_l_repeat_neg / mu0
+                                )
+                            )[:, :, None]
+                        )
+                        contribution_from_other_layers_neg = np.sum(
+                            contribution_from_each_other_layer_neg.reshape((N, NLayers, Ntau, Nphi)),
+                            axis=1,
+                        )
 
                 if _autograd_compatible:
                     if not any_pos_contribution:
@@ -484,7 +549,7 @@ def pydisort(
                 return solution
         # --------------------------------------------------------------------------------------------------------------------------
 
-        # IMS correction
+        # IMS correction for the intensity (see Section 3.7.2)
         # --------------------------------------------------------------------------------------------------------------------------
         sum1 = np.sum(omega_arr * tau_arr)
         omega_avg = sum1 / np.sum(tau_arr)
@@ -498,15 +563,22 @@ def pydisort(
         )
         scaled_mu0 = mu0 / (1 - omega_avg * f_avg)
 
-        def IMS_correction(tau, phi):
+        def IMS_correction(tau, phi, is_antiderivative_wrt_tau):
             nu = subroutines.atleast_2d_append(
                 subroutines.calculate_nu(-mu_arr_pos, phi, -mu0, phi0)
             )
             x = 1 / mu_arr_pos - 1 / scaled_mu0
-            chi = (1 / (mu_arr_pos * scaled_mu0 * x))[:, None] * (
-                (tau[None, :] - 1 / x[:, None]) * np.exp(-tau / scaled_mu0)[None, :]
-                + np.exp(-tau[None, :] / mu_arr_pos[:, None]) / x[:, None]
-            )
+            if is_antiderivative_wrt_tau:
+                chi = (
+                    (scaled_mu0 - x[:, None] * scaled_mu0 * (scaled_mu0 + tau)[None, :])
+                    * np.exp(-tau / scaled_mu0)[None, :]
+                    - mu_arr_pos[:, None] * np.exp(-tau[None, :] / mu_arr_pos[:, None])
+                ) / (mu_arr_pos * scaled_mu0 * x**2)[:, None]
+            else:
+                chi = (
+                    (tau[None, :] - 1 / x[:, None]) * np.exp(-tau / scaled_mu0)[None, :]
+                    + np.exp(-tau[None, :] / mu_arr_pos[:, None]) / x[:, None]
+                ) / (mu_arr_pos * scaled_mu0 * x)[:, None]
             return (
                 I0
                 / (4 * pi)
@@ -521,26 +593,26 @@ def pydisort(
 
         # The corrected intensity
         # --------------------------------------------------------------------------------------------------------------------------
-        def u_corrected(tau, phi, return_Fourier_error=False):
+        def u_corrected(tau, phi, return_Fourier_error=False, is_antiderivative_wrt_tau=False):
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
-            NT_corrections = TMS_correction(tau, phi)
+            NT_corrections = TMS_correction(tau, phi, is_antiderivative_wrt_tau)
 
             if _autograd_compatible:
                 NT_corrections = NT_corrections + np.concatenate(
-                    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi)], axis=0
+                    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi, is_antiderivative_wrt_tau)], axis=0
                 )
             else:
-                NT_corrections[N:, :, :] += IMS_correction(tau, phi)
+                NT_corrections[N:, :, :] += IMS_correction(tau, phi, is_antiderivative_wrt_tau)
                
             if return_Fourier_error:
-                u_star_outputs = u_star(tau, phi, True)
+                u_star_outputs = u_star(tau, phi, True, is_antiderivative_wrt_tau)
                 return (
                     u_star_outputs[0] + I0_orig * np.squeeze(NT_corrections),
                     u_star_outputs[1],
                 )
             else:
-                return u_star(tau, phi, False) + I0_orig * np.squeeze(NT_corrections)
+                return u_star(tau, phi, False, is_antiderivative_wrt_tau) + I0_orig * np.squeeze(NT_corrections)
         # --------------------------------------------------------------------------------------------------------------------------
 
         return mu_arr, flux_up, flux_down, u0, u_corrected
