@@ -88,7 +88,7 @@ def pydisort(
         Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
         to switch to an antiderivative of the function with respect to `tau`.
         For example, `Fp(tau0, is_antiderivative_wrt_tau=True) - Fp(0, is_antiderivative_wrt_tau=True)` 
-        will give the integral of `Fp` over $\tau \in [0, \tau_0].
+        will give the tau-integral of `Fp` from `tau0` to `0`.
     Fm(tau) : function
         (Energetic) Flux function with argument `tau` (type: array or float) for negative (downward) `mu` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
