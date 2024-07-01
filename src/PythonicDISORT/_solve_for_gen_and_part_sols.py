@@ -111,7 +111,7 @@ def _solve_for_gen_and_part_sols(
             if np.any(weighted_asso_Leg_coeffs_l > 0) and np.all(
                 np.isfinite(asso_leg_term_pos)
             ):  
-                # Generate mathscr_D and mathscr_X (BDRF terms)
+                # Generate D and X (phase function terms)
                 # --------------------------------------------------------------------------------------------------------------------------
                 D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
                 D_pos = (scaled_omega_l / 2) * D_temp @ asso_leg_term_pos
