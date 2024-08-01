@@ -252,12 +252,12 @@ def generate_diff_act_flux_funcs(u0):
 
     # Note that the zeroth axis of the array u0(tau) captures variation with mu
     def flux_act_up(tau, is_antiderivative_wrt_tau=False):
-        return 2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[:N]
+        return np.squeeze(2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[:N])[()]
         
     def flux_act_down_diffuse(tau, is_antiderivative_wrt_tau=False):
         u0_cache, act_dscale_reclassification = u0(tau, is_antiderivative_wrt_tau, _return_act_dscale_for_reclass=True)
         result_without_reclassification = 2 * pi * GL_weights @ u0_cache[N:]
-        return result_without_reclassification + act_dscale_reclassification
+        return np.squeeze(result_without_reclassification + act_dscale_reclassification)[()]
     
     return flux_act_up, flux_act_down_diffuse
 
