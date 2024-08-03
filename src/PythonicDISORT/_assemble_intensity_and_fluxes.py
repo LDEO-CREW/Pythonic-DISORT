@@ -238,7 +238,10 @@ def _assemble_intensity_and_fluxes(
                 )
                 
                 if _autograd_compatible:
-                    um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NFourier - 1, len(tau), NQuad))))
+                    if NFourier == 1:
+                        um = um + _mathscr_v_contribution.T
+                    else:
+                        um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NFourier - 1, len(tau), NQuad))))
                 else:
                     um[0, :, :] += _mathscr_v_contribution.T
                 
