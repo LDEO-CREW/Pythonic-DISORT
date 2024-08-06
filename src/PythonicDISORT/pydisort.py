@@ -82,7 +82,7 @@ def pydisort(
     -------
     mu_arr : array or float
         All `mu` (cosine of polar angle) quadrature nodes.
-    Fp(tau) : function, function
+    Fp(tau) : function
         (Energetic) Flux function with argument `tau` (type: array or float) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (same type and size as `tau`).
         Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
@@ -104,7 +104,7 @@ def pydisort(
         Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
         to switch to an antiderivative of the function with respect to `tau`.
     u(tau, phi) : function, optional
-        Intensity function with arguments `(tau, phi)` of types `(array or float, array or float)`.
+        Intensity function with arguments `(tau, phi)` each of type array or float.
         Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
         Pass `return_Fourier_error = True` (defaults to `False`) to return the 
         Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.

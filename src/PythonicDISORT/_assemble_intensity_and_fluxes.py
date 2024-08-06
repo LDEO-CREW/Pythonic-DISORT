@@ -233,8 +233,8 @@ def _assemble_intensity_and_fluxes(
                     K_collect_0,
                     G_inv_collect_0,
                     mu_arr,
-                    _autograd_compatible,
-                    is_antiderivative_wrt_tau
+                    is_antiderivative_wrt_tau,
+                    _autograd_compatible
                 )
                 
                 if _autograd_compatible:
@@ -386,8 +386,8 @@ def _assemble_intensity_and_fluxes(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _autograd_compatible,
-                is_antiderivative_wrt_tau
+                is_antiderivative_wrt_tau,
+                _autograd_compatible
             )
             u0 = u0 + _mathscr_v_contribution
         
@@ -439,8 +439,8 @@ def _assemble_intensity_and_fluxes(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _autograd_compatible,
-                is_antiderivative_wrt_tau
+                is_antiderivative_wrt_tau,
+                _autograd_compatible
             )[:N, :]
         else:
             _mathscr_v_contribution = 0
@@ -518,8 +518,8 @@ def _assemble_intensity_and_fluxes(
                 K_collect_0,
                 G_inv_collect_0,
                 mu_arr,
-                _autograd_compatible,
-                is_antiderivative_wrt_tau
+                is_antiderivative_wrt_tau,
+                _autograd_compatible
             )[N:, :]
         else:
             _mathscr_v_contribution = 0

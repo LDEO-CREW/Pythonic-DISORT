@@ -124,7 +124,8 @@ def _solve_for_coeffs(
         # _mathscr_v_contribution
         if there_is_iso_source and m_equals_0:
             _mathscr_v_contribution_top = -_mathscr_v(
-                        np.array([0]), np.array([0]),
+                        np.array([0]), 
+                        np.array([0]),
                         s_poly_coeffs[0:1, :],
                         Nscoeffs,
                         G_collect_m[0:1, N:, :],
@@ -139,38 +140,51 @@ def _solve_for_coeffs(
                 _mathscr_v_contribution_middle = (
                     _mathscr_v(
                         tau_arr[:-1],
-                        indices,
-                        s_poly_coeffs[:-1, :],
+                        indices + 1,
+                        s_poly_coeffs,
                         Nscoeffs,
-                        G_collect_m[:-1, :, :],
-                        K_collect_m[:-1, :],
-                        G_inv_collect_0[:-1, :, :],
+                        G_collect_m,
+                        K_collect_m,
+                        G_inv_collect_0,
                         mu_arr,
                     )
                     - _mathscr_v(
                         tau_arr[:-1],
                         indices,
-                        s_poly_coeffs[1:, :],
+                        s_poly_coeffs,
                         Nscoeffs,
-                        G_collect_m[1:, :, :],
-                        K_collect_m[1:, :],
-                        G_inv_collect_0[1:, :, :],
+                        G_collect_m,
+                        K_collect_m,
+                        G_inv_collect_0,
                         mu_arr,
                     )
-                ).ravel()
+                ).ravel(order='F')
             
-            _mathscr_v_contribution_bottom = _mathscr_v(
-                    tau_arr[-1:], np.array([0]),
+            _mathscr_v_contribution_bottom = -_mathscr_v(
+                    tau_arr[-1:], 
+                    np.array([0]),
                     s_poly_coeffs[-1:, :],
                     Nscoeffs,
-                    G_collect_m[-1:, N:, :],
+                    G_collect_m[-1:, :N, :],
                     K_collect_m[-1:, :],
                     G_inv_collect_0[-1:, :, :],
-                    mu_arr).ravel()
+                    mu_arr
+                ).ravel()
             if NBDRF > 0:
                 _mathscr_v_contribution_bottom = (
-                    R + np.eye(N)
-                ) @ _mathscr_v_contribution_bottom
+                    _mathscr_v_contribution_bottom
+                    + R
+                    @ _mathscr_v(
+                        tau_arr[-1:],
+                        np.array([0]),
+                        s_poly_coeffs[-1:, :],
+                        Nscoeffs,
+                        G_collect_m[-1:, N:, :],
+                        K_collect_m[-1:, :],
+                        G_inv_collect_0[-1:, :, :],
+                        mu_arr
+                    ).ravel()
+                )
                     
             _mathscr_v_contribution = np.concatenate(
                 [

@@ -1,7 +1,6 @@
 import numpy as np
 import scipy as sc
 from math import pi
-from numpy.polynomial.legendre import leggauss
 
 
 def transform_interval(arr, c, d, a, b):
@@ -71,7 +70,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
 
     Returns
     -------
-    ndarray
+    nu : ndarray
         Cosine of scattering angles which axes capture variation with `mu, phi, mu_p, phi_p` respectively.
 
     """
@@ -104,7 +103,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
         Quadrature weights.
 
     """
-    mu_arr_pos, W = leggauss(int(N))
+    mu_arr_pos, W = np.polynomial.legendre.leggauss(int(N))
 
     return transform_interval(mu_arr_pos, c, d, -1, 1), transform_weights(W, c, d, -1, 1)
 
@@ -224,8 +223,10 @@ def atleast_2d_append(*arys):
         
 def generate_diff_act_flux_funcs(u0):
     """Generates the up and down diffuse actinic flux functions respectively.
-    This is a use case of the ``u0`` function that is an output of ``pydisort``.
+    This is a use case of the ``u0`` function which is an output of ``pydisort``.
     The reclassification of delta-scaled actinic flux is automatically performed.
+    The computation of actinic fluxes is similar to that of energetic fluxes
+    and the latter is discussed in section 3.8 of the Comprehensive Documentation.
 
     Parameters
     ----------
@@ -235,12 +236,12 @@ def generate_diff_act_flux_funcs(u0):
 
     Returns
     -------
-    function
+    Fp_act(tau) : function
         Actinic flux function with argument `tau` (type: array) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (type: array).
         Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
         to switch to an antiderivative of the function with respect to `tau`.
-    function
+    Fm_act(tau) : function
         Actinic flux function with argument `tau` (type: array) for negative (downward) `mu` values.
         Returns the diffuse flux magnitudes (type: array).
         Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
@@ -262,6 +263,65 @@ def generate_diff_act_flux_funcs(u0):
     return flux_act_up, flux_act_down_diffuse
 
 
+def interpolate(mu_arr_pos, u):
+    """Polynomial (Barycentric) interpolation with respect to mu. The output 
+    is a function that is continuous and variable in all three arguments: mu, tau and phi.
+    Discussed in sections 3.7 and 6.3 in the Comprehensive Documentation.
+
+    Parameters
+    ----------
+    mu_arr_pos : array
+        Positive `mu` (cosine of polar angle) quadrature nodes.
+        Equivalent to `mu_arr[:N]`.
+    u : function
+        Non-interpolated intensity function as outputted by `pydisort`.
+
+    Returns
+    -------
+    u_interpol : function
+        Intensity function with arguments `(mu, tau, phi)` each of type array or float.
+        Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
+        Pass `return_Fourier_error = True` (defaults to `False`) to return the 
+        Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
+        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
+        to switch to an antiderivative of the function with respect to `tau`.
+
+    """
+    N = len(mu_arr_pos)
+    u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
+    u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
+
+    def u_interpol(mu, tau, phi, return_Fourier_error=False, is_antiderivative_wrt_tau=False):
+        assert np.all(np.abs(mu) <= 1)
+        mu = np.atleast_1d(mu)
+
+        if return_Fourier_error:
+            u_cache, Fourier_error = u(tau, phi, True, is_antiderivative_wrt_tau)
+        else:
+            u_cache = u(tau, phi, False, is_antiderivative_wrt_tau)
+        
+        u_shape =  np.shape(u_cache)
+        assert N == u_shape[0] // 2 # Check that mu_arr_pos (of length N) matches the function u
+        
+        results = np.empty((len(mu),) + u_shape[1:])
+        mask_pos = mu > 0
+        mask_else = ~mask_pos
+        
+        if np.any(mask_pos):
+            u_pos_interpol.set_yi(u_cache[:N])
+            results[mask_pos] = u_pos_interpol(mu[mask_pos])
+        if np.any(mask_else):
+            u_neg_interpol.set_yi(u_cache[N:])
+            results[mask_else] = u_neg_interpol(mu[mask_else])
+        
+        if return_Fourier_error:
+            return np.squeeze(results)[()], Fourier_error
+        else:
+            return np.squeeze(results)[()]
+
+    return u_interpol
+                
+
 def _mathscr_v(tau,                             # Input optical depths
                 l,                              # Layer index of each input optical depth
                 s_poly_coeffs,                  # Polynomial coefficients of isotropic source
@@ -270,8 +330,8 @@ def _mathscr_v(tau,                             # Input optical depths
                 K,                              # Eigenvalues
                 G_inv,                          # Inverse of eigenvector matrix
                 mu_arr,                         # Quadrature nodes for both hemispheres
+                is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
                 _autograd_compatible=False,      # Should the output functions be compatible with autograd?
-                is_antiderivative_wrt_tau=False # Switch to an antiderivative of the function?
                 ):
     """Particular solution for isotropic internal sources.
     Refer to Section 3.6.1 of the Comprehensive Documentation.
@@ -289,8 +349,8 @@ def _mathscr_v(tau,                             # Input optical depths
     | `K`                         | `NLayers<= x NQuad`                   |
     | `G_inv`                     | `NLayers<= x NQuad x NQuad` or `None` |
     | `mu_arr`                    | `NQuad`                               |
-    | `_autograd_compatible`      | boolean                               |
     | `is_antiderivative_wrt_tau` | boolean                               |
+    | `_autograd_compatible`      | boolean                               |
     
     Notable internal variables of _mathscr_v
     |     Variable     |                Shape                | 

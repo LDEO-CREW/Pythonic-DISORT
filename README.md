@@ -7,8 +7,10 @@ On the other hand, PythonicDISORT should be easier to install, use, and modify t
 
 PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]) and has its main features: multi-layer solver, 
 delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, direct beam source, isotropic internal source (blackbody emission), 
-Dirichlet boundary conditions (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) for surface reflection, and more.
-In addition, subroutine to calculate actinic fluxes was added to satisfy a user request and further feature requests as well as feedback are welcome.
+Dirichlet boundary conditions (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) for surface reflection, 
+interpolation with respect to polar angle and more.
+In addition, we added a subroutine to calculate actinic fluxes to satisfy a user request, and integration with respect to tau was also added.
+Further feature requests as well as feedback are welcome.
 
 You may contact me, Dion, through dh3065@columbia.edu.
 
@@ -29,8 +31,8 @@ Not only are there verification tests in `Pythonic-DISORT.ipynb`,
 most of the test problems in Stamnes' `disotest.f90` (download DISORT 4.0.99 from http://www.rtatmocn.com/disort/) have also been recreated.
 In these tests, the solutions from PythonicDISORT are compared against solutions 
 from a F2PY-wrapped Stamnes' DISORT (version 4.0.99; wrapper inspired by https://github.com/kconnour/pyRT_DISORT). With PyTest installed, execute the console command `pytest` 
-in the `pydisotest` directory to run these tests. The `pydisotest` directory also contains Jupyter Notebooks that correspond to each test
-to show how it was implemented. These notebooks double up as examples of how to use PythonicDISORT.
+in the `pydisotest` directory to run these tests. The `pydisotest` directory also contains Jupyter Notebooks to show the implementation of each test.
+These notebooks double up as examples of how to use PythonicDISORT.
 
 # Installation
 
