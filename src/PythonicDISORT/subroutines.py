@@ -266,7 +266,7 @@ def generate_diff_act_flux_funcs(u0):
 def interpolate(mu_arr_pos, u):
     """Polynomial (Barycentric) interpolation with respect to mu. The output 
     is a function that is continuous and variable in all three arguments: mu, tau and phi.
-    Discussed in sections 3.7 and 6.3 in the Comprehensive Documentation.
+    Discussed in sections 3.7 and 6.3 of the Comprehensive Documentation.
 
     Parameters
     ----------
