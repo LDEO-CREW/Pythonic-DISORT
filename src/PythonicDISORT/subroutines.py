@@ -136,7 +136,7 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     Nphi_pos = Nphi // 2
     phi_arr_pos = np.cos(pi * np.arange(Nphi_pos) / Nphi)
     phi_arr = np.concatenate([-phi_arr_pos, [0], np.flip(phi_arr_pos)])
-    diff = np.concatenate([[2], 2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2)])
+    diff = np.append(2, 2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2))
     weights_phi_pos = sc.fft.idct(diff, type=1)
     weights_phi_pos[0] /= 2
     full_weights_phi = np.hstack((weights_phi_pos, np.flip(weights_phi_pos[:-1])))
@@ -320,12 +320,47 @@ def interpolate(mu_arr_pos, u):
             return np.squeeze(results)[()]
 
     return u_interpol
-                
+          
 
+def to_diag_ordered_form(A, sym_offset):
+    """
+    Convert a matrix A to the diagonal ordered form required by `scipy.linalg.solve_banded`.
+    We assume that the matrix has the same number of super- and sub-diagonals.
+
+    Parameters
+    ----------
+    A : 2darray
+        The square matrix to be converted.
+    sym_offset : int
+        The number of super- or sub-diagonals (assumed to be equal)
+
+    Returns
+    -------
+    2darray
+        The diagonal ordered form matrix as required by solve_banded.
+    """
+    n = A.shape[0]
+    indices = np.arange(n)
+
+    return np.concatenate(
+        [
+            A[
+                indices - np.arange(sym_offset, -1, -1)[:, None],
+                indices[None, :],
+            ],
+            A[
+                indices - np.arange(n - 1, n - sym_offset - 1, -1)[:, None],
+                indices[None, :],
+            ],
+        ],
+        axis=0,
+    )
+
+    
 def _mathscr_v(tau,                             # Input optical depths
                 l,                              # Layer index of each input optical depth
-                s_poly_coeffs,                  # Polynomial coefficients of isotropic source
                 Nscoeffs,                       # Number of isotropic source polynomial coefficients
+                s_poly_coeffs,                  # Polynomial coefficients of isotropic source
                 G,                              # Eigenvector matrices
                 K,                              # Eigenvalues
                 G_inv,                          # Inverse of eigenvector matrix
@@ -344,6 +379,7 @@ def _mathscr_v(tau,                             # Input optical depths
     | --------------------------- | ------------------------------------- |
     | `tau`                       | `Ntau`                                |
     | `l`                         | `Ntau`                                |
+    | `Nscoeffs`                  | scalar                                |
     | `s_poly_coeffs`             | `NLayers x Nscoeffs` or `Nscoeffs`    |
     | `G`                         | `NLayers<= x NQuad x NQuad`           |
     | `K`                         | `NLayers<= x NQuad`                   |
@@ -409,29 +445,19 @@ def _mathscr_v(tau,                             # Input optical depths
             ),
         )
     
-    powers = np.flip(np.arange(Nscoeffs))[None, :]
+    powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
     if is_antiderivative_wrt_tau:
         tau_poly = tau[:, None] ** (powers + 1) / (powers + 1)
     else:
         tau_poly = tau[:, None] ** powers
-        
+    
     return np.einsum(
-        "tik, tc, ctk, tkj, j -> it",
+        "tik, tc, ctk -> it",
         G[l, :, :],
         tau_poly,
-        mathscr_v_coeffs[:, l, :],
-        G_inv[l, :, :],
-        1 / mu_arr,
+        (mathscr_v_coeffs * (G_inv @ (1 / mu_arr))[None, :, :])[:, l, :],
         optimize=True,
     )
-    
-def _nd_slice_to_indexes(nd_slice):
-    """Code taken from https://stackoverflow.com/questions/64097025/how-to-convert-n-d-slice-to-indexes-in-numpy.
-    This function is used to efficiently construct sparse COO matrices.
-    
-    """
-    grid = np.mgrid[{tuple: nd_slice, slice: (nd_slice,)}[type(nd_slice)]]
-    return tuple(grid[i].ravel() for i in range(grid.shape[0]))
     
 
 def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):

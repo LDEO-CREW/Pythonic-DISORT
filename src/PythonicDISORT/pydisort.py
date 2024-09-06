@@ -22,7 +22,7 @@ def pydisort(
     NT_cor=False,
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
-    NLayers_to_use_sparse=13,
+    NLayers_for_banded_solver=13,
     _autograd_compatible = False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
@@ -75,8 +75,8 @@ def pydisort(
     s_poly_coeffs : optional, array
         Polynomial coefficients of isotropic internal sources.
         Arrange coefficients from lowest order term to highest.
-    NLayers_to_use_sparse : optional, int
-        At or above how many atmospheric layers should SciPy's sparse matrix framework be used?
+    NLayers_for_banded_solver : optional, int
+        At or above how many atmospheric layers should `scipy.linalg.solve_banded` be used?
 
     Returns
     -------
@@ -115,25 +115,25 @@ def pydisort(
     
     """
     Arguments of pydisort
-    |         Variable        |            Type / Shape            |
-    | ----------------------- | ---------------------------------- |
-    | `tau_arr`               | `NLayers`                          |
-    | `omega_arr`             | `NLayers`                          |
-    | `NQuad`                 | scalar                             |
-    | `Leg_coeffs_all`        | `NLeg_all`                         |
-    | `mu0`                   | scalar                             |
-    | `I0`                    | scalar                             |
-    | `phi0`                  | scalar                             |
-    | `NLeg`                  | scalar                             |
-    | `NFourier`              | scalar                             |
-    | `b_pos`                 | `NQuad/2 x NFourier` or scalar     |
-    | `b_neg`                 | `NQuad/2 x NFourier` or scalar     |              
-    | `only_flux`             | boolean                            |
-    | `f_arr`                 | `NLayers` or scalar                |
-    | `NT_cor`                | boolean                            |
-    | `BDRF_Fourier_modes`    | `NBDRF`                            |
-    | `s_poly_coeffs`         | `NLayers x Nscoeffs` or `Nscoeffs` |
-    | `NLayers_to_use_sparse` | scalar                             |
+    |          Variable           |            Type / Shape            |
+    | --------------------------- | ---------------------------------- |
+    | `tau_arr`                   | `NLayers`                          |
+    | `omega_arr`                 | `NLayers`                          |
+    | `NQuad`                     | scalar                             |
+    | `Leg_coeffs_all`            | `NLeg_all`                         |
+    | `mu0`                       | scalar                             |
+    | `I0`                        | scalar                             |
+    | `phi0`                      | scalar                             |
+    | `NLeg`                      | scalar                             |
+    | `NFourier`                  | scalar                             |
+    | `b_pos`                     | `NQuad/2 x NFourier` or scalar     |
+    | `b_neg`                     | `NQuad/2 x NFourier` or scalar     |              
+    | `only_flux`                 | boolean                            |
+    | `f_arr`                     | `NLayers` or scalar                |
+    | `NT_cor`                    | boolean                            |
+    | `BDRF_Fourier_modes`        | `NBDRF`                            |
+    | `s_poly_coeffs`             | `NLayers x Nscoeffs` or `Nscoeffs` |
+    | `NLayers_for_banded_solver` | scalar                             |
     
     Notable internal variables of pydisort
     |          Variable            |     Type / Shape     |
@@ -190,7 +190,7 @@ def pydisort(
     NLayers = len(tau_arr)
     b_pos_is_scalar = False
     b_neg_is_scalar = False
-    thickness_arr = np.concatenate([[tau_arr[0]], np.diff(tau_arr)])
+    thickness_arr = np.append(tau_arr[0], np.diff(tau_arr))
     NLeg_all = np.shape(Leg_coeffs_all)[1]
     N = NQuad // 2
     there_is_beam_source = I0 > 0
@@ -243,8 +243,8 @@ def pydisort(
         assert np.shape(b_neg) == (N, NFourier)
     # The fractional scattering must be between 0 and 1
     assert np.all(0 <= f_arr) and np.all(f_arr <= 1)
-    # The minimum threshold is the minimum numbers of layers: 1
-    assert(NLayers_to_use_sparse >= 1)
+    # The minimum threshold is 3 else the matrix will not be banded
+    assert(NLayers_for_banded_solver >= 3)
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Some more setup
@@ -277,9 +277,7 @@ def pydisort(
     if np.any(f_arr > 0):
         scale_tau = 1 - omega_arr * f_arr
         scaled_thickness_arr = scale_tau * thickness_arr
-        scaled_tau_arr_with_0 = np.array(
-            list(map(lambda l: np.sum(scaled_thickness_arr[:l]), range(NLayers + 1)))
-        )
+        scaled_tau_arr_with_0 = np.append(0, np.cumsum(scaled_thickness_arr))
         weighted_scaled_Leg_coeffs = ((Leg_coeffs - f_arr[:, None]) / (1 - f_arr[:, None])) * (
             2 * np.arange(NLeg) + 1
         )[None, :]
@@ -287,7 +285,7 @@ def pydisort(
     else:
         # This is a shortcut to the same results
         scale_tau = np.ones(NLayers)
-        scaled_tau_arr_with_0 = np.concatenate([[0], tau_arr])
+        scaled_tau_arr_with_0 = np.append(0, tau_arr)
         weighted_scaled_Leg_coeffs = Leg_coeffs * (2 * np.arange(NLeg) + 1)[None, :]
         scaled_omega_arr = omega_arr
     # --------------------------------------------------------------------------------------------------------------------------
@@ -313,12 +311,12 @@ def pydisort(
             there_is_beam_source,
             b_pos, b_neg,
             b_pos_is_scalar, b_neg_is_scalar,
-            s_poly_coeffs,
             Nscoeffs,
+            s_poly_coeffs,
             there_is_iso_source,
             scale_tau,
             only_flux,
-            NLayers_to_use_sparse,
+            NLayers_for_banded_solver,
             _autograd_compatible,
         )
         
@@ -371,14 +369,14 @@ def pydisort(
             
             if is_antiderivative_wrt_tau:
                 TMS_correction_pos = (
-                    np.exp(-scaled_tau / mu0)[None, :] / (-scale_tau[None, l] / mu0)
+                    np.exp(-scaled_tau / mu0)[None, :] / (-scale_tau / mu0)[None, l]
                     - np.exp(
                         (scaled_tau - scaled_tau_arr_l)[None, :] / mu_arr_pos[:, None]
                         - scaled_tau_arr_l[None, :] / mu0
                     ) / (scale_tau[None, l] / mu_arr_pos[:, None])
                 )
                 TMS_correction_neg = (
-                    np.exp(-scaled_tau / mu0)[None, :] / (-scale_tau[None, l] / mu0)
+                    np.exp(-scaled_tau / mu0)[None, :] / (-scale_tau / mu0)[None, l]
                     - np.exp(
                         (scaled_tau_arr_lm1 - scaled_tau)[None, :] / mu_arr_pos[:, None]
                         - scaled_tau_arr_lm1[None, :] / mu0
@@ -501,7 +499,7 @@ def pydisort(
                                         - scaled_tau_arr_with_0_l_repeat_neg / mu0
                                     )
                                 )
-                                / (-scale_tau_repeat_pos / mu_arr_pos[:, None])
+                                / (-scale_tau_repeat_neg / mu_arr_pos[:, None])
                             )[:, :, None]
                         )
                         contribution_from_other_layers_neg = np.sum(
@@ -637,11 +635,11 @@ def pydisort(
             there_is_beam_source,
             b_pos, b_neg,
             b_pos_is_scalar, b_neg_is_scalar,
-            s_poly_coeffs,
             Nscoeffs,
+            s_poly_coeffs,
             there_is_iso_source,
             scale_tau,
             only_flux,
-            NLayers_to_use_sparse,
+            NLayers_for_banded_solver,
             _autograd_compatible,
         )

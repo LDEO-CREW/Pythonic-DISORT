@@ -53,7 +53,6 @@ def _solve_for_gen_and_part_sols(
     | `K_collect`         | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
     | `alpha_arr`         | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
     | `beta_arr`          | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
-    | `X_tilde_arr`       | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
     | `B_collect`         | `NFourier*NLayers x NQuad` or `None`   | Reshaped to NFourier x NLayers x NQuad
     | `eigenvecs_GpG_arr` | `NFourier*NLayers x NQuad/2 x NQuad    |
     | `eigenvecs_GmG_arr` | `NFourier*NLayers x NQuad/2 x NQuad    |
@@ -72,7 +71,6 @@ def _solve_for_gen_and_part_sols(
     K_collect = np.empty((NFourier * NLayers, NQuad))
     alpha_arr = np.empty((NFourier * NLayers, N, N))
     beta_arr = np.empty((NFourier * NLayers, N, N))
-    X_tilde_arr = np.empty((NFourier * NLayers, NQuad))
     no_shortcut_indices = []
     no_shortcut_indices_0 = []
     
@@ -111,13 +109,26 @@ def _solve_for_gen_and_part_sols(
             if np.any(weighted_asso_Leg_coeffs_l > 0) and np.all(
                 np.isfinite(asso_leg_term_pos)
             ):  
-                # Generate D and X (phase function terms)
+                # Generate D
                 # --------------------------------------------------------------------------------------------------------------------------
                 D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
                 D_pos = (scaled_omega_l / 2) * D_temp @ asso_leg_term_pos
                 D_neg = (scaled_omega_l / 2) * D_temp @ asso_leg_term_neg
+                
+                # --------------------------------------------------------------------------------------------------------------------------
+                
 
+                # Assemble the coefficient matrix and additional terms
+                # --------------------------------------------------------------------------------------------------------------------------
+                alpha = M_inv[:, None] * (D_pos * W[None, :] - np.eye(N))
+                beta = M_inv[:, None] * D_neg * W[None, :]
+                
+                # --------------------------------------------------------------------------------------------------------------------------
+                
+                # Particular solution for the direct beam source (refer to Section 3.6.1 of the Comprehensive Documentation)
+                # --------------------------------------------------------------------------------------------------------------------------
                 if there_is_beam_source:
+                    # Generate X
                     X_temp = (
                         (scaled_omega_l * I0 * (2 - (m == 0)) / (4 * pi))
                         * weighted_asso_Leg_coeffs_l
@@ -125,20 +136,25 @@ def _solve_for_gen_and_part_sols(
                     )
                     X_pos = X_temp @ asso_leg_term_pos
                     X_neg = X_temp @ asso_leg_term_neg
+                    X_tilde = np.concatenate([-M_inv * X_pos, M_inv * X_neg])
+                    
+                    A = np.concatenate(
+                        [
+                            np.concatenate([-alpha, -beta], axis=1),
+                            np.concatenate([beta, alpha], axis=1),
+                        ],
+                        axis=0,
+                    )
+                    np.fill_diagonal(A, np.diag(A) + 1 / mu0)
+                    B_collect[ind, :] = -np.linalg.solve(A, X_tilde) # We moved the minus sign out
+                    
                 # --------------------------------------------------------------------------------------------------------------------------
-
-                # Assemble the coefficient matrix and additional terms
-                # --------------------------------------------------------------------------------------------------------------------------
-                alpha = M_inv[:, None] * (D_pos * W[None, :] - np.eye(N))
-                beta = M_inv[:, None] * D_neg * W[None, :]
-                if there_is_beam_source:
-                    X_tilde_arr[ind, :] = np.concatenate([-M_inv * X_pos, M_inv * X_neg])
-                # --------------------------------------------------------------------------------------------------------------------------
+                
                 
                 alpha_arr[ind, :, :] = alpha
                 beta_arr[ind, :, :] = beta
                 no_shortcut_indices.append(ind)
-                if there_is_iso_source and m_equals_0:
+                if m_equals_0 and there_is_iso_source:
                     no_shortcut_indices_0.append(l)
                 
             else:
@@ -149,8 +165,9 @@ def _solve_for_gen_and_part_sols(
                 
                 G_collect[ind, :, :] = G
                 K_collect[ind, :] = -1 / mu_arr
-                if there_is_iso_source and m_equals_0:
+                if m_equals_0 and there_is_iso_source:
                     G_inv_collect_0[l, :, :] = G
+                    
             ind += 1
                 
     if len(no_shortcut_indices) > 0:
@@ -184,26 +201,16 @@ def _solve_for_gen_and_part_sols(
             ),
             axis=1,
         )
-        G_inv_arr = np.linalg.inv(G_arr)
         
         G_collect[no_shortcut_indices, :, :] = G_arr
         K_collect[no_shortcut_indices, :] = K_arr
         if len(no_shortcut_indices_0) > 0:
-            G_inv_collect_0[no_shortcut_indices_0, :, :] = G_inv_arr[: len(no_shortcut_indices_0), :, :]
+            G_inv_collect_0[no_shortcut_indices_0, :, :] = np.linalg.inv(
+                G_collect[: len(no_shortcut_indices_0), :, :]
+            )
+
         # --------------------------------------------------------------------------------------------------------------------------
 
-        # Particular solution for the direct beam source (refer to Section 3.6.1 of the Comprehensive Documentation)
-        # --------------------------------------------------------------------------------------------------------------------------
-        if there_is_beam_source:
-            X_tilde_arr = X_tilde_arr[: len(no_shortcut_indices), :]
-            B_collect[no_shortcut_indices, :] = np.einsum(
-                "lij, ljk, lk -> li",
-                -G_arr / (1 / mu0 + K_arr)[:, None, :],
-                G_inv_arr,
-                X_tilde_arr,
-                optimize=True,
-            )
-        # --------------------------------------------------------------------------------------------------------------------------
         
     if there_is_beam_source:
         if there_is_iso_source:

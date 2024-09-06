@@ -20,12 +20,12 @@ def _assemble_intensity_and_fluxes(
     there_is_beam_source,               # Is there a beam source?
     b_pos, b_neg,                       # Dirichlet BCs
     b_pos_is_scalar, b_neg_is_scalar,   # Is each Dirichlet BCs scalar (isotropic)?
-    s_poly_coeffs,                      # Polynomial coefficients of isotropic source
     Nscoeffs,                           # Number of isotropic source polynomial coefficients
+    s_poly_coeffs,                      # Polynomial coefficients of isotropic source
     there_is_iso_source,                # Is there an isotropic source?
     scale_tau,                          # Delta-scale factor for tau
     only_flux,                          # Only compute fluxes?
-    NLayers_to_use_sparse,              # Number of layers above or equal which to use sparse matrices
+    NLayers_for_banded_solver,          # Number of layers above or equal which to use `scipy.linalg.solve_banded`
     _autograd_compatible,               # Should the output functions be compatible with autograd?
 ):  
     """Assembles the solution functions: intensity `u`, upward flux `flux_up`, downward flux `flux_down` 
@@ -66,13 +66,13 @@ def _assemble_intensity_and_fluxes(
     | `b_pos`                        | `NQuad/2 x NFourier` or scalar     |
     | `b_neg`                        | `NQuad/2 x NFourier` or scalar     |
     | `b_pos_is_scalar`              | boolean                            |
-    | `b_neg_is_scalar`              | boolean                            |              
+    | `b_neg_is_scalar`              | boolean                            |        
+    | `Nscoeffs`                     | scalar                             |    
     | `s_poly_coeffs`                | `NLayers x Nscoeffs` or `Nscoeffs` |
-    | `Nscoeffs`                     | scalar                             |
     | `there_is_iso_source`          | boolean                            |
     | `scale_tau`                    | `NLayers`                          |
     | `only_flux`                    | boolean                            |
-    | `NLayers_to_use_sparse`        | scalar                             |
+    | `NLayers_for_banded_solver`    | scalar                             |
     | `_autograd_compatible`         | boolean                            |
     
     Notable internal variables of _assemble_intensity_and_fluxes
@@ -146,10 +146,10 @@ def _assemble_intensity_and_fluxes(
         there_is_beam_source,
         b_pos, b_neg,
         b_pos_is_scalar, b_neg_is_scalar,
-        s_poly_coeffs,
         Nscoeffs,
+        s_poly_coeffs,
         there_is_iso_source,
-        NLayers_to_use_sparse,
+        NLayers_for_banded_solver,
     )
     
     G_collect_0 = G_collect[0, :, :, :]
@@ -198,26 +198,28 @@ def _assemble_intensity_and_fluxes(
             
             if is_antiderivative_wrt_tau:
                 if there_is_beam_source:
-                    um = np.einsum(
-                        "mtij, mtj -> mti",
-                        GC_collect[:, l, :, :],
-                        np.exp(exponent) / (scale_tau[None, l, None] * K_collect[:, l, :]),
-                        optimize=True,
-                    ) + B_collect[:, l, :] * np.exp(-scaled_tau[None, :, None] / mu0) / (
-                        -scale_tau[None, l, None] / mu0
+                    um = (
+                        np.einsum(
+                            "mtij, mtj -> mti",
+                            GC_collect[:, l, :, :],
+                            np.exp(exponent) / (scale_tau[None, :, None] * K_collect)[:, l, :],
+                            optimize=True,
+                        )
+                        + (B_collect / (-scale_tau / mu0)[None, :, None])[:, l, :]
+                        * np.exp(-scaled_tau / mu0)[None, :, None]
                     )
                 else:
                     um = np.einsum(
                         "mtij, mtj -> mti",
                         GC_collect[:, l, :, :],
-                        np.exp(exponent) / (scale_tau[None, l, None] * K_collect[:, l, :]),
+                        np.exp(exponent) / (scale_tau[None, l, None] * K_collect)[:, l, :],
                         optimize=True,
                     )
             else:
                 if there_is_beam_source:
                     um = np.einsum(
                         "mtij, mtj -> mti", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
-                    ) + B_collect[:, l, :] * np.exp(-scaled_tau[None, :, None] / mu0)
+                    ) + B_collect[:, l, :] * np.exp(-scaled_tau / mu0)[None, :, None]
                 else:
                     um = np.einsum(
                         "mtij, mtj -> mti", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
@@ -225,13 +227,13 @@ def _assemble_intensity_and_fluxes(
             
             # Contribution from particular solution for isotropic internal sources
             if there_is_iso_source:
+                l_uniq, l_inv = np.unique(l, return_inverse=True)
                 _mathscr_v_contribution = _mathscr_v(
-                    tau, l,
-                    s_poly_coeffs,
-                    Nscoeffs,
-                    G_collect_0,
-                    K_collect_0,
-                    G_inv_collect_0,
+                    tau, l_inv, Nscoeffs,
+                    s_poly_coeffs[l_uniq],
+                    G_collect_0[l_uniq],
+                    K_collect_0[l_uniq],
+                    G_inv_collect_0[l_uniq],
                     mu_arr,
                     is_antiderivative_wrt_tau,
                     _autograd_compatible
@@ -262,26 +264,28 @@ def _assemble_intensity_and_fluxes(
                 )
                 if is_antiderivative_wrt_tau:
                     if there_is_beam_source:
-                        ulast = np.einsum(
-                            "tij, tj -> it",
-                            GC_collect[-1, l, :, :],
-                            np.exp(exponent) / (scale_tau[l, None] * K_collect[-1, l, :]),
-                            optimize=True,
-                        ) + B_collect[-1, l, :].T * np.exp(-scaled_tau[None, :] / mu0) / (
-                            -scale_tau[None, l] / mu0
+                        ulast = (
+                            np.einsum(
+                                "tij, tj -> it",
+                                GC_collect[-1, l, :, :],
+                                np.exp(exponent) / (scale_tau[:, None] * K_collect[-1, :, :])[l, :],
+                                optimize=True,
+                            )
+                            + (B_collect.T[-1, :, :] / (-scale_tau / mu0)[None, :])[:, l]
+                            * np.exp(-scaled_tau / mu0)[None, :]
                         )
                     else:
                         ulast = np.einsum(
                             "tij, tj -> it",
                             GC_collect[-1, l, :, :],
-                            np.exp(exponent) / (scale_tau[l, None] * K_collect[-1, l, :]),
+                            np.exp(exponent) / (scale_tau[:, None] * K_collect[-1, :, :])[l, :],
                             optimize=True,
                         )
                 else:
                     if there_is_beam_source:
                         ulast = np.einsum(
                             "tij, tj -> it", GC_collect[-1, l, :, :], np.exp(exponent), optimize=True
-                        ) + B_collect[-1, l, :].T * np.exp(-scaled_tau[None, :] / mu0)
+                        ) + B_collect.T[-1, :, l] * np.exp(-scaled_tau / mu0)[None, :]
                     else:
                         ulast = np.einsum(
                             "tij, tj -> it", GC_collect[-1, l, :, :], np.exp(exponent), optimize=True
@@ -333,7 +337,10 @@ def _assemble_intensity_and_fluxes(
             # in performing the reclassification of delta-scaled actinic flux
             if _return_act_dscale_for_reclass: 
                 if is_antiderivative_wrt_tau:
-                    act_dscale_reclassification = I0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0) - I0 * np.exp(-tau / mu0) * -mu0
+                    act_dscale_reclassification = (
+                        I0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0)
+                        - I0 * np.exp(-tau / mu0) * -mu0
+                    )
                 else:
                     act_dscale_reclassification = I0 * np.exp(-scaled_tau / mu0) - I0 * np.exp(-tau / mu0)
         else:
@@ -351,26 +358,28 @@ def _assemble_intensity_and_fluxes(
         
         if is_antiderivative_wrt_tau:
             if there_is_beam_source:
-                u0 = np.einsum(
-                    "tij, tj -> it",
-                    GC_collect_0[l, :, :],
-                    np.exp(exponent) / (scale_tau[l, None] * K_collect_0[l, :]),
-                    optimize=True,
-                ) + B_collect_0[l, :].T * np.exp(-scaled_tau[None, :] / mu0) / (
-                    -scale_tau[None, l] / mu0
+                u0 = (
+                    np.einsum(
+                        "tij, tj -> it",
+                        GC_collect_0[l, :, :],
+                        np.exp(exponent) / (scale_tau[:, None] * K_collect_0)[l, :],
+                        optimize=True,
+                    )
+                    + (B_collect_0.T / (-scale_tau / mu0)[None, :])[:, l]
+                    * np.exp(-scaled_tau / mu0)[None, :]
                 )
             else:
                 u0 = np.einsum(
                     "tij, tj -> it",
                     GC_collect_0[l, :, :],
-                    np.exp(exponent) / (scale_tau[l, None] * K_collect_0[l, :]),
+                    np.exp(exponent) / (scale_tau[:, None] * K_collect_0)[l, :],
                     optimize=True,
                 )
         else:
             if there_is_beam_source:
                 u0 = np.einsum(
                     "tij, tj -> it", GC_collect_0[l, :, :], np.exp(exponent), optimize=True
-                ) + B_collect_0[l, :].T * np.exp(-scaled_tau[None, :] / mu0)
+                ) + B_collect_0.T[:, l] * np.exp(-scaled_tau / mu0)[None, :]
             else:
                 u0 = np.einsum(
                     "tij, tj -> it", GC_collect_0[l, :, :], np.exp(exponent), optimize=True
@@ -378,13 +387,13 @@ def _assemble_intensity_and_fluxes(
         
         # Contribution from particular solution for isotropic internal sources
         if there_is_iso_source:
+            l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                tau, l,
-                s_poly_coeffs,
-                Nscoeffs,
-                G_collect_0,
-                K_collect_0,
-                G_inv_collect_0,
+                tau, l_inv, Nscoeffs,
+                s_poly_coeffs[l_uniq],
+                G_collect_0[l_uniq],
+                K_collect_0[l_uniq],
+                G_inv_collect_0[l_uniq],
                 mu_arr,
                 is_antiderivative_wrt_tau,
                 _autograd_compatible
@@ -431,27 +440,27 @@ def _assemble_intensity_and_fluxes(
             scaled_tau = tau
 
         if there_is_iso_source:
+            l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                tau, l,
-                s_poly_coeffs,
-                Nscoeffs,
-                G_collect_0,
-                K_collect_0,
-                G_inv_collect_0,
+                tau, l_inv, Nscoeffs,
+                s_poly_coeffs[l_uniq],
+                G_collect_0[l_uniq, :N, :],
+                K_collect_0[l_uniq],
+                G_inv_collect_0[l_uniq],
                 mu_arr,
                 is_antiderivative_wrt_tau,
                 _autograd_compatible
-            )[:N, :]
+            )
         else:
             _mathscr_v_contribution = 0
         
         if there_is_beam_source:
             if is_antiderivative_wrt_tau:
                 direct_beam_contribution = (
-                    B_pos[:, l] * np.exp(-scaled_tau[None, :] / mu0) / (-scale_tau[None, l] / mu0)
+                    (B_pos / (-scale_tau / mu0)[None, :])[:, l] * np.exp(-scaled_tau / mu0)[None, :] 
                 )
             else:
-                direct_beam_contribution = B_pos[:, l] * np.exp(-scaled_tau[None, :] / mu0)
+                direct_beam_contribution = B_pos[:, l] * np.exp(-scaled_tau / mu0)[None, :]
         else:
             direct_beam_contribution = 0
 
@@ -468,7 +477,7 @@ def _assemble_intensity_and_fluxes(
                 np.einsum(
                     "tij, tj -> it",
                     GC_pos[l, :, :],
-                    np.exp(exponent) / (scale_tau[l, None] * K_collect_0[l, :]),
+                    np.exp(exponent) / (scale_tau[:, None] * K_collect_0)[l, :],
                 )
                 + direct_beam_contribution
                 + _mathscr_v_contribution
@@ -510,27 +519,27 @@ def _assemble_intensity_and_fluxes(
             scaled_tau = tau
 
         if there_is_iso_source:
+            l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                tau, l,
-                s_poly_coeffs,
-                Nscoeffs,
-                G_collect_0,
-                K_collect_0,
-                G_inv_collect_0,
+                tau, l_inv, Nscoeffs,
+                s_poly_coeffs[l_uniq],
+                G_collect_0[l_uniq, N:, :],
+                K_collect_0[l_uniq],
+                G_inv_collect_0[l_uniq],
                 mu_arr,
                 is_antiderivative_wrt_tau,
                 _autograd_compatible
-            )[N:, :]
+            )
         else:
             _mathscr_v_contribution = 0
         
         if there_is_beam_source:
             if is_antiderivative_wrt_tau:
-                direct_beam_contribution = B_neg[:, l] * np.exp(-scaled_tau[None, :] / mu0) / (-scale_tau[None, l] / mu0)
+                direct_beam_contribution = (B_neg / (-scale_tau / mu0)[None, l])[:, l] * np.exp(-scaled_tau / mu0)[None, :]
                 direct_beam = I0 * mu0 * np.exp(-tau / mu0) * -mu0
-                direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0) / (-scale_tau[None, l] / mu0)
+                direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0) / (-scale_tau / mu0)[None, l]
             else:
-                direct_beam_contribution = B_neg[:, l] * np.exp(-scaled_tau[None, :] / mu0)
+                direct_beam_contribution = B_neg[:, l] * np.exp(-scaled_tau / mu0)[None, :]
                 direct_beam = I0 * mu0 * np.exp(-tau / mu0)
                 direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0)
         else:
@@ -548,7 +557,7 @@ def _assemble_intensity_and_fluxes(
         
         if is_antiderivative_wrt_tau:
             u0_neg = (
-                np.einsum("tij, tj -> it", GC_neg[l, :, :], np.exp(exponent) / (scale_tau[l, None] * K_collect_0[l, :]))
+                np.einsum("tij, tj -> it", GC_neg[l, :, :], np.exp(exponent) / (scale_tau[:, None] * K_collect_0)[l, :])
                 + direct_beam_contribution
                 + _mathscr_v_contribution
             )
