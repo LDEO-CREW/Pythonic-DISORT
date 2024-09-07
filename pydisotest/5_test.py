@@ -70,7 +70,7 @@ def test_5a():
     only_flux=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=13
+    use_banded_solver_NLayers=10
 
     ####################################################################################################
 
@@ -146,7 +146,7 @@ def test_5b():
     only_flux=False
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=13
+    use_banded_solver_NLayers=10
 
     ####################################################################################################
 
@@ -223,7 +223,7 @@ def test_5BDRF():
     b_neg=0
     only_flux=False
     s_poly_coeffs=np.array([[]])
-    use_sparse_NLayers=13
+    use_banded_solver_NLayers=10
 
     ####################################################################################################
 

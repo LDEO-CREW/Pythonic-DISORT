@@ -26,7 +26,7 @@ def _solve_for_coeffs(
     Nscoeffs,                               # Number of isotropic source polynomial coefficients
     s_poly_coeffs,                          # Polynomial coefficients of isotropic source           
     there_is_iso_source,                    # Is there an isotropic source?
-    NLayers_for_banded_solver,              # Number of layers above or equal which to use `scipy.linalg.solve_banded`
+    use_banded_solver_NLayers,              # Number of layers above or equal which to use `scipy.linalg.solve_banded`
 ):
     """
     Uses the boundary conditions to solve for the unknown coefficients 
@@ -66,7 +66,7 @@ def _solve_for_coeffs(
     | `Nscoeffs`                     | scalar                                 |
     | `s_poly_coeffs`                | `NLayers x Nscoeffs` or `Nscoeffs`     |
     | `there_is_iso_source`          | boolean                                |
-    | `NLayers_for_banded_solver`    | scalar                                 |
+    | `use_banded_solver_NLayers`    | scalar                                 |
     
     Notable internal variables of _solve_for_coeffs
     |   Variable   |                 Shape                |
@@ -79,7 +79,7 @@ def _solve_for_coeffs(
     
     dim = NLayers * NQuad
     GC_collect = np.empty((NFourier, NLayers, NQuad, NQuad))
-    use_banded_solver = (NLayers >= NLayers_for_banded_solver)
+    use_banded_solver = (NLayers >= use_banded_solver_NLayers)
     if use_banded_solver:
         sym_offset = 3 * N - 1
     

@@ -25,7 +25,7 @@ def _assemble_intensity_and_fluxes(
     there_is_iso_source,                # Is there an isotropic source?
     scale_tau,                          # Delta-scale factor for tau
     only_flux,                          # Only compute fluxes?
-    NLayers_for_banded_solver,          # Number of layers above or equal which to use `scipy.linalg.solve_banded`
+    use_banded_solver_NLayers,          # Number of layers above or equal which to use `scipy.linalg.solve_banded`
     _autograd_compatible,               # Should the output functions be compatible with autograd?
 ):  
     """Assembles the solution functions: intensity `u`, upward flux `flux_up`, downward flux `flux_down` 
@@ -72,7 +72,7 @@ def _assemble_intensity_and_fluxes(
     | `there_is_iso_source`          | boolean                            |
     | `scale_tau`                    | `NLayers`                          |
     | `only_flux`                    | boolean                            |
-    | `NLayers_for_banded_solver`    | scalar                             |
+    | `use_banded_solver_NLayers`    | scalar                             |
     | `_autograd_compatible`         | boolean                            |
     
     Notable internal variables of _assemble_intensity_and_fluxes
@@ -149,7 +149,7 @@ def _assemble_intensity_and_fluxes(
         Nscoeffs,
         s_poly_coeffs,
         there_is_iso_source,
-        NLayers_for_banded_solver,
+        use_banded_solver_NLayers,
     )
     
     G_collect_0 = G_collect[0, :, :, :]

@@ -30,7 +30,7 @@ def test_11a():
     NLeg=None
     NLoops=None
     only_flux=False
-    use_sparse_NLayers=13
+    use_banded_solver_NLayers=10
 
     ####################################################################################################
     

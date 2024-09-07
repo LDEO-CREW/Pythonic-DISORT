@@ -34,7 +34,7 @@ def test_8a():
     NT_cor = False
     BDRF_Fourier_modes = []
     s_poly_coeffs = np.array([[]])
-    use_sparse_NLayers = 13
+    use_banded_solver_NLayers = 13
 
     ####################################################################################################
 
@@ -110,7 +110,7 @@ def test_8b():
     NT_cor = False
     BDRF_Fourier_modes = []
     s_poly_coeffs = np.array([[]])
-    use_sparse_NLayers = 13
+    use_banded_solver_NLayers = 13
 
     ####################################################################################################
 
@@ -186,7 +186,7 @@ def test_8c():
     NT_cor = False
     BDRF_Fourier_modes = []
     s_poly_coeffs = np.array([[]])
-    use_sparse_NLayers = 13
+    use_banded_solver_NLayers = 13
 
     ####################################################################################################
 

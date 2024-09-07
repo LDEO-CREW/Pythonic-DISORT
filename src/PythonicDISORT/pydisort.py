@@ -22,7 +22,7 @@ def pydisort(
     NT_cor=False,
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
-    NLayers_for_banded_solver=13,
+    use_banded_solver_NLayers=13,
     _autograd_compatible = False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
@@ -75,7 +75,7 @@ def pydisort(
     s_poly_coeffs : optional, array
         Polynomial coefficients of isotropic internal sources.
         Arrange coefficients from lowest order term to highest.
-    NLayers_for_banded_solver : optional, int
+    use_banded_solver_NLayers : optional, int
         At or above how many atmospheric layers should `scipy.linalg.solve_banded` be used?
 
     Returns
@@ -133,7 +133,7 @@ def pydisort(
     | `NT_cor`                    | boolean                            |
     | `BDRF_Fourier_modes`        | `NBDRF`                            |
     | `s_poly_coeffs`             | `NLayers x Nscoeffs` or `Nscoeffs` |
-    | `NLayers_for_banded_solver` | scalar                             |
+    | `use_banded_solver_NLayers` | scalar                             |
     
     Notable internal variables of pydisort
     |          Variable            |     Type / Shape     |
@@ -244,7 +244,7 @@ def pydisort(
     # The fractional scattering must be between 0 and 1
     assert np.all(0 <= f_arr) and np.all(f_arr <= 1)
     # The minimum threshold is 3 else the matrix will not be banded
-    assert(NLayers_for_banded_solver >= 3)
+    assert(use_banded_solver_NLayers >= 3)
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Some more setup
@@ -316,7 +316,7 @@ def pydisort(
             there_is_iso_source,
             scale_tau,
             only_flux,
-            NLayers_for_banded_solver,
+            use_banded_solver_NLayers,
             _autograd_compatible,
         )
         
@@ -640,6 +640,6 @@ def pydisort(
             there_is_iso_source,
             scale_tau,
             only_flux,
-            NLayers_for_banded_solver,
+            use_banded_solver_NLayers,
             _autograd_compatible,
         )

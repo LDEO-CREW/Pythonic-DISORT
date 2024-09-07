@@ -101,14 +101,13 @@ def _solve_for_gen_and_part_sols(
         # Loop over NLayers atmospheric layers
         # --------------------------------------------------------------------------------------------------------------------------          
         for l in range(NLayers):
-            # More setup
             weighted_asso_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, :][ells] * fac
-            scaled_omega_l = scaled_omega_arr[l]
             
-            # We take precautions against overflow and underflow (this shouldn't happen though)
-            if np.any(weighted_asso_Leg_coeffs_l > 0) and np.all(
-                np.isfinite(asso_leg_term_pos)
+            if np.any(weighted_asso_Leg_coeffs_l > 0) and np.all( # Due to `fac` or the coeffs being zero
+                np.isfinite(asso_leg_term_pos) # We take precautions against overflow and underflow (this shouldn't happen though)
             ):  
+                scaled_omega_l = scaled_omega_arr[l]
+                
                 # Generate D
                 # --------------------------------------------------------------------------------------------------------------------------
                 D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
@@ -120,7 +119,9 @@ def _solve_for_gen_and_part_sols(
 
                 # Assemble the coefficient matrix and additional terms
                 # --------------------------------------------------------------------------------------------------------------------------
-                alpha = M_inv[:, None] * (D_pos * W[None, :] - np.eye(N))
+                DW = D_pos * W[None, :]
+                np.fill_diagonal(DW, np.diag(DW) - 1)
+                alpha = M_inv[:, None] * DW
                 beta = M_inv[:, None] * D_neg * W[None, :]
                 
                 # --------------------------------------------------------------------------------------------------------------------------
@@ -160,8 +161,8 @@ def _solve_for_gen_and_part_sols(
             else:
                 # This is a shortcut to the diagonalization results
                 G = np.zeros((NQuad, NQuad))
-                G[N:, :N] = np.eye(N)
-                G[:N, N:] = np.eye(N)
+                np.fill_diagonal(G[N:, :N], 1)
+                np.fill_diagonal(G[:N, N:], 1)
                 
                 G_collect[ind, :, :] = G
                 K_collect[ind, :] = -1 / mu_arr
