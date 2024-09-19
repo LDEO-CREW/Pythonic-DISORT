@@ -26,7 +26,7 @@ def _assemble_intensity_and_fluxes(
     scale_tau,                          # Delta-scale factor for tau
     only_flux,                          # Only compute fluxes?
     use_banded_solver_NLayers,          # Number of layers above or equal which to use `scipy.linalg.solve_banded`
-    _autograd_compatible,               # Should the output functions be compatible with autograd?
+    autograd_compatible,               # Should the output functions be compatible with autograd?
 ):  
     """Assembles the solution functions: intensity `u`, upward flux `flux_up`, downward flux `flux_down` 
     from the previously solved eigenpairs and coefficients from the boundary conditions. 
@@ -73,7 +73,7 @@ def _assemble_intensity_and_fluxes(
     | `scale_tau`                    | `NLayers`                          |
     | `only_flux`                    | boolean                            |
     | `use_banded_solver_NLayers`    | scalar                             |
-    | `_autograd_compatible`         | boolean                            |
+    | `autograd_compatible`          | boolean                            |
     
     Notable internal variables of _assemble_intensity_and_fluxes
     |     Variable      |             Type / Shape               |
@@ -92,7 +92,7 @@ def _assemble_intensity_and_fluxes(
     | `GC_pos`          | `NLayers x NQuad/2 x NQuad`            |
     | `GC_neg`          | `NLayers x NQuad/2 x NQuad`            |
     """
-    if _autograd_compatible:
+    if autograd_compatible:
         import autograd.numpy as np
     else:
         import numpy as np
@@ -236,10 +236,10 @@ def _assemble_intensity_and_fluxes(
                     G_inv_collect_0[l_uniq],
                     mu_arr,
                     is_antiderivative_wrt_tau,
-                    _autograd_compatible
+                    autograd_compatible
                 )
                 
-                if _autograd_compatible:
+                if autograd_compatible:
                     if NFourier == 1:
                         um = um + _mathscr_v_contribution.T
                     else:
@@ -396,7 +396,7 @@ def _assemble_intensity_and_fluxes(
                 G_inv_collect_0[l_uniq],
                 mu_arr,
                 is_antiderivative_wrt_tau,
-                _autograd_compatible
+                autograd_compatible
             )
             u0 = u0 + _mathscr_v_contribution
         
@@ -449,7 +449,7 @@ def _assemble_intensity_and_fluxes(
                 G_inv_collect_0[l_uniq],
                 mu_arr,
                 is_antiderivative_wrt_tau,
-                _autograd_compatible
+                autograd_compatible
             )
         else:
             _mathscr_v_contribution = 0
@@ -528,7 +528,7 @@ def _assemble_intensity_and_fluxes(
                 G_inv_collect_0[l_uniq],
                 mu_arr,
                 is_antiderivative_wrt_tau,
-                _autograd_compatible
+                autograd_compatible
             )
         else:
             _mathscr_v_contribution = 0

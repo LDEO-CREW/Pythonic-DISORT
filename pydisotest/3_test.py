@@ -34,6 +34,7 @@ def test_3a():
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers=10
+	autograd_compatible=False
 
     ####################################################################################################
 
@@ -109,6 +110,7 @@ def test_3b():
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers=10
+	autograd_compatible=False
 
     ####################################################################################################
 

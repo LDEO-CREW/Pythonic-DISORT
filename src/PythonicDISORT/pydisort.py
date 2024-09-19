@@ -23,7 +23,7 @@ def pydisort(
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
     use_banded_solver_NLayers=13,
-    _autograd_compatible = False,
+    autograd_compatible = False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -77,6 +77,9 @@ def pydisort(
         Arrange coefficients from lowest order term to highest.
     use_banded_solver_NLayers : optional, int
         At or above how many atmospheric layers should `scipy.linalg.solve_banded` be used?
+    autograd_compatible : optional, bool
+        If `True`, the autograd package: https://github.com/HIPS/autograd can be used to compute
+        the tau-derivatives of the function outputs but `pydisort` will be less efficient.  
 
     Returns
     -------
@@ -159,7 +162,7 @@ def pydisort(
     | `scaled_mu0`                 | scalar               |
     """
 
-    if _autograd_compatible:
+    if autograd_compatible:
         import autograd.numpy as np
     else:
         import numpy as np
@@ -317,7 +320,7 @@ def pydisort(
             scale_tau,
             only_flux,
             use_banded_solver_NLayers,
-            _autograd_compatible,
+            autograd_compatible,
         )
         
         # TMS correction for the intensity (see Section 3.7.2)
@@ -527,7 +530,7 @@ def pydisort(
                             axis=1,
                         )
 
-                if _autograd_compatible:
+                if autograd_compatible:
                     if not any_pos_contribution:
                         TMS_correction_pos = np.zeros((N, Ntau, Nphi))
                     if not any_neg_contribution:
@@ -598,7 +601,7 @@ def pydisort(
             phi = np.atleast_1d(phi)
             NT_corrections = TMS_correction(tau, phi, is_antiderivative_wrt_tau)
 
-            if _autograd_compatible:
+            if autograd_compatible:
                 NT_corrections = NT_corrections + np.concatenate(
                     [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi, is_antiderivative_wrt_tau)], axis=0
                 )
@@ -641,5 +644,5 @@ def pydisort(
             scale_tau,
             only_flux,
             use_banded_solver_NLayers,
-            _autograd_compatible,
+            autograd_compatible,
         )

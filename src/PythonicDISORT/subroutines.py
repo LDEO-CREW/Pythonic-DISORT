@@ -366,7 +366,7 @@ def _mathscr_v(tau,                             # Input optical depths
                 G_inv,                          # Inverse of eigenvector matrix
                 mu_arr,                         # Quadrature nodes for both hemispheres
                 is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
-                _autograd_compatible=False,      # Should the output functions be compatible with autograd?
+                autograd_compatible=False,      # Should the output functions be compatible with autograd?
                 ):
     """Particular solution for isotropic internal sources.
     Refer to Section 3.6.1 of the Comprehensive Documentation.
@@ -386,7 +386,7 @@ def _mathscr_v(tau,                             # Input optical depths
     | `G_inv`                     | `NLayers<= x NQuad x NQuad` or `None` |
     | `mu_arr`                    | `NQuad`                               |
     | `is_antiderivative_wrt_tau` | boolean                               |
-    | `_autograd_compatible`      | boolean                               |
+    | `autograd_compatible`      | boolean                               |
     
     Notable internal variables of _mathscr_v
     |     Variable     |                Shape                | 
@@ -399,7 +399,7 @@ def _mathscr_v(tau,                             # Input optical depths
     """
     n = Nscoeffs - 1
     
-    if _autograd_compatible:
+    if autograd_compatible:
         import autograd.numpy as np
     
         def mathscr_b(i):
