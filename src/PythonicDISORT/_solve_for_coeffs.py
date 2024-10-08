@@ -109,18 +109,17 @@ def _solve_for_coeffs(
         # Assemble RHS
         # --------------------------------------------------------------------------------------------------------------------------
         # Ensure the BCs are of the correct shape
-        if b_pos_is_scalar:
-            if m_equals_0:
-                b_pos_m = np.full(N, b_pos)
-            else:
-                b_pos_m = np.zeros(N)
+        if b_pos_is_scalar and m_equals_0:
+            b_pos_m = np.full(N, b_pos)
+        elif b_pos_is_scalar and not m_equals_0:
+            b_pos_m = np.zeros(N)
         else:
             b_pos_m = b_pos[:, m]
-        if b_neg_is_scalar:
-            if m_equals_0:
-                b_neg_m = np.full(N, b_neg)
-            else:
-                b_neg_m = np.zeros(N)
+            
+        if b_neg_is_scalar and m_equals_0:
+            b_neg_m = np.full(N, b_neg)
+        elif b_neg_is_scalar and not m_equals_0:
+            b_neg_m = np.zeros(N)
         else:
             b_neg_m = b_neg[:, m]
         
@@ -205,7 +204,7 @@ def _solve_for_coeffs(
                 l_range = np.arange(1, NLayers)
                 RHS_middle = (
                     (B_collect_m[l_range, :] - B_collect_m[l_range - 1, :])
-                    * np.exp(-mu0 * scaled_tau_arr_with_0)[l_range, None]
+                    * np.exp(-scaled_tau_arr_with_0 / mu0)[l_range, None]
                 ).ravel()
                 
             if BDRF_bool:

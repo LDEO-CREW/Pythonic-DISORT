@@ -28,6 +28,7 @@ def transform_interval(arr, c, d, a, b):
     return (((arr - a) * (d - c)) / (b - a)) + c
 
 
+
 def transform_weights(weights, c, d, a, b):
     """Transforms an array of quadrature weights from interval [a, b] to [c, d].
 
@@ -53,9 +54,10 @@ def transform_weights(weights, c, d, a, b):
     return weights * (d - c) / (b - a)
 
 
+
 def calculate_nu(mu, phi, mu_p, phi_p):
-    """Calculates the cosine of the scattering angle `nu` 
-    between incident angle `(mu_p, phi_p)` and scattering angle `(mu, phi)`.
+    """Calculates the cosine of the scattering angle ``nu`` 
+    between incident angle ``(mu_p, phi_p)`` and scattering angle ``(mu, phi)``.
 
     Parameters
     ----------
@@ -71,7 +73,7 @@ def calculate_nu(mu, phi, mu_p, phi_p):
     Returns
     -------
     nu : ndarray
-        Cosine of scattering angles which axes capture variation with `mu, phi, mu_p, phi_p` respectively.
+        Cosine of scattering angles which axes capture variation with ``mu, phi, mu_p, phi_p`` respectively.
 
     """
     mu, phi, mu_p, phi_p = np.atleast_1d(mu, phi, mu_p, phi_p)
@@ -83,12 +85,13 @@ def calculate_nu(mu, phi, mu_p, phi_p):
     return np.squeeze(nu)
 
 
+
 def Gauss_Legendre_quad(N, c=0, d=1):
     """Generates Gauss-Legendre quadrature zero points and weights for integration from c to d.
 
     Parameters
     ----------
-    N : int
+    N : int (will be converted to int)
         Number of quadrature nodes.
     c : float, optional
         Start of integration interval.
@@ -106,6 +109,7 @@ def Gauss_Legendre_quad(N, c=0, d=1):
     mu_arr_pos, W = np.polynomial.legendre.leggauss(int(N))
 
     return transform_interval(mu_arr_pos, c, d, -1, 1), transform_weights(W, c, d, -1, 1)
+
 
 
 def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
@@ -129,8 +133,8 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
 
     """
     # Ensure that the number of nodes is odd and greater than 2
-    assert Nphi > 2
-    assert Nphi % 2 == 1
+    if not (Nphi > 2 and Nphi % 2 == 1):
+        raise ValueError("The number of quadrature nodes must be odd and greater than 2.")
 
     Nphi -= 1  # The extra index corresponds to the point 0 which we will add later
     Nphi_pos = Nphi // 2
@@ -144,9 +148,10 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     return transform_interval(phi_arr, c, d, -1, 1), transform_weights(full_weights_phi, c, d, -1, 1)
 
 
+
 def generate_FD_mat(Ntau, a, b):
     """Generates a sparse first derivative central difference (second-order accuracy) 
-    matrix on [a,b] in `csr` format with `Ntau` grid points.
+    matrix on [a,b] in ``csr`` format with ``Ntau`` grid points.
     Second order forward or backward differences are used at the boundaries.
 
     Parameters
@@ -182,6 +187,7 @@ def generate_FD_mat(Ntau, a, b):
 
     return tau_arr, first_deriv.tocsr()
   
+
 
 def atleast_2d_append(*arys):
     """View inputs as arrays with at least two dimensions. 
@@ -219,7 +225,8 @@ def atleast_2d_append(*arys):
         return res[0]
     else:
         return res
-        
+       
+       
         
 def generate_diff_act_flux_funcs(u0):
     """Generates the up and down diffuse actinic flux functions respectively.
@@ -237,73 +244,95 @@ def generate_diff_act_flux_funcs(u0):
     Returns
     -------
     Fp_act(tau) : function
-        Actinic flux function with argument `tau` (type: array) for positive (upward) `mu` values.
+        Actinic flux function with argument ``tau`` (type: array) for positive (upward) ``mu`` values.
         Returns the diffuse flux magnitudes (type: array).
-        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of the function with respect to `tau`.
+        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
+        to switch to an antiderivative of the function with respect to ``tau``.
+        Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     Fm_act(tau) : function
-        Actinic flux function with argument `tau` (type: array) for negative (downward) `mu` values.
+        Actinic flux function with argument ``tau`` (type: array) for negative (downward) ``mu`` values.
         Returns the diffuse flux magnitudes (type: array).
-        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of the function with respect to `tau`.
+        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
+        to switch to an antiderivative of the function with respect to ``tau``.
+        Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
 
     """
-    N = np.shape(u0(0))[0] // 2
+    N = len(u0(0)) // 2
     GL_weights = Gauss_Legendre_quad(N, 0, 1)[1]
 
     # Note that the zeroth axis of the array u0(tau) captures variation with mu
-    def flux_act_up(tau, is_antiderivative_wrt_tau=False):
-        return np.squeeze(2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[:N])[()]
+    def flux_act_up(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False):
+        if return_tau_arr:
+            (
+                u0_cache, 
+                tau_arr,
+            ) = u0(tau, is_antiderivative_wrt_tau, True)
+            return np.squeeze(2 * pi * GL_weights @ u0_cache[:N])[()], tau_arr
+        else:
+            return np.squeeze(2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[:N])[()]
         
-    def flux_act_down_diffuse(tau, is_antiderivative_wrt_tau=False):
-        u0_cache, act_dscale_reclassification = u0(tau, is_antiderivative_wrt_tau, _return_act_dscale_for_reclass=True)
-        result_without_reclassification = 2 * pi * GL_weights @ u0_cache[N:]
-        return np.squeeze(result_without_reclassification + act_dscale_reclassification)[()]
+    def flux_act_down_diffuse(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False):
+        if return_tau_arr:
+            (
+                u0_cache, 
+                tau_arr,
+                act_dscale_reclassification,
+            ) = u0(tau, is_antiderivative_wrt_tau, True, _return_act_dscale_for_reclass=True)
+            result_without_reclassification = 2 * pi * GL_weights @ u0_cache[N:]
+            return np.squeeze(result_without_reclassification + act_dscale_reclassification)[()], tau_arr
+        else:
+            (
+                u0_cache, 
+                act_dscale_reclassification,
+            ) = u0(tau, is_antiderivative_wrt_tau, False, _return_act_dscale_for_reclass=True)
+            result_without_reclassification = 2 * pi * GL_weights @ u0_cache[N:]
+            return np.squeeze(result_without_reclassification + act_dscale_reclassification)[()]
     
     return flux_act_up, flux_act_down_diffuse
 
 
-def interpolate(mu_arr_pos, u):
+
+def interpolate(u):
     """Polynomial (Barycentric) interpolation with respect to mu. The output 
     is a function that is continuous and variable in all three arguments: mu, tau and phi.
     Discussed in sections 3.7 and 6.3 in the Comprehensive Documentation.
 
     Parameters
     ----------
-    mu_arr_pos : array
-        Positive `mu` (cosine of polar angle) quadrature nodes.
-        Equivalent to `mu_arr[:N]`.
     u : function
-        Non-interpolated intensity function as outputted by `pydisort`.
+        Non-interpolated intensity function as given by ``pydisort``.
 
     Returns
     -------
     u_interpol : function
-        Intensity function with arguments `(mu, tau, phi)` each of type array or float.
-        Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
-        Pass `return_Fourier_error = True` (defaults to `False`) to return the 
+        Intensity function with arguments ``(mu, tau, phi)`` each of type array or float.
+        Returns an ndarray with axes corresponding to variation with ``mu, tau, phi`` respectively.
+        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
+        to switch to an antiderivative of the function with respect to ``tau``.
+        Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the 
         Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
-        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of the function with respect to `tau`.
+        Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
 
     """
-    N = len(mu_arr_pos)
+    N = len(u(0, 0)) // 2
+    mu_arr_pos = Gauss_Legendre_quad(N)[0]
+    
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
 
-    def u_interpol(mu, tau, phi, return_Fourier_error=False, is_antiderivative_wrt_tau=False):
-        assert np.all(np.abs(mu) <= 1)
+    def u_interpol(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
+        if not np.all(np.abs(mu) <= 1):
+            raise ValueError("mu values must be between -1 and 1.")
+        
         mu = np.atleast_1d(mu)
 
-        if return_Fourier_error:
-            u_cache, Fourier_error = u(tau, phi, True, is_antiderivative_wrt_tau)
+        if return_Fourier_error or return_tau_arr:
+            u_outputs = u(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
+            u_cache = u_outputs[0]
         else:
-            u_cache = u(tau, phi, False, is_antiderivative_wrt_tau)
+            u_cache = u(tau, phi, is_antiderivative_wrt_tau)
         
-        u_shape =  np.shape(u_cache)
-        assert N == u_shape[0] // 2 # Check that mu_arr_pos (of length N) matches the function u
-        
-        results = np.empty((len(mu),) + u_shape[1:])
+        results = np.empty((len(mu),) + np.shape(u_cache)[1:])
         mask_pos = mu > 0
         mask_else = ~mask_pos
         
@@ -314,17 +343,18 @@ def interpolate(mu_arr_pos, u):
             u_neg_interpol.set_yi(u_cache[N:])
             results[mask_else] = u_neg_interpol(mu[mask_else])
         
-        if return_Fourier_error:
-            return np.squeeze(results)[()], Fourier_error
+        if return_Fourier_error or return_tau_arr:
+            return (np.squeeze(results)[()],) + u_outputs[1:]
         else:
             return np.squeeze(results)[()]
 
     return u_interpol
-          
+         
+         
 
 def to_diag_ordered_form(A, sym_offset):
     """
-    Convert a matrix A to the diagonal ordered form required by `scipy.linalg.solve_banded`.
+    Convert a matrix A to the diagonal ordered form required by ``scipy.linalg.solve_banded``.
     We assume that the matrix has the same number of super- and sub-diagonals.
 
     Parameters
@@ -356,6 +386,7 @@ def to_diag_ordered_form(A, sym_offset):
         axis=0,
     )
 
+
     
 def _mathscr_v(tau,                             # Input optical depths
                 l,                              # Layer index of each input optical depth
@@ -371,31 +402,31 @@ def _mathscr_v(tau,                             # Input optical depths
     """Particular solution for isotropic internal sources.
     Refer to Section 3.6.1 of the Comprehensive Documentation.
     It has many seemingly redundant arguments to maximize 
-    precomputation in the `_assemble_intensity_and_fluxes` 
-    and `_solve_for_coeffs` functions which call it.
+    precomputation in the ``_assemble_intensity_and_fluxes`` 
+    and ``_solve_for_coeffs`` functions which call it.
     
     Arguments of _mathscr_v
     |          Variable           |                 Shape                 |
     | --------------------------- | ------------------------------------- |
-    | `tau`                       | `Ntau`                                |
-    | `l`                         | `Ntau`                                |
-    | `Nscoeffs`                  | scalar                                |
-    | `s_poly_coeffs`             | `NLayers x Nscoeffs` or `Nscoeffs`    |
-    | `G`                         | `NLayers<= x NQuad x NQuad`           |
-    | `K`                         | `NLayers<= x NQuad`                   |
-    | `G_inv`                     | `NLayers<= x NQuad x NQuad` or `None` |
-    | `mu_arr`                    | `NQuad`                               |
-    | `is_antiderivative_wrt_tau` | boolean                               |
-    | `autograd_compatible`      | boolean                               |
+    | ``tau``                       | ``Ntau``                                |
+    | ``l``                         | ``Ntau``                                |
+    | ``Nscoeffs``                  | scalar                                |
+    | ``s_poly_coeffs``             | ``NLayers x Nscoeffs`` or ``Nscoeffs``    |
+    | ``G``                         | ``NLayers<= x NQuad x NQuad``           |
+    | ``K``                         | ``NLayers<= x NQuad``                   |
+    | ``G_inv``                     | ``NLayers<= x NQuad x NQuad`` or ``None`` |
+    | ``mu_arr``                    | ``NQuad``                               |
+    | ``is_antiderivative_wrt_tau`` | boolean                               |
+    | ``autograd_compatible``      | boolean                               |
     
     Notable internal variables of _mathscr_v
     |     Variable     |                Shape                | 
     | ---------------- | ----------------------------------- |
-    | i_arr            | `Nscoeffs`                          |
-    | i_arr_repeat     | `Nscoeffs*(Nscoeffs+1)/2`           | Using triangular number formula
-    | j_arr            | `Nscoeffs*(Nscoeffs+1)/2`           | Using triangular number formula
-    | s_poly_coeffs_nj | `NLayers x Nscoeffs*(Nscoeffs+1)/2` |
-    | OUTPUT           | `NQuad x Ntau`                      |
+    | i_arr            | ``Nscoeffs``                          |
+    | i_arr_repeat     | ``Nscoeffs*(Nscoeffs+1)/2``           | Using triangular number formula
+    | j_arr            | ``Nscoeffs*(Nscoeffs+1)/2``           | Using triangular number formula
+    | s_poly_coeffs_nj | ``NLayers x Nscoeffs*(Nscoeffs+1)/2`` |
+    | OUTPUT           | ``NQuad x Ntau``                      |
     """
     n = Nscoeffs - 1
     
@@ -407,9 +438,9 @@ def _mathscr_v(tau,                             # Input optical depths
             Notable internal variables of mathscr_b
             |     Variable     |                 Shape                 |
             | ---------------- | ------------------------------------- |
-            | j_arr            | `i + 1`                               |
-            | s_poly_coeffs_nj | `i + 1`                               |
-            | OUTPUT           | `Nscoeffs x (i + 1) x NQuad`          |
+            | j_arr            | ``i + 1``                               |
+            | s_poly_coeffs_nj | ``i + 1``                               |
+            | OUTPUT           | ``Nscoeffs x (i + 1) x NQuad``          |
             """
         
             j_arr = np.arange(i + 1)
@@ -459,6 +490,7 @@ def _mathscr_v(tau,                             # Input optical depths
         optimize=True,
     )
     
+
 
 def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
     """Performs pointwise comparisons between results from Stamnes' DISORT,

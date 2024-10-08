@@ -103,9 +103,7 @@ def _solve_for_gen_and_part_sols(
         for l in range(NLayers):
             weighted_asso_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, :][ells] * fac
             
-            if np.any(weighted_asso_Leg_coeffs_l > 0) and np.all( # Due to `fac` or the coeffs being zero
-                np.isfinite(asso_leg_term_pos) # We take precautions against overflow and underflow (this shouldn't happen though)
-            ):  
+            if np.any(weighted_asso_Leg_coeffs_l > 0): # There are shortcuts if the coefficients are all zero
                 scaled_omega_l = scaled_omega_arr[l]
                 
                 # Generate D
@@ -213,29 +211,27 @@ def _solve_for_gen_and_part_sols(
         # --------------------------------------------------------------------------------------------------------------------------
 
         
-    if there_is_beam_source:
-        if there_is_iso_source:
-            return (
-                G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
-                K_collect.reshape((NFourier, NLayers, NQuad)),
-                B_collect.reshape((NFourier, NLayers, NQuad)),
-                G_inv_collect_0,
-            )
-        else:
-            return (
-                G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
-                K_collect.reshape((NFourier, NLayers, NQuad)),
-                B_collect.reshape((NFourier, NLayers, NQuad)),
-            )
+    if there_is_beam_source and there_is_iso_source:
+        return (
+            G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
+            K_collect.reshape((NFourier, NLayers, NQuad)),
+            B_collect.reshape((NFourier, NLayers, NQuad)),
+            G_inv_collect_0,
+        )
+    elif there_is_beam_source and not there_is_iso_source:
+        return (
+            G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
+            K_collect.reshape((NFourier, NLayers, NQuad)),
+            B_collect.reshape((NFourier, NLayers, NQuad)),
+        )
+    elif not there_is_beam_source and there_is_iso_source:
+        return (
+            G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
+            K_collect.reshape((NFourier, NLayers, NQuad)),
+            G_inv_collect_0,
+        )
     else:
-        if there_is_iso_source:
-            return (
-                G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
-                K_collect.reshape((NFourier, NLayers, NQuad)),
-                G_inv_collect_0,
-            )
-        else:
-            return (
-                G_collect.reshape((NFourier, NLayers, NQuad, NQuad)), 
-                K_collect.reshape((NFourier, NLayers, NQuad)),
-            )
+        return (
+            G_collect.reshape((NFourier, NLayers, NQuad, NQuad)), 
+            K_collect.reshape((NFourier, NLayers, NQuad)),
+        )
