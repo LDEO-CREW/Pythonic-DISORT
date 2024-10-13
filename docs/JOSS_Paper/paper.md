@@ -182,7 +182,7 @@ It was used in @HP2024 and is being used in at least three ongoing projects:
 on the Two-Stream Approximations, on atmospheric photolysis, 
 and on the topographic mapping of Mars through photoclinometry.
 I will continue to maintain and upgrade `PythonicDISORT`. The latest version: 
-`PythonicDISORT v0.9.2` was released on October 13, 2024.
+`PythonicDISORT v0.9.3` was released on October 13, 2024.
 
 # Acknowledgements
 

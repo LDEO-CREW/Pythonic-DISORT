@@ -9,7 +9,7 @@
 project = 'Pythonic DISORT'
 copyright = '2023, HO Jia Xu Dion'
 author = 'Dion HO Jia Xu'
-release = '0.9.2'
+release = '0.9.3'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
