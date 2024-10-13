@@ -178,7 +178,7 @@ This should expedite research and development for `DISORT` and similar algorithm
 
 `PythonicDISORT` was first released on [PyPI](https://pypi.org/project/PythonicDISORT/) 
 and [GitHub](https://github.com/LDEO-CREW/Pythonic-DISORT) on May 30, 2023.
-It was used in [@HP2024] and is being used in at least three ongoing projects: 
+It was used in @HP2024 and is being used in at least three ongoing projects: 
 on the Two-Stream Approximations, on atmospheric photolysis, 
 and on the topographic mapping of Mars through photoclinometry.
 I will continue to maintain and upgrade `PythonicDISORT`. The latest version: 
