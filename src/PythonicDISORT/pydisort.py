@@ -23,8 +23,8 @@ def pydisort(
     NT_cor=False,
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
-    use_banded_solver_NLayers=13,
-    autograd_compatible = False,
+    use_banded_solver_NLayers=10,
+    autograd_compatible=False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions

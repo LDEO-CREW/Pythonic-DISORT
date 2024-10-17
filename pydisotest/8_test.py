@@ -34,7 +34,7 @@ def test_8a():
     NT_cor = False
     BDRF_Fourier_modes = []
     s_poly_coeffs = np.array([[]])
-    use_banded_solver_NLayers = 13
+    use_banded_solver_NLayers = 10
 
     ####################################################################################################
 
@@ -110,7 +110,7 @@ def test_8b():
     NT_cor = False
     BDRF_Fourier_modes = []
     s_poly_coeffs = np.array([[]])
-    use_banded_solver_NLayers = 13
+    use_banded_solver_NLayers = 10
 
     ####################################################################################################
 
@@ -186,7 +186,7 @@ def test_8c():
     NT_cor = False
     BDRF_Fourier_modes = []
     s_poly_coeffs = np.array([[]])
-    use_banded_solver_NLayers = 13
+    use_banded_solver_NLayers = 10
 
     ####################################################################################################
 
@@ -232,4 +232,46 @@ def test_8c():
     assert np.max(ratio_flux_down_diffuse[diff_flux_down_diffuse > 1e-3], initial=0) < 1e-3
     assert np.max(ratio_flux_down_direct[diff_flux_down_direct > 1e-3], initial=0) < 1e-3
     assert np.max(diff_ratio[diff > 1e-3], initial=0) < 1e-2
+    # --------------------------------------------------------------------------------------------------
+
+def test_8ARTS():
+    print()
+    print("################################################ Test 8ARTS ##################################################")
+    print()
+    from inpydis import src, tau
+
+    nv = len(src)
+    pyth = np.empty((nv, 20, 8))
+
+    for i in range(nv):
+        mu_arr, flux_up, flux_down, u0, u = PythonicDISORT.pydisort(
+            tau_arr=tau[i],
+            omega_arr=tau[i] * 0,
+            NQuad=8,
+            Leg_coeffs_all=np.ones((len(tau[i]), 1)),
+            I0=0.0, 
+            mu0=0.0, 
+            phi0=0.0,
+            NLeg=1,
+            NFourier=1,
+            s_poly_coeffs=src[i] * 1e15,
+        )
+
+        pyth[i] = u(tau[i], 0.0).T
+
+        
+    # Unused optional arguments
+    NLeg = None
+    NFourier = None
+    b_pos = 0
+    b_neg = 0
+    only_flux = False
+    f_arr = 0
+    NT_cor = False
+    BDRF_Fourier_modes = []
+    use_banded_solver_NLayers = 10
+    autograd_compatible = False
+    
+    ARTS_results = np.load("Stamnes_results/8ARTS_test.npy")
+    assert np.max(np.abs(pyth[:, -1, -1] - ARTS_results) / ARTS_results) < 1e-2
     # --------------------------------------------------------------------------------------------------
