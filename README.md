@@ -7,9 +7,9 @@ On the other hand, PythonicDISORT should be easier to install, use, and modify t
 
 PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]) and has its main features: multi-layer solver, 
 delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, direct beam source, isotropic internal source (blackbody emission), 
-Dirichlet boundary conditions (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) for surface reflection, 
-interpolation with respect to polar angle and more.
-In addition, we added a subroutine to calculate actinic fluxes to satisfy a user request, and integration with respect to tau was also added.
+Dirichlet boundary conditions (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) for surface reflection,
+and interpolation with respect to polar angle.
+In addition, we added a subroutine to compute actinic fluxes to satisfy a user request, and integration with respect to optical depth was also added.
 Further feature requests as well as feedback are welcome.
 
 You may contact me, Dion, through dh3065@columbia.edu.
