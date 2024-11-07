@@ -370,14 +370,14 @@ def _assemble_intensity_and_fluxes(
                 + (B_collect_0.T / (-scale_tau / mu0)[None, :])[:, l]
                 * np.exp(-scaled_tau / mu0)[None, :]
             )
-        if is_antiderivative_wrt_tau and not there_is_beam_source:
+        elif is_antiderivative_wrt_tau and not there_is_beam_source:
             u0 = np.einsum(
                 "tij, tj -> it",
                 GC_collect_0[l, :, :],
                 np.exp(exponent) / (scale_tau[:, None] * K_collect_0)[l, :],
                 optimize=True,
             )
-        if not is_antiderivative_wrt_tau and there_is_beam_source:
+        elif not is_antiderivative_wrt_tau and there_is_beam_source:
             u0 = np.einsum(
                 "tij, tj -> it", GC_collect_0[l, :, :], np.exp(exponent), optimize=True
             ) + B_collect_0.T[:, l] * np.exp(-scaled_tau / mu0)[None, :]
@@ -589,6 +589,6 @@ def _assemble_intensity_and_fluxes(
         # --------------------------------------------------------------------------------------------------------------------------
 
     if only_flux:
-        return flux_up, flux_down, u0
+        return flux_up, flux_down, u0, GC_collect_0, K_collect_0
     else:
         return flux_up, flux_down, u0, u

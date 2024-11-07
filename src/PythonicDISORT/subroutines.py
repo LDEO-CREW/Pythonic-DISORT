@@ -299,14 +299,15 @@ def interpolate(u):
 
     Parameters
     ----------
-    u : function
+    u or u0 : function
         Non-interpolated intensity function as given by ``pydisort``.
 
     Returns
     -------
     u_interpol : function
-        Intensity function with arguments ``(mu, tau, phi)`` each of type array or float.
-        Returns an ndarray with axes corresponding to variation with ``mu, tau, phi`` respectively.
+        Intensity function with arguments ``(mu, tau, phi)`` (for ``u``) 
+        or ``(mu, tau)`` (for ``u0``) each of type array or float.
+        Returns an ndarray with axes corresponding to variation with each argument in the same order.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.
         Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the 
@@ -319,37 +320,68 @@ def interpolate(u):
     
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
+    
+    if u.__code__.co_argcount == 5: # Function is u instead of u0
+        def u_interpol(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
+            if not np.all(np.abs(mu) <= 1):
+                raise ValueError("mu values must be between -1 and 1.")
+            
+            mu = np.atleast_1d(mu)
 
-    def u_interpol(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
-        if not np.all(np.abs(mu) <= 1):
-            raise ValueError("mu values must be between -1 and 1.")
-        
-        mu = np.atleast_1d(mu)
+            if return_Fourier_error or return_tau_arr:
+                u_outputs = u(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
+                u_cache = u_outputs[0]
+            else:
+                u_cache = u(tau, phi, is_antiderivative_wrt_tau)
+            
+            results = np.empty((len(mu),) + np.shape(u_cache)[1:])
+            mask_pos = mu > 0
+            mask_else = ~mask_pos
+            
+            if np.any(mask_pos):
+                u_pos_interpol.set_yi(u_cache[:N])
+                results[mask_pos] = u_pos_interpol(mu[mask_pos])
+            if np.any(mask_else):
+                u_neg_interpol.set_yi(u_cache[N:])
+                results[mask_else] = u_neg_interpol(mu[mask_else])
+            
+            if return_Fourier_error or return_tau_arr:
+                return (np.squeeze(results)[()],) + u_outputs[1:]
+            else:
+                return np.squeeze(results)[()]
+    
+    elif u.__code__.co_argcount == 4: # Function is u0 instead of u
+        def u_interpol(mu, tau, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
+            if not np.all(np.abs(mu) <= 1):
+                raise ValueError("mu values must be between -1 and 1.")
+            
+            mu = np.atleast_1d(mu)
 
-        if return_Fourier_error or return_tau_arr:
-            u_outputs = u(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
-            u_cache = u_outputs[0]
-        else:
-            u_cache = u(tau, phi, is_antiderivative_wrt_tau)
-        
-        results = np.empty((len(mu),) + np.shape(u_cache)[1:])
-        mask_pos = mu > 0
-        mask_else = ~mask_pos
-        
-        if np.any(mask_pos):
-            u_pos_interpol.set_yi(u_cache[:N])
-            results[mask_pos] = u_pos_interpol(mu[mask_pos])
-        if np.any(mask_else):
-            u_neg_interpol.set_yi(u_cache[N:])
-            results[mask_else] = u_neg_interpol(mu[mask_else])
-        
-        if return_Fourier_error or return_tau_arr:
-            return (np.squeeze(results)[()],) + u_outputs[1:]
-        else:
-            return np.squeeze(results)[()]
-
+            if return_Fourier_error or return_tau_arr:
+                u_outputs = u(tau, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
+                u_cache = u_outputs[0]
+            else:
+                u_cache = u(tau, is_antiderivative_wrt_tau)
+            
+            results = np.empty((len(mu),) + np.shape(u_cache)[1:])
+            mask_pos = mu > 0
+            mask_else = ~mask_pos
+            
+            if np.any(mask_pos):
+                u_pos_interpol.set_yi(u_cache[:N])
+                results[mask_pos] = u_pos_interpol(mu[mask_pos])
+            if np.any(mask_else):
+                u_neg_interpol.set_yi(u_cache[N:])
+                results[mask_else] = u_neg_interpol(mu[mask_else])
+            
+            if return_Fourier_error or return_tau_arr:
+                return (np.squeeze(results)[()],) + u_outputs[1:]
+            else:
+                return np.squeeze(results)[()]
+    else:
+        raise ValueError("This subroutine can only interpolate u or u0")
+    
     return u_interpol
-         
          
 
 def to_diag_ordered_form(A, sym_offset):
