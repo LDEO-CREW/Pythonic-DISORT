@@ -12,7 +12,7 @@ authors:
     orcid: 0009-0000-5829-5081
     affiliation: "1"
 affiliations:
- - name: Columbia University, Department of Applied Physics and Applied Mathematics, USA
+ - name: Columbia University, Department of Applied Physics and Applied Mathematics, United States of America
    index: 1
 date: 11 February 2024
 bibliography: paper.bib
@@ -71,13 +71,12 @@ Dirichlet boundary conditions.
 The Radiative Transfer Equation (RTE) models the processes of absorption, scattering and emission 
 as electromagnetic radiation propagates through a medium. 
 Consider a plane-parallel, horizontally homogeneous atmosphere with vertical coordinate 
-$\tau$ (optical depth) increasing from top to bottom and directional coordinates $\phi$ for the azimuthal angle (positive is counterclockwise) 
-and $\mu=\cos\theta$ for the polar direction ($\theta$ is the polar angle measured from the surface normal), 
-with $\mu > 0$ pointing up following the convention of [@STWJ1988].
-Given three possible sources: 
-blackbody emission from the atmosphere $s(\tau)$; 
-scattering from a collimated beam of starlight with intensity $I_0$ and incident azimuthal and cosine polar angles $\phi_0, \mu_0$;
-radiation from other atmospheric layers or the Earth's surface which is modeled by Dirichlet boundary conditions,
+$\tau$ (optical depth) increasing from top to bottom, directional coordinates $\phi$ for the azimuthal angle (positive is counterclockwise), 
+and $\mu=\cos\theta$ for the polar direction ($\theta$ is the polar angle measured from the surface normal) 
+with $\mu > 0$ pointing up following the convention of @STWJ1988.
+Given three possible sources, namely blackbody emission from the atmosphere $s(\tau)$, 
+scattering from a collimated beam of starlight with intensity $I_0$ as well as incident azimuthal and cosine polar angles \phi_0 and \mu_0, respectively,
+and radiation from other atmospheric layers or the Earth's surface which is modeled by Dirichlet boundary conditions,
 the diffuse intensity $u(\tau, \mu, \phi)$ propagating in direction $(\mu, \phi)$ 
 is described by the 1D RTE [@Cha1960; @STWJ1988]:
 
@@ -96,12 +95,12 @@ a multi-layer atmosphere with different $\omega$ and $p$ for each layer.
 The RTE is important in many fields of science and engineering,
 for example, in the retrieval of optical properties of the medium from measurements [@TCCGL1999; @MRO/CRISM2008; @TLZWSY2020].
 The gold standard for numerically solving the 1D RTE is the Discrete Ordinate Radiative Transfer 
-package `DISORT` which was coded in FORTRAN 77 and first released in 1988 [@STWJ1988; @Sta1999].
+package `DISORT` which was coded in FORTRAN77 and first released in 1988 [@STWJ1988; @Sta1999].
 It has been widely used, for example by `MODTRAN` [@Ber2014], `Streamer` [@Key1998], and `SBDART` [@Ric1998],
 all of which are comprehensive radiative transfer models that are themselves widely used in atmospheric science,
-and by the three retrieval papers @TCCGL1999; @MRO/CRISM2008; @TLZWSY2020.
+and by the three retrieval papers: @TCCGL1999; @MRO/CRISM2008; @TLZWSY2020.
 `DISORT` implements the Discrete Ordinates Method which has two key steps.
-First, the diffuse intensity function $u$ and phase function $p$ are expanded as the Fourier cosine series and Legendre series respectively:
+First, the diffuse intensity function $u$ and phase function $p$ are expanded as the Fourier cosine series and Legendre series, respectively:
 
 $$
 \begin{aligned}
@@ -110,38 +109,39 @@ p\left(\mu, \phi ; \mu', \phi'\right) = p\left(\cos\gamma\right) &\approx \sum_{
 \end{aligned}
 $$
 
-where $\gamma$ is the scattering angle.
-These address the $\phi'$ integral in (\ref{RTE}) and decompose the problem into solving
+where $\gamma$ is the scattering angle, $g_\ell$ is the $\ell$th Legendre coefficient of the phase function $p$, 
+and $P_\ell$ is the Legendre polynomial of order $\ell$.
+These address the $\phi'$ integral in (\ref{RTE}) and decompose the problem into solving the equation
 
 $$
 \mu \frac{\partial u^m(\tau, \mu)}{\partial \tau}=u^m(\tau, \mu)-\int_{-1}^1 D^m\left(\mu, \mu'\right) u^m\left(\tau, \mu'\right) \mathrm{d} \mu' - Q^m(\tau, \mu) - \delta_{0m}s(\tau)
 $$
 
-for each Fourier mode of $u$. The terms $D^m$ are derived from $p$ 
-and are thus also independent of $\tau$. The second key step is to discretize the 
-$\mu'$ integral using some quadrature scheme. `DISORT` 
-uses the double-Gauss quadrature scheme from @Syk1951. 
+for each Fourier mode of $u$. The $D^m$ terms are derived from $p$ 
+and are thus also independent of $\tau$. The $Q^m$ terms are derived from the direct beam source. 
+The second key step is to discretize the $\mu'$ integral using a quadrature scheme. 
+`DISORT` uses the double-Gauss quadrature scheme from @Syk1951. 
 This results in a system of ordinary differential equations that can be solved using standard methods,
-and post-hoc corrections [@Wis1977; @NT1988] are made to reduce the errors incurred by the truncation of the phase function Legendre series.
+and post-hoc corrections are made to reduce the errors incurred 
+by the truncation of the phase function Legendre series [@Wis1977; @NT1988].
 
 My package `PythonicDISORT` is a Python 3 reimplementation of `DISORT` that replicates 
 most of its functionality while being easier to install, use and modify, 
 though at the cost of computational speed. It has `DISORT`'s main features: 
-multi-layer solver, delta-M scaling, Nakajima-Tanaka (NT) corrections, only flux option, 
+multi-layer solver, delta-$M$ scaling, Nakajima-Tanaka corrections, only flux option, 
 direct beam source, isotropic internal source (blackbody emission), Dirichlet boundary conditions 
-(diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF)
+(diffuse flux boundary sources), Bi-Directional Reflectance Function 
 for surface reflection, as well as additional features like actinic flux computation 
 and integration of the solution functions with respect to optical depth.
 `PythonicDISORT` has been tested against `DISORT` on `DISORT`'s own test problems. While packages 
 that wrap `DISORT` in Python already exist [@CM2020; @Hu2017],
-`PythonicDISORT` is the first time `DISORT`
-has been reimplemented from scratch in Python.
+`PythonicDISORT` is the first reimplementation of `DISORT` from scratch in Python.
 
 # Statement of need
 
 `PythonicDISORT` is not meant to replace `DISORT`. Due to fundamental 
 differences between Python and FORTRAN, `PythonicDISORT`, though quite optimized,
-remains a few times slower than `DISORT`. Thus, projects that
+remains slower than `DISORT`. Thus, projects that
 prioritize computational speed should still use `DISORT`.
 In addition, `PythonicDISORT` currently lacks `DISORT`'s latest features, 
 most notably its pseudo-spherical correction.
@@ -151,16 +151,16 @@ First, it is meant to be a pedagogical and exploratory tool.
 `PythonicDISORT`'s ease of installation and use makes it a low-barrier 
 introduction to Radiative Transfer and Discrete Ordinates Solvers. 
 Even researchers who are experienced in the field may find it useful to experiment 
-with `PythonicDISORT` before deciding whether and how to upscale with `DISORT`.
+with `PythonicDISORT` before upscaling with `DISORT`.
 Installation of `PythonicDISORT` through `pip` should be system agnostic
 as `PythonicDISORT`'s core dependencies are only `NumPy` [@NumPy] and `SciPy` [@SciPy].
 In addition, using `PythonicDISORT` is as simple as calling the Python function `pydisort`. In contrast,
-`DISORT` requires FORTRAN compilers and manual memory allocation, has a lengthy and system dependent
-installation, and each call requires shell script for compilation and execution.
+`DISORT` requires FORTRAN compilers and manual memory allocation, has a lengthy and system-dependent
+installation, and each call requires a shell script for compilation and execution.
 
 Second, `PythonicDISORT` is designed to be modified by users to suit their needs.
-Given that Python is a widely-used high-level language, `PythonicDISORT`'s 
-code should be understandable, at least more so than `DISORT`'s FORTRAN code. 
+Given that Python is a widely used high-level language, `PythonicDISORT`'s 
+code should be accessible to more people than `DISORT`'s FORTRAN implementation.
 Moreover, `PythonicDISORT` comes with a Jupyter Notebook [@JupyterNotebook] -- 
 its [*Comprehensive Documentation*](https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html) --
 that breaks down both the mathematics and code behind the solver. 
