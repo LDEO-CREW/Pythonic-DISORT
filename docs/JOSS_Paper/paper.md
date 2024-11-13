@@ -75,10 +75,10 @@ $\tau$ (optical depth) increasing from top to bottom, directional coordinates $\
 and $\mu=\cos\theta$ for the polar direction ($\theta$ is the polar angle measured from the surface normal) 
 with $\mu > 0$ pointing up following the convention of @STWJ1988.
 Given three possible sources, namely blackbody emission from the atmosphere $s(\tau)$, 
-scattering from a collimated beam of starlight with intensity $I_0$ as well as incident azimuthal and cosine polar angles \phi_0 and \mu_0, respectively,
+scattering from a collimated beam of starlight with intensity $I_0$ as well as incident azimuthal and cosine polar angles $\phi_0$ and $\mu_0$, respectively,
 and radiation from other atmospheric layers or the Earth's surface which is modeled by Dirichlet boundary conditions,
 the diffuse intensity $u(\tau, \mu, \phi)$ propagating in direction $(\mu, \phi)$ 
-is described by the 1D RTE [@Cha1960; @STWJ1988]:
+is described by the 1D RTE [@Cha1960; @STWJ1988]
 
 \begin{align}
 \begin{split}
@@ -100,7 +100,7 @@ It has been widely used, for example by `MODTRAN` [@Ber2014], `Streamer` [@Key19
 all of which are comprehensive radiative transfer models that are themselves widely used in atmospheric science,
 and by the three retrieval papers: @TCCGL1999; @MRO/CRISM2008; @TLZWSY2020.
 `DISORT` implements the Discrete Ordinates Method which has two key steps.
-First, the diffuse intensity function $u$ and phase function $p$ are expanded as the Fourier cosine series and Legendre series, respectively:
+First, the diffuse intensity function $u$ and phase function $p$ are expanded as the Fourier cosine series and Legendre series, respectively,
 
 $$
 \begin{aligned}
@@ -160,7 +160,7 @@ installation, and each call requires a shell script for compilation and executio
 
 Second, `PythonicDISORT` is designed to be modified by users to suit their needs.
 Given that Python is a widely used high-level language, `PythonicDISORT`'s 
-code should be accessible to more people than `DISORT`'s FORTRAN implementation.
+code should be accessible to more people than `DISORT`'s FORTRAN code.
 Moreover, `PythonicDISORT` comes with a Jupyter Notebook [@JupyterNotebook] -- 
 its [*Comprehensive Documentation*](https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html) --
 that breaks down both the mathematics and code behind the solver. 
