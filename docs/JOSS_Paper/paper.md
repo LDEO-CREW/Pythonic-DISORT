@@ -1,5 +1,5 @@
 ---
-title: '`PythonicDISORT`: A Python reimplementation of the Discrete Ordinate Radiative Transfer package `DISORT`'
+title: 'PythonicDISORT: A Python reimplementation of the Discrete Ordinate Radiative Transfer package DISORT'
 tags:
   - Python
   - Radiative Transfer
