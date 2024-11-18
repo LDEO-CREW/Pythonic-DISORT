@@ -1,3 +1,5 @@
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.06442/status.svg)](https://doi.org/10.21105/joss.06442)
+
 # Introduction
 The PythonicDISORT package is a Discrete Ordinates Solver for the (1D) Radiative Transfer Equation 
 in a plane-parallel, horizontally homogeneous atmosphere.
@@ -15,6 +17,8 @@ Further feature requests as well as feedback are welcome.
 You may contact me, Dion, through dh3065@columbia.edu.
 
 The **GitHub repository** is https://github.com/LDEO-CREW/Pythonic-DISORT.
+
+Accompanying Journal of Open Source Software paper: https://joss.theoj.org/papers/10.21105/joss.06442.
 
 # Documentation
 https://pythonic-disort.readthedocs.io/en/latest/
