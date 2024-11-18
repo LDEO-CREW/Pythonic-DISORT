@@ -95,10 +95,10 @@ a multi-layer atmosphere with different $\omega$ and $p$ for each layer.
 The RTE is important in many fields of science and engineering,
 for example, in the retrieval of optical properties of the medium from measurements [@TCCGL1999; @MRO/CRISM2008; @TLZWSY2020].
 The gold standard for numerically solving the 1D RTE is the Discrete Ordinate Radiative Transfer 
-package `DISORT` which was coded in FORTRAN77 and first released in 1988 [@STWJ1988; @Sta1999].
+package `DISORT` which was written in FORTRAN 77 and first released in 1988 [@STWJ1988; @Sta1999].
 It has been widely used, for example by `MODTRAN` [@Ber2014], `Streamer` [@Key1998], and `SBDART` [@Ric1998],
 all of which are comprehensive radiative transfer models that are themselves widely used in atmospheric science,
-and by the three retrieval papers: @TCCGL1999; @MRO/CRISM2008; @TLZWSY2020.
+and by the three retrieval papers: @TCCGL1999, @MRO/CRISM2008, and @TLZWSY2020.
 `DISORT` implements the Discrete Ordinates Method which has two key steps.
 First, the diffuse intensity function $u$ and phase function $p$ are expanded as the Fourier cosine series and Legendre series, respectively,
 
