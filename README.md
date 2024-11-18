@@ -1,3 +1,4 @@
+[![Run PyTests](https://github.com/LDEO-CREW/Pythonic-DISORT/actions/workflows/continuous_integration.yml/badge.svg)](https://github.com/LDEO-CREW/Pythonic-DISORT/actions/workflows/continuous_integration.yml)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.06442/status.svg)](https://doi.org/10.21105/joss.06442)
 
 # Introduction
