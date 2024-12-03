@@ -33,11 +33,20 @@ It is highly recommended that new users read the non-optional parts of sections 
 ## PyTest and examples of how to use PythonicDISORT
 
 Not only are there verification tests in `Pythonic-DISORT.ipynb`, 
-most of the test problems in Stamnes' `disotest.f90` (download DISORT 4.0.99 from http://www.rtatmocn.com/disort/) have also been recreated.
+most of the test problems in Stamnes' `disotest.f90` (download DISORT 4.0.99 from http://www.rtatmocn.com/disort/) have also been recreated and enhanced.
 In these tests, the solutions from PythonicDISORT are compared against solutions 
 from a F2PY-wrapped Stamnes' DISORT (version 4.0.99; wrapper inspired by https://github.com/kconnour/pyRT_DISORT). With PyTest installed, execute the console command `pytest` 
 in the `pydisotest` directory to run these tests. The `pydisotest` directory also contains Jupyter Notebooks to show the implementation of each test.
-These notebooks double up as examples of how to use PythonicDISORT.
+These notebooks double up as examples of how to use PythonicDISORT. The tests which have been implemented are:
+
+* Test Problem 1: Isotropic Scattering
+* Test Problem 2: Rayleigh Scattering, Beam Source
+* Test Problem 3: Henyey-Greenstein Scattering
+* Test Problem 4: Haze-L Scattering, Beam Source
+* Test Problem 5: Cloud C.1 Scattering, Beam Source (Test 5BDRF has Lambertian BDRF with albedo 1)
+* Test Problem 8:  Absorbing/Isotropic-Scattering Medium With Two Computational Layers 
+* Test Problem 9:  General Emitting/Absorbing/Scattering Medium with Every Computational Layer Different
+* Test Problem 11: Single-Layer vs. Multiple Layers (no corresponding Jupyter Notebook)
 
 # Installation
 
