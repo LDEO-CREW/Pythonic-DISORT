@@ -68,6 +68,8 @@ def pydisort(
         Do NOT compute the intensity function?
     f_arr : optional, array or float
         Fractional scattering into peak for each atmospheric layer.
+        We recommend setting ``f_arr`` to ``Leg_coeffs_all[NQuad]``, 
+        or ``Leg_coeffs_all[:, NQuad]`` for a multi-layer atmosphere.
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
     BDRF_Fourier_modes : optional, list
