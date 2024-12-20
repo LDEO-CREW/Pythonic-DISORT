@@ -82,7 +82,7 @@ def pydisort(
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
     autograd_compatible : optional, bool
         If ``True``, the autograd package: https://github.com/HIPS/autograd can be used to compute
-        the tau-derivatives of the function outputs but ``pydisort`` will be less efficient.  
+        the tau-derivatives of the output functions but ``pydisort`` will be less efficient.  
 
     Returns
     -------
@@ -299,8 +299,8 @@ def pydisort(
     mu_arr = np.concatenate([mu_arr_pos, -mu_arr_pos])
     M_inv = 1 / mu_arr_pos
     
-    # We do not allow mu0 to equal a quadrature / computational angle
-    if np.any(np.abs(mu_arr_pos - mu0) < 1e-8):
+    # We do not allow mu0 to equal a quadrature / computational angle if `NT_cor = True`
+    if NT_cor and np.any(np.abs(mu_arr_pos - mu0) < 1e-8):
         raise ValueError("Some quadrature angles come too close to `mu0`. Perturb `NQuad` or `mu0` to rectify this error.")
     # --------------------------------------------------------------------------------------------------------------------------
 
