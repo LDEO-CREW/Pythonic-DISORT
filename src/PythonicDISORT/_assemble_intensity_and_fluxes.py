@@ -16,10 +16,11 @@ def _assemble_intensity_and_fluxes(
     is_atmos_multilayered,              # Is the atmosphere multilayered?
     weighted_scaled_Leg_coeffs,         # Weighted and delta-scaled Legendre coefficients
     BDRF_Fourier_modes,                 # BDRF Fourier modes
-    mu0, I0, I0_orig, phi0,             # Properties of direct beam. If I0 was rescaled to 1, I0_orig is the original I0
+    mu0, I0, rescale_factor, phi0,             # Properties of direct beam. If I0 was rescaled to 1, rescale_factor is the original I0
     there_is_beam_source,               # Is there a beam source?
     b_pos, b_neg,                       # Dirichlet BCs
-    b_pos_is_scalar, b_neg_is_scalar,   # Is each Dirichlet BCs scalar (isotropic)?
+    b_pos_is_scalar, b_neg_is_scalar,   # Is each Dirichlet BCs scalar and so isotropic?
+    b_pos_is_vector, b_neg_is_vector,   # Is each Dirichlet BCs vector?
     Nscoeffs,                           # Number of isotropic source polynomial coefficients
     s_poly_coeffs,                      # Polynomial coefficients of isotropic source
     there_is_iso_source,                # Is there an isotropic source?
@@ -60,13 +61,15 @@ def _assemble_intensity_and_fluxes(
     | `BDRF_Fourier_modes`           | `NBDRF`                            |
     | `mu0`                          | scalar                             |
     | `I0`                           | scalar                             |
-    | `I0_orig`                      | scalar                             |
+    | `rescale_factor`               | scalar                             |
     | `phi0`                         | scalar                             |
     | `there_is_beam_source`         | scalar                             |
     | `b_pos`                        | `NQuad/2 x NFourier` or scalar     |
     | `b_neg`                        | `NQuad/2 x NFourier` or scalar     |
     | `b_pos_is_scalar`              | boolean                            |
-    | `b_neg_is_scalar`              | boolean                            |        
+    | `b_neg_is_scalar`              | boolean                            |  
+    | `b_pos_is_vector`              | boolean                            |
+    | `b_neg_is_vector`              | boolean                            |     
     | `Nscoeffs`                     | scalar                             |    
     | `s_poly_coeffs`                | `NLayers x Nscoeffs` or `Nscoeffs` |
     | `there_is_iso_source`          | boolean                            |
@@ -147,6 +150,7 @@ def _assemble_intensity_and_fluxes(
         there_is_beam_source,
         b_pos, b_neg,
         b_pos_is_scalar, b_neg_is_scalar,
+        b_pos_is_vector, b_neg_is_vector,
         Nscoeffs,
         s_poly_coeffs,
         there_is_iso_source,
@@ -173,7 +177,7 @@ def _assemble_intensity_and_fluxes(
             """
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
-            if np.all(tau < 0) or np.all(tau > tau_arr[-1]):
+            if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
                 raise ValueError("tau input outside the tau range specified for the atmosphere (check `tau_arr`).")
             
             # Atmospheric layer indices
@@ -300,14 +304,14 @@ def _assemble_intensity_and_fluxes(
                 )
                 
                 if return_tau_arr:
-                    return I0_orig * np.squeeze(u), Fourier_error, tau_arr
+                    return rescale_factor * np.squeeze(u), Fourier_error, tau_arr
                 else:
-                    return I0_orig * np.squeeze(u), Fourier_error
+                    return rescale_factor * np.squeeze(u), Fourier_error
             else:
                 if return_tau_arr:
-                    return I0_orig * np.squeeze(u), tau_arr
+                    return rescale_factor * np.squeeze(u), tau_arr
                 else:
-                    return I0_orig * np.squeeze(u)
+                    return rescale_factor * np.squeeze(u)
         # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct u0
@@ -323,7 +327,7 @@ def _assemble_intensity_and_fluxes(
         to switch to an antiderivative of the function with respect to `tau`.
         """
         tau = np.atleast_1d(tau)
-        if np.all(tau < 0) or np.all(tau > tau_arr[-1]):
+        if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
             raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
         
         # Atmospheric layer indices
@@ -402,13 +406,13 @@ def _assemble_intensity_and_fluxes(
             u0 = u0 + _mathscr_v_contribution
             
         if return_tau_arr and _return_act_dscale_for_reclass:
-            return I0_orig * np.squeeze(u0), tau_arr, act_dscale_reclassification
+            return rescale_factor * np.squeeze(u0), tau_arr, act_dscale_reclassification
         elif return_tau_arr and not _return_act_dscale_for_reclass:
-            return I0_orig * np.squeeze(u0), tau_arr
+            return rescale_factor * np.squeeze(u0), tau_arr
         elif not return_tau_arr and _return_act_dscale_for_reclass:
-            return I0_orig * np.squeeze(u0), act_dscale_reclassification
+            return rescale_factor * np.squeeze(u0), act_dscale_reclassification
         else:
-            return I0_orig * np.squeeze(u0)
+            return rescale_factor * np.squeeze(u0)
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct the flux functions (refer to Section 3.8 of the Comprehensive Documentation)
@@ -428,7 +432,7 @@ def _assemble_intensity_and_fluxes(
         to switch to an antiderivative of the function with respect to `tau`.
         """
         tau = np.atleast_1d(tau)
-        if np.all(tau < 0) or np.all(tau > tau_arr[-1]):
+        if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
             raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
         
         # Atmospheric layer indices
@@ -495,9 +499,9 @@ def _assemble_intensity_and_fluxes(
         flux = 2 * pi * (mu_arr_pos * W) @ u0_pos
         
         if return_tau_arr:
-            return I0_orig * np.squeeze(flux)[()], tau_arr
+            return rescale_factor * np.squeeze(flux)[()], tau_arr
         else:
-            return I0_orig * np.squeeze(flux)[()]
+            return rescale_factor * np.squeeze(flux)[()]
 
 
     def flux_down(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False):
@@ -509,7 +513,7 @@ def _assemble_intensity_and_fluxes(
         to switch to an antiderivative of the function with respect to `tau`.
         """
         tau = np.atleast_1d(tau)
-        if np.all(tau < 0) or np.all(tau > tau_arr[-1]):
+        if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
             raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
 
         # Atmospheric layer indices
@@ -577,18 +581,18 @@ def _assemble_intensity_and_fluxes(
         
         if return_tau_arr:
             return (
-                I0_orig * np.squeeze(diffuse_flux)[()],
-                I0_orig * I0 * np.squeeze(direct_beam)[()],
+                rescale_factor * np.squeeze(diffuse_flux)[()],
+                rescale_factor * np.squeeze(direct_beam)[()],
                 tau_arr
             )
         else:
             return (
-                I0_orig * np.squeeze(diffuse_flux)[()],
-                I0_orig * I0 * np.squeeze(direct_beam)[()],
+                rescale_factor * np.squeeze(diffuse_flux)[()],
+                rescale_factor * np.squeeze(direct_beam)[()],
             )
         # --------------------------------------------------------------------------------------------------------------------------
 
     if only_flux:
-        return flux_up, flux_down, u0
+        return flux_up, flux_down, u0#, GC_collect_0, K_collect_0
     else:
         return flux_up, flux_down, u0, u

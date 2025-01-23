@@ -27,7 +27,7 @@ def test_3a():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False
@@ -103,7 +103,7 @@ def test_3b():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False
@@ -179,7 +179,7 @@ def test_3multilayer():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False

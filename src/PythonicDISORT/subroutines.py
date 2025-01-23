@@ -3,6 +3,7 @@ import scipy as sc
 from math import pi
 
 
+
 def transform_interval(arr, c, d, a, b):
     """Affine transformation of an array from interval [a, b] to [c, d].
 
@@ -292,6 +293,192 @@ def generate_diff_act_flux_funcs(u0):
 
 
 
+def Planck(T, WVNM):
+    """The Planck function for intensity leaving a blackbody surface,
+    with units W / m^2 to match Stamnes' DISORT.
+
+    Parameters
+    ----------
+    T : float or 1darray
+        Temperatures in kelvin.
+    WVNM : float
+        Wavenumber with units m^-1.
+
+    Returns
+    -------
+    float or 1darray
+        Emitted power per unit area from a blackbody surface with units W / m^2.
+
+    """
+    T = np.atleast_1d(T)
+    not_zeros_ind = T != 0
+    
+    results = np.zeros(len(T))
+    results[~not_zeros_ind] = 0
+    
+    # Coded in this way to prevent overflow
+    expterm = np.exp(-100 * sc.constants.h * sc.constants.c * WVNM / (sc.constants.k * T[not_zeros_ind]))
+    results[not_zeros_ind] = (2e8 * sc.constants.h * sc.constants.c**2 * WVNM**3 * expterm) / (1 - expterm)
+        
+    return np.squeeze(results)[()]
+    
+    
+
+def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
+    """Compute blackbody contribution to the BCs (``b_pos`` or ``b_neg``).
+    This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT.
+    Users will have to manually adjust emissivities but ``PythonicDISORT.subroutines.generate_emissivity_from_BDRF``
+    can help with that.
+    
+    Parameters
+    ----------
+    T : float or 1darray
+        Temperatures in kelvin.
+    WVNMLO : float
+        Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+    WVNMHI : float
+        Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+    **kwargs
+        Keyword arguments to pass to ``scipy.integrate.quad_vec``.
+        
+    """ 
+    return np.squeeze(sc.integrate.quad_vec(lambda WVNM: Planck(T, WVNM), WVNMLO, WVNMHI, **kwargs)[0])
+
+
+
+def linear_spline_coefficients(x, y, check_inputs=True):
+    """Compute the coefficients of a linear spline interpolation.
+
+    Parameters
+    ----------
+    x : 1darray
+        Array of `x` data points.
+    y : 1darray
+        Array of `y` data points.
+
+    Returns
+    -------
+    2darray
+        The coefficients with axes (segment, ascending polynomial order), as required by ``pydisort``.
+
+    """
+    # Input checks
+    if check_inputs:
+        if not len(x) > 1:
+            raise ValueError("At least 2 points are required.")
+        if not len(x) == len(y):
+            raise ValueError("The number of x and y points must be equal.")
+        if not np.all(np.diff(x) > 0):
+            raise ValueError("The x values must be sorted in ascending order.")
+    
+    slopes = (y[1:] - y[:-1]) / (x[1:] - x[:-1])
+    intercepts = y[:-1] - slopes * x[:-1]
+    
+    return np.array((intercepts, slopes)).T
+
+
+
+def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
+    """Generate ``s_poly_coeffs`` as required by ``pydisort``.
+    This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT,
+    however, users will have to manually adjust emissivities.
+    
+    Parameters
+    ----------
+    tau_arr : array or float
+        Optical depth of the lower boundary of each atmospheric layer.
+    TEMPER : 1darray
+        Temperature in kelvin at each boundary / interface from top to bottom.
+        This variable is identically named in Stamnes' DISORT.
+    WVNMLO : float
+        Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+    WVNMHI : float
+        Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+    **kwargs
+        Keyword arguments to pass to ``scipy.integrate.quad_vec``.
+        
+    Returns
+    -------
+    s_poly_coeffs : 2darray
+        Polynomial coefficients of isotropic internal sources.
+        Each row pertains to an atmospheric layer (from top to bottom).
+        The coefficients are arranged from lowest order term to highest.
+
+    """
+    tau_arr = np.atleast_1d(tau_arr)
+    if not len(TEMPER) == len(tau_arr) + 1:
+        raise ValueError("Missing temperature specification at some boundaries / interfaces.")
+    
+    tau_arr_with_0 = np.append(0, tau_arr)
+    blackbody_emission_at_each_boundary = sc.integrate.quad_vec(lambda WVNM: Planck(TEMPER, WVNM), WVNMLO, WVNMHI, **kwargs)[0]
+    
+    return linear_spline_coefficients(tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False)
+
+
+
+def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
+    """Use Kirchoff's law of thermal radiation to determine the (directional) emissivity 
+    of the surface given the zeroth Fourier mode of the Bi-Directional Reflectance Function (BDRF).
+    This computation is internal to Stamnes' DISORT.
+    This function supplements ``PythonicDISORT.subroutines.blackbody_contrib_to_BCs``.
+    
+    Parameters
+    ----------
+    N : int
+        Number of upper hemisphere quadrature nodes. Equal to ``NQuad // 2``.
+    zeroth_BDRF_Fourier_mode : function
+        Zeroth BDRF Fourier mode with arguments ``mu, -mu_p`` of type array
+        and which output has the same dimensions as the outer product of the two arrays.
+
+    Returns
+    -------
+    1darray
+        Emissivity for the blackbody contribution to the lower boundary source `b_neg``.
+    """
+    mu_arr_pos, W = Gauss_Legendre_quad(N)
+    return 1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos) * mu_arr_pos[None, :] @ W
+
+
+
+def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
+    """If the same BDRF, number of streams and ``mu0`` will be used repeatedly,
+    consider using this function to cache ``BDRF_Fourier_modes`` and instead input
+    ``cached_BDRF_Fourier_modes`` into ``pydisort``.
+
+    Parameters
+    ----------
+    N : int
+        Number of upper hemisphere quadrature nodes. Equal to ``NQuad // 2``.
+    mu0 : float
+        Cosine of polar angle of the incident beam.
+    BDRF_Fourier_modes : list of functions
+        BDRF Fourier modes, each a function with arguments ``mu, -mu_p`` of type array
+        and which output has the same dimensions as the outer product of the two arrays.
+
+    Returns
+    -------
+    cached_BDRF_Fourier_modes : list of functions
+        Cached BDRF Fourier modes, each a function with arguments ``mu, -mu_p`` of type array
+        and which output has the same dimensions as the outer product of the two arrays.
+    """
+    NBDRF = len(BDRF_Fourier_modes)
+    mu_arr_pos = Gauss_Legendre_quad(N)[0]
+
+    BDRF_Fourier_modes_evaluated = [
+        BDRF_Fourier_modes[m](mu_arr_pos, np.append(mu_arr_pos, mu0)) for m in range(NBDRF)
+    ]
+    cached_BDRF_Fourier_modes = [
+        (
+            lambda mu, neg_mup, m=m: BDRF_Fourier_modes_evaluated[m][:, [-1]]
+            if len(neg_mup) == 1
+            else BDRF_Fourier_modes_evaluated[m][:, :-1]
+        )
+        for m in range(NBDRF)
+    ]
+    return cached_BDRF_Fourier_modes
+
+
+
 def interpolate(u):
     """Polynomial (Barycentric) interpolation with respect to mu. The output 
     is a function that is continuous and variable in all three arguments: mu, tau and phi.
@@ -384,6 +571,7 @@ def interpolate(u):
     return u_interpol
          
 
+
 def to_diag_ordered_form(A, sym_offset):
     """
     Convert a matrix A to the diagonal ordered form required by ``scipy.linalg.solve_banded``.
@@ -417,7 +605,6 @@ def to_diag_ordered_form(A, sym_offset):
         ],
         axis=0,
     )
-
 
     
 def _mathscr_v(tau,                             # Input optical depths
@@ -524,20 +711,22 @@ def _mathscr_v(tau,                             # Input optical depths
     
 
 
-def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
+def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):
     """Performs pointwise comparisons between results from Stamnes' DISORT,
     which are stored in .npz files, against results from PythonicDISORT. Used in our PyTests.
 
     """
     # Load saved results from Stamnes' DISORT
-    uu = results["uu"]
     flup = results["flup"]
     rfldn = results["rfldn"]
     rfldir = results["rfldir"]
+    if u != None:
+        uu = results["uu"]
 
     # Load comparison points
     tau_test_arr = results["tau_test_arr"]
-    phi_arr = results["phi_arr"]
+    if u != None:
+        phi_arr = results["phi_arr"]
 
     # Perform and print the comparisons
     # --------------------------------------------------------------------------------------------------
@@ -588,35 +777,46 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u):
         np.max(ratio_flux_down_direct),
     )
     print()
-
-    # Intensity
-    diff = np.abs(uu - u(tau_test_arr, phi_arr)[reorder_mu])[mu_to_compare]
-    diff_ratio = np.divide(
-        diff,
-        uu[mu_to_compare],
-        out=np.zeros_like(diff),
-        where=uu[mu_to_compare] > 1e-8,
-    )
-    max_diff_tau_index = np.argmax(np.max(np.max(diff, axis=0), axis=1))
-    max_ratio_tau_index = np.argmax(np.max(np.max(diff_ratio, axis=0), axis=1))
     
-    diff_tau_pt = tau_test_arr[max_diff_tau_index]
-    ratio_tau_pt = tau_test_arr[max_ratio_tau_index]
-    print("Intensities")
-    print()
-    print("At tau = " + str(diff_tau_pt))
-    print("Max pointwise difference =", np.max(diff[:, max_diff_tau_index, :]))
-    print("At tau = " + str(ratio_tau_pt))
-    print("Max pointwise difference ratio =", np.max(diff_ratio[:, max_ratio_tau_index, :]))
-    print()
+    if u != None:
+        # Intensity
+        diff = np.abs(uu - u(tau_test_arr, phi_arr)[reorder_mu])[mu_to_compare]
+        diff_ratio = np.divide(
+            diff,
+            uu[mu_to_compare],
+            out=np.zeros_like(diff),
+            where=uu[mu_to_compare] > 1e-8,
+        )
+        max_diff_tau_index = np.argmax(np.max(np.max(diff, axis=0), axis=1))
+        max_ratio_tau_index = np.argmax(np.max(np.max(diff_ratio, axis=0), axis=1))
+        
+        diff_tau_pt = tau_test_arr[max_diff_tau_index]
+        ratio_tau_pt = tau_test_arr[max_ratio_tau_index]
+        print("Intensities")
+        print()
+        print("At tau = " + str(diff_tau_pt))
+        print("Max pointwise difference =", np.max(diff[:, max_diff_tau_index, :]))
+        print("At tau = " + str(ratio_tau_pt))
+        print("Max pointwise difference ratio =", np.max(diff_ratio[:, max_ratio_tau_index, :]))
+        print()
 
-    return (
-        diff_flux_up,
-        ratio_flux_up,
-        diff_flux_down_diffuse,
-        ratio_flux_down_diffuse,
-        diff_flux_down_direct,
-        ratio_flux_down_direct,
-        diff,
-        diff_ratio,
-    )
+        return (
+            diff_flux_up,
+            ratio_flux_up,
+            diff_flux_down_diffuse,
+            ratio_flux_down_diffuse,
+            diff_flux_down_direct,
+            ratio_flux_down_direct,
+            diff,
+            diff_ratio,
+        )
+    
+    else:
+        return (
+            diff_flux_up,
+            ratio_flux_up,
+            diff_flux_down_diffuse,
+            ratio_flux_down_diffuse,
+            diff_flux_down_direct,
+            ratio_flux_down_direct,
+        )

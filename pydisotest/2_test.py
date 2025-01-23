@@ -27,7 +27,7 @@ def test_2a():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False
@@ -102,7 +102,7 @@ def test_2b():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False
@@ -178,7 +178,7 @@ def test_2c():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False
@@ -254,7 +254,7 @@ def test_2d():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False

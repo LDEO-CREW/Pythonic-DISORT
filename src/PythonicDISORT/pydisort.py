@@ -47,7 +47,7 @@ def pydisort(
         Number of ``mu`` quadrature nodes.
     Leg_coeffs_all : 2darray
         All available unweighted phase function Legendre coefficients.
-        Each row of coefficients pertain to an atmospheric layer.
+        Each row pertains to an atmospheric layer (from top to bottom).
         Each coefficient should be between 0 and 1 inclusive.
     mu0 : float
         Cosine of polar angle of the incident beam.
@@ -62,21 +62,25 @@ def pydisort(
         Number of Fourier modes to use to construct the intensity function.
     b_pos : optional, 2darray or float
         Dirichlet boundary condition for the upward direction.
+        Each column pertains to a Fourier mode (ascending order).
     b_neg : optional, 2darray or float
         Dirichlet boundary condition for the downward direction.
+        Each column pertains to a Fourier mode (ascending order).
     only_flux : optional, bool
         Do NOT compute the intensity function?
     f_arr : optional, array or float
         Fractional scattering into peak for each atmospheric layer.
+        Each row pertains to an atmospheric layer (from top to bottom).
         We recommend setting ``f_arr`` to ``Leg_coeffs_all[NQuad]``, 
         or ``Leg_coeffs_all[:, NQuad]`` for a multi-layer atmosphere.
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
-    BDRF_Fourier_modes : optional, list
+    BDRF_Fourier_modes : optional, list of functions
         BDRF Fourier modes, each a function with arguments ``mu, -mu_p`` of type array
         and which output has the same dimensions as the outer product of the two arrays.
     s_poly_coeffs : optional, array
         Polynomial coefficients of isotropic internal sources.
+        Each row pertains to an atmospheric layer (from top to bottom).
         Arrange coefficients from lowest order term to highest.
     use_banded_solver_NLayers : optional, int
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
@@ -149,7 +153,7 @@ def pydisort(
     Notable internal variables of pydisort
     |          Variable            |     Type / Shape     |
     | ---------------------------- | -------------------- |
-    | `I0_orig`                    | scalar               |
+    | `rescale_factor`             | scalar               |
     | `thickness_arr`              | `NLayers`            |
     | `weighted_Leg_coeffs_all`    | `NLayers x NLeg_all` |
     | `Leg_coeffs`                 | `NLayers x NLeg`     |
@@ -188,7 +192,9 @@ def pydisort(
     # --------------------------------------------------------------------------------------------------------------------------
     if NLeg is None:
         NLeg = NQuad
-    if NFourier is None:
+    if only_flux:
+        NFourier = 1 # We only need to solve for the 0th Fourier mode to compute the flux
+    elif NFourier is None:
         NFourier = NQuad
     if np.all(b_pos == 0):
         b_pos = 0
@@ -201,6 +207,8 @@ def pydisort(
     NLayers = len(tau_arr)
     b_pos_is_scalar = False
     b_neg_is_scalar = False
+    b_pos_is_vector = False
+    b_neg_is_vector = False
     thickness_arr = np.append(tau_arr[0], np.diff(tau_arr))
     NLeg_all = np.shape(Leg_coeffs_all)[1]
     N = NQuad // 2
@@ -213,9 +221,9 @@ def pydisort(
     # --------------------------------------------------------------------------------------------------------------------------
     # Optical depths and thickness must be positive
     if not np.all(tau_arr > 0):
-        raise ValueError("tau values cannot be negative.")
+        raise ValueError("tau values cannot be non-positive.")
     if not np.all(thickness_arr > 0):
-        raise ValueError("Layer thickness cannot be negative.")
+        raise ValueError("Layer thickness cannot be non-positive.")
     # Single-scattering albedo must be between 0 and 1, excluding 1
     if not (np.all(omega_arr >= 0) and np.all(omega_arr < 1)):
         raise ValueError("Single-scattering albedo must be between 0 and 1, excluding 1.") 
@@ -223,12 +231,10 @@ def pydisort(
     # The user must supply at least as many phase function Legendre coefficients as intended for use
     if not NLeg > 0:
         raise ValueError("The number of phase function Legendre coefficients must be positive.") 
-    if not np.all(Leg_coeffs_all[:, 0] == 1):
+    if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
         raise ValueError("The first phase function Legendre coefficient must equal 1.") 
     if not (np.all(0 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)):
         raise ValueError("The phase function Legendre coefficients must all be between 0 and 1.") 
-    if not np.all(np.array([f.__code__.co_argcount for f in BDRF_Fourier_modes]) == 2):
-        raise ValueError("Some functions in the list `BDRF_Fourier_modes` are of the wrong form.")
     if not NLeg <= NLeg_all:
         raise ValueError("`NLeg` cannot be larger than the number of phase function Legendre coefficients provided.")
     # Ensure that the first dimension of the following inputs corresponds to the number of layers
@@ -255,7 +261,7 @@ def pydisort(
     if not NLeg <= NQuad:
         raise ValueError("There should be more streams than the number of phase function Legendre coefficients used.")
     # We require principal angles and a downward incident beam
-    if not I0 >= 0:
+    if I0 < 0:
         raise ValueError("The incident beam must have positive intensity.")
     if there_is_beam_source:
         if not 0 < mu0 and mu0 <= 1:
@@ -265,12 +271,16 @@ def pydisort(
     # Ensure that the BC inputs are of the correct shape
     if len(np.atleast_1d(b_pos)) == 1:
         b_pos_is_scalar = True
+    elif len(b_pos) == N:
+        b_pos_is_vector = True
     elif not np.shape(b_pos) == (N, NFourier):
-        raise ValueError("The shape of the bottom of atmosphere boundary conditions must equal (NQuad // 2, NFourier).")
+        raise ValueError("The shape of the bottom boundary condition is incorrect.")
     if len(np.atleast_1d(b_neg)) == 1:
         b_neg_is_scalar = True
+    elif len(b_neg) == N:
+        b_neg_is_vector = True
     elif not np.shape(b_neg) == (N, NFourier):
-        raise ValueError("The shape of the top of atmosphere boundary conditions must equal (NQuad // 2, NFourier).")
+        raise ValueError("The shape of the top boundary condition is incorrect.")
     # The fractional scattering must be between 0 and 1
     if not (np.all(0 <= f_arr) and np.all(f_arr <= 1)):
         raise ValueError("The fractional scattering must be between 0 and 1.")
@@ -285,11 +295,17 @@ def pydisort(
     weighted_Leg_coeffs_all = (2 * np.arange(NLeg_all) + 1) * Leg_coeffs_all
     Leg_coeffs = Leg_coeffs_all[:, :NLeg]
     # The following is explained in Section 1.4 of the Comprehensive Documentation
-    if (b_pos_is_scalar and b_pos == 0) and (b_neg_is_scalar and b_neg == 0) and not there_is_iso_source and there_is_beam_source:
-        I0_orig = I0
-        I0 = 1
+    if there_is_iso_source:
+        rescale_factor = np.max((I0, np.max(b_pos), np.max(b_neg), s_poly_coeffs[-1, :] @ (tau_arr[-1] ** np.arange(Nscoeffs)), s_poly_coeffs[0, 0]))
+        I0 = (I0 / rescale_factor).copy()
+        b_pos = (b_pos / rescale_factor).copy()
+        b_neg = (b_neg / rescale_factor).copy()
+        s_poly_coeffs = (s_poly_coeffs / rescale_factor).copy()
     else:
-        I0_orig = 1
+        rescale_factor = np.max((I0, np.max(b_pos), np.max(b_neg)))
+        I0 = (I0 / rescale_factor).copy()
+        b_pos = (b_pos / rescale_factor).copy()
+        b_neg = (b_neg / rescale_factor).copy()
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Generation of "double-Gauss" quadrature weights and points (refer to Section 3.4 of the Comprehensive Documentation)
@@ -340,10 +356,11 @@ def pydisort(
             is_atmos_multilayered,
             weighted_scaled_Leg_coeffs,
             BDRF_Fourier_modes,
-            mu0, I0, I0_orig, phi0,
+            mu0, I0, rescale_factor, phi0,
             there_is_beam_source,
             b_pos, b_neg,
             b_pos_is_scalar, b_neg_is_scalar,
+            b_pos_is_vector, b_neg_is_vector,
             Nscoeffs,
             s_poly_coeffs,
             there_is_iso_source,
@@ -642,17 +659,15 @@ def pydisort(
             if return_Fourier_error or return_tau_arr:
                 u_star_outputs = u_star(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
                 return (
-                    u_star_outputs[0] + I0_orig * np.squeeze(NT_corrections),
+                    u_star_outputs[0] + rescale_factor * np.squeeze(NT_corrections),
                 ) + u_star_outputs[1:]
             else:
-                return u_star(tau, phi, is_antiderivative_wrt_tau) + I0_orig * np.squeeze(NT_corrections)
+                return u_star(tau, phi, is_antiderivative_wrt_tau) + rescale_factor * np.squeeze(NT_corrections)
         # --------------------------------------------------------------------------------------------------------------------------
 
         return mu_arr, flux_up, flux_down, u0, u_corrected
         
     else:
-        if only_flux:
-            NFourier = 1 # We only need to solve for the 0th Fourier mode to compute the flux
         return (mu_arr,) + _assemble_intensity_and_fluxes(
             scaled_omega_arr,
             tau_arr,
@@ -664,10 +679,11 @@ def pydisort(
             is_atmos_multilayered,
             weighted_scaled_Leg_coeffs,
             BDRF_Fourier_modes,
-            mu0, I0, I0_orig, phi0,
+            mu0, I0, rescale_factor, phi0,
             there_is_beam_source,
             b_pos, b_neg,
             b_pos_is_scalar, b_neg_is_scalar,
+            b_pos_is_vector, b_neg_is_vector,
             Nscoeffs,
             s_poly_coeffs,
             there_is_iso_source,

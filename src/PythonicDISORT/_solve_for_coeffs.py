@@ -16,13 +16,14 @@ def _solve_for_coeffs(
     scaled_tau_arr_with_0,                  # Delta-scaled lower boundary of layers with 0 inserted in front
     mu_arr, mu_arr_pos, mu_arr_pos_times_W, # Quadrature nodes for 1) both 2) upper hemispheres; 3) upper hemisphere quadrature nodes times weights
     N, NQuad,                               # Number of 1) upper 2) both hemispheres quadrature nodes
-    NLayers, NBDRF,                         # Number of 1) intensity Fourier modes; 2) layers
+    NLayers, NBDRF,                         # Number of 1) layers; 2) BDRF Fourier modes
     is_atmos_multilayered,                  # Is the atmosphere multilayered?
     BDRF_Fourier_modes,                     # BDRF Fourier modes
     mu0, I0,                                # Properties of direct beam
     there_is_beam_source,                   # Is there a beam source?
     b_pos, b_neg,                           # Dirichlet BCs
-    b_pos_is_scalar, b_neg_is_scalar,       # Is each Dirichlet BCs scalar (isotropic)?
+    b_pos_is_scalar, b_neg_is_scalar,       # Is each Dirichlet BCs scalar and so isotropic?
+    b_pos_is_vector, b_neg_is_vector,       # Is each Dirichlet BCs vector?
     Nscoeffs,                               # Number of isotropic source polynomial coefficients
     s_poly_coeffs,                          # Polynomial coefficients of isotropic source           
     there_is_iso_source,                    # Is there an isotropic source?
@@ -63,6 +64,8 @@ def _solve_for_coeffs(
     | `b_neg`                        | `NQuad/2 x NFourier` or scalar         |
     | `b_pos_is_scalar`              | boolean                                |
     | `b_neg_is_scalar`              | boolean                                |
+    | `b_pos_is_vector`              | boolean                                |
+    | `b_neg_is_vector`              | boolean                                |
     | `Nscoeffs`                     | scalar                                 |
     | `s_poly_coeffs`                | `NLayers x Nscoeffs` or `Nscoeffs`     |
     | `there_is_iso_source`          | boolean                                |
@@ -97,12 +100,12 @@ def _solve_for_coeffs(
         # Just for this part, refer to Section 3.4.2 of the Comprehensive Documentation 
         # --------------------------------------------------------------------------------------------------------------------------
         if BDRF_bool:
-            mathscr_D_neg = (1 + m_equals_0 * 1) * BDRF_Fourier_modes[m](mu_arr_pos, -mu_arr_pos)
+            mathscr_D_neg = (1 + m_equals_0 * 1) * BDRF_Fourier_modes[m](mu_arr_pos, mu_arr_pos)
             R = mathscr_D_neg * mu_arr_pos_times_W[None, :]
 
             if there_is_beam_source:
                 mathscr_X_pos = (mu0 * I0 / pi) * BDRF_Fourier_modes[m](
-                    mu_arr_pos, -np.array([mu0])
+                    mu_arr_pos, np.array([mu0])
                 )[:, 0]
         # --------------------------------------------------------------------------------------------------------------------------
     
@@ -111,14 +114,18 @@ def _solve_for_coeffs(
         # Ensure the BCs are of the correct shape
         if b_pos_is_scalar and m_equals_0:
             b_pos_m = np.full(N, b_pos)
-        elif b_pos_is_scalar and not m_equals_0:
+        elif b_pos_is_vector and m_equals_0:
+            b_pos_m = b_pos
+        elif (b_pos_is_scalar or b_pos_is_vector) and not m_equals_0:
             b_pos_m = np.zeros(N)
         else:
             b_pos_m = b_pos[:, m]
             
         if b_neg_is_scalar and m_equals_0:
             b_neg_m = np.full(N, b_neg)
-        elif b_neg_is_scalar and not m_equals_0:
+        elif b_neg_is_vector and m_equals_0:
+            b_neg_m = b_neg
+        elif (b_neg_is_scalar or b_neg_is_vector) and not m_equals_0:
             b_neg_m = np.zeros(N)
         else:
             b_neg_m = b_neg[:, m]

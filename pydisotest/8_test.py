@@ -27,7 +27,7 @@ def test_8a():
 
     # Optional (unused)
     NLeg = None
-    NLoops = None
+    NFourier = None
     b_pos = 0
     only_flux = False
     f_arr = 0
@@ -103,7 +103,7 @@ def test_8b():
 
     # Optional (unused)
     NLeg = None
-    NLoops = None
+    NFourier = None
     b_pos = 0
     only_flux = False
     f_arr = 0
@@ -179,7 +179,7 @@ def test_8c():
 
     # Optional (unused)
     NLeg = None
-    NLoops = None
+    NFourier = None
     b_pos = 0
     only_flux = False
     f_arr = 0

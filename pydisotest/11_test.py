@@ -24,11 +24,11 @@ def test_11a():
     b_neg=1
     b_pos=1
     BDRF_Fourier_modes=[lambda mu, neg_mup: np.full((len(mu), len(neg_mup)), 1)]
-    s_poly_coeffs=np.tile(np.array([ 172311.79936609, -102511.44170512]), (NLayers, 1))
+    s_poly_coeffs=np.tile(np.array([1, 1]), (NLayers, 1))
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     only_flux=False
     use_banded_solver_NLayers=10
     autograd_compatible=False

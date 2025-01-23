@@ -46,7 +46,7 @@ def test_4a():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False
@@ -122,7 +122,7 @@ def test_4b():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False
@@ -198,7 +198,7 @@ def test_4c():
 
     # Optional (unused)
     NLeg=None
-    NLoops=None
+    NFourier=None
     b_pos=0
     b_neg=0
     only_flux=False
