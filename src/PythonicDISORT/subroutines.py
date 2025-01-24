@@ -321,7 +321,7 @@ def Planck(T, WVNM):
     results[not_zeros_ind] = (2e8 * sc.constants.h * sc.constants.c**2 * WVNM**3 * expterm) / (1 - expterm)
         
     return np.squeeze(results)[()]
-    
+    sdo
     
 
 def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
@@ -344,8 +344,8 @@ def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
         
     Returns
     -------
-    scalar
-        The blackbody emission of the boundary with units W / m^2.
+    float or array
+        The blackbody emission of each boundary with units W / m^2.
     """ 
     return np.squeeze(sc.integrate.quad_vec(lambda WVNM: Planck(T, WVNM), WVNMLO, WVNMHI, **kwargs)[0])
 
@@ -364,7 +364,7 @@ def linear_spline_coefficients(x, y, check_inputs=True):
     Returns
     -------
     2darray
-        The coefficients with axes (segment, ascending polynomial order), as required by ``pydisort``.
+        The coefficients with axes (segment, ascending polynomial order) which is required by ``pydisort``.
 
     """
     # Input checks
@@ -424,7 +424,7 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
 def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
     """Use Kirchoff's law of thermal radiation to determine the (directional) emissivity 
     of the surface given the zeroth Fourier mode of the Bi-Directional Reflectance Function (BDRF).
-    This computation is internal to Stamnes' DISORT.
+    This computation is automatic and internal to Stamnes' DISORT.
     This function supplements ``PythonicDISORT.subroutines.blackbody_contrib_to_BCs``.
     
     Parameters
@@ -438,7 +438,7 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
     Returns
     -------
     array
-        Emissivity for the blackbody contribution to the lower boundary source `b_neg``.
+        Emissivity for the blackbody contribution to the lower boundary source ``b_neg``.
     """
     mu_arr_pos, W = Gauss_Legendre_quad(N)
     return 1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos) * mu_arr_pos[None, :] @ W
@@ -524,9 +524,9 @@ def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
 
 
 def interpolate(u):
-    """Polynomial (Barycentric) interpolation with respect to mu. The output 
-    is a function that is continuous and variable in all three arguments: mu, tau and phi.
-    Discussed in sections 3.7 and 6.3 in the Comprehensive Documentation.
+    """Polynomial (Barycentric) interpolation with respect to ``mu``. The output 
+    is a function that is continuous and variable in all three arguments: ``mu``, ``tau`` and ``phi``.
+    Discussed in sections 3.7 and 6.3 of the Comprehensive Documentation.
 
     Parameters
     ----------
@@ -616,22 +616,23 @@ def interpolate(u):
          
 
 
-def to_diag_ordered_form(A, sym_offset):
+def to_diag_ordered_form(A, Nsuperdiags, Nsubdiags):
     """
-    Convert a matrix A to the diagonal ordered form required by ``scipy.linalg.solve_banded``.
-    We assume that the matrix has the same number of super- and sub-diagonals.
+    Convert some matrix A to the diagonal ordered form required by ``scipy.linalg.solve_banded``.
 
     Parameters
     ----------
     A : 2darray
         The square matrix to be converted.
-    sym_offset : int
-        The number of super- or sub-diagonals (assumed to be equal)
+    Nsuperdiags : int
+        The number of super-diagonals.
+    Nsubdiags : int
+        The number of sub-diagonals.
 
     Returns
     -------
     2darray
-        The diagonal ordered form matrix as required by solve_banded.
+        The diagonal ordered form matrix as required by ``scipy.linalg.solve_banded``.
     """
     n = A.shape[0]
     indices = np.arange(n)
@@ -639,11 +640,11 @@ def to_diag_ordered_form(A, sym_offset):
     return np.concatenate(
         [
             A[
-                indices - np.arange(sym_offset, -1, -1)[:, None],
+                indices - np.arange(Nsuperdiags, -1, -1)[:, None],
                 indices[None, :],
             ],
             A[
-                indices - np.arange(n - 1, n - sym_offset - 1, -1)[:, None],
+                indices - np.arange(n - 1, n - Nsubdiags - 1, -1)[:, None],
                 indices[None, :],
             ],
         ],

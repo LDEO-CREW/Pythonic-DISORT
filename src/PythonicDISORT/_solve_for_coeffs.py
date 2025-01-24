@@ -82,7 +82,7 @@ def _solve_for_coeffs(
     GC_collect = np.empty((NFourier, NLayers, NQuad, NQuad))
     use_banded_solver = (NLayers >= use_banded_solver_NLayers)
     if use_banded_solver:
-        sym_offset = 3 * N - 1
+        Nsupsubdiags = 3 * N - 1 # The number of super-diagonals equals the number of sub-diagonals
     
     # The following loops can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     for m in range(NFourier):
@@ -298,8 +298,8 @@ def _solve_for_coeffs(
         # Solve the system
         if use_banded_solver:
             C_m = sc.linalg.solve_banded(
-                (sym_offset, sym_offset),
-                to_diag_ordered_form(LHS, sym_offset),
+                (Nsupsubdiags, Nsupsubdiags),
+                to_diag_ordered_form(LHS, Nsupsubdiags, Nsupsubdiags),
                 RHS,
                 True,
                 True,
