@@ -299,14 +299,14 @@ def Planck(T, WVNM):
 
     Parameters
     ----------
-    T : float or 1darray
+    T : float or array
         Temperatures in kelvin.
     WVNM : float
         Wavenumber with units m^-1.
 
     Returns
     -------
-    float or 1darray
+    float or array
         Emitted power per unit area from a blackbody surface with units W / m^2.
 
     """
@@ -325,14 +325,15 @@ def Planck(T, WVNM):
     
 
 def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
-    """Compute blackbody contribution to the BCs (``b_pos`` or ``b_neg``).
+    """Compute blackbody contribution to each BC (``b_pos`` or ``b_neg``), 
+    i.e. the blackbody emission of that boundary, with units W / m^2.
     This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT.
     Users will have to manually adjust emissivities but ``PythonicDISORT.subroutines.generate_emissivity_from_BDRF``
     can help with that.
     
     Parameters
     ----------
-    T : float or 1darray
+    T : float or array
         Temperatures in kelvin.
     WVNMLO : float
         Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
@@ -341,6 +342,10 @@ def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
         
+    Returns
+    -------
+    scalar
+        The blackbody emission of the boundary with units W / m^2.
     """ 
     return np.squeeze(sc.integrate.quad_vec(lambda WVNM: Planck(T, WVNM), WVNMLO, WVNMHI, **kwargs)[0])
 
@@ -351,9 +356,9 @@ def linear_spline_coefficients(x, y, check_inputs=True):
 
     Parameters
     ----------
-    x : 1darray
+    x : array
         Array of `x` data points.
-    y : 1darray
+    y : array
         Array of `y` data points.
 
     Returns
@@ -387,7 +392,7 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
     ----------
     tau_arr : array or float
         Optical depth of the lower boundary of each atmospheric layer.
-    TEMPER : 1darray
+    TEMPER : array
         Temperature in kelvin at each boundary / interface from top to bottom.
         This variable is identically named in Stamnes' DISORT.
     WVNMLO : float
@@ -432,7 +437,7 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
 
     Returns
     -------
-    1darray
+    array
         Emissivity for the blackbody contribution to the lower boundary source `b_neg``.
     """
     mu_arr_pos, W = Gauss_Legendre_quad(N)
@@ -488,9 +493,9 @@ def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
     poly_coeffs : 2darray
         Array with columns [C_0, C_1, ..., C_n]. 
         The rows correspond to different affine transformations.
-    a_arr : 1darray
+    a_arr : array
         Scale factors.
-    b_arr : 1darray
+    b_arr : array
         Translations.
 
     Returns
