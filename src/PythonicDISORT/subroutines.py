@@ -321,7 +321,7 @@ def Planck(T, WVNM):
     results[not_zeros_ind] = (2e8 * sc.constants.h * sc.constants.c**2 * WVNM**3 * expterm) / (1 - expterm)
         
     return np.squeeze(results)[()]
-    sdo
+    
     
 
 def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
@@ -523,6 +523,7 @@ def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
     return np.einsum("lij, lj -> li", T, poly_coeffs, optimize=True)
 
 
+
 def interpolate(u):
     """Polynomial (Barycentric) interpolation with respect to ``mu``. The output 
     is a function that is continuous and variable in all three arguments: ``mu``, ``tau`` and ``phi``.
@@ -651,17 +652,18 @@ def to_diag_ordered_form(A, Nsuperdiags, Nsubdiags):
         axis=0,
     )
 
+
     
-def _mathscr_v(tau,                             # Input optical depths
-                l,                              # Layer index of each input optical depth
-                Nscoeffs,                       # Number of isotropic source polynomial coefficients
-                s_poly_coeffs,                  # Polynomial coefficients of isotropic source
-                G,                              # Eigenvector matrices
-                K,                              # Eigenvalues
-                G_inv,                          # Inverse of eigenvector matrix
-                mu_arr,                         # Quadrature nodes for both hemispheres
+def _mathscr_v(tau,                              # Input optical depths
+                l,                               # Layer index of each input optical depth
+                Nscoeffs,                        # Number of isotropic source polynomial coefficients
+                s_poly_coeffs,                   # Polynomial coefficients of isotropic source
+                G,                               # Eigenvector matrices
+                K,                               # Eigenvalues
+                G_inv,                           # Inverse of eigenvector matrix
+                mu_arr,                          # Quadrature nodes for both hemispheres
                 is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
-                autograd_compatible=False,      # Should the output functions be compatible with autograd?
+                autograd_compatible=False,       # Should the output functions be compatible with autograd?
                 ):
     """Particular solution for isotropic internal sources.
     Refer to section 3.6.1 of the Comprehensive Documentation.
@@ -670,22 +672,22 @@ def _mathscr_v(tau,                             # Input optical depths
     and ``_solve_for_coeffs`` functions which call it.
     
     Arguments of _mathscr_v
-    |          Variable           |                 Shape                 |
-    | --------------------------- | ------------------------------------- |
-    | ``tau``                       | ``Ntau``                                |
-    | ``l``                         | ``Ntau``                                |
-    | ``Nscoeffs``                  | scalar                                |
-    | ``s_poly_coeffs``             | ``NLayers x Nscoeffs`` or ``Nscoeffs``    |
-    | ``G``                         | ``NLayers<= x NQuad x NQuad``           |
-    | ``K``                         | ``NLayers<= x NQuad``                   |
+    |          Variable             |                   Shape                   |
+    | ----------------------------- | ----------------------------------------- |
+    | ``tau``                       | ``Ntau``                                  |
+    | ``l``                         | ``Ntau``                                  |
+    | ``Nscoeffs``                  | scalar                                    |
+    | ``s_poly_coeffs``             | ``NLayers x Nscoeffs``                    |
+    | ``G``                         | ``NLayers<= x NQuad x NQuad``             |
+    | ``K``                         | ``NLayers<= x NQuad``                     |
     | ``G_inv``                     | ``NLayers<= x NQuad x NQuad`` or ``None`` |
-    | ``mu_arr``                    | ``NQuad``                               |
-    | ``is_antiderivative_wrt_tau`` | boolean                               |
-    | ``autograd_compatible``      | boolean                               |
+    | ``mu_arr``                    | ``NQuad``                                 |
+    | ``is_antiderivative_wrt_tau`` | boolean                                   |
+    | ``autograd_compatible``       | boolean                                   |
     
     Notable internal variables of _mathscr_v
-    |     Variable     |                Shape                | 
-    | ---------------- | ----------------------------------- |
+    |     Variable     |                Shape                  | 
+    | ---------------- | ------------------------------------- |
     | i_arr            | ``Nscoeffs``                          |
     | i_arr_repeat     | ``Nscoeffs*(Nscoeffs+1)/2``           | Using triangular number formula
     | j_arr            | ``Nscoeffs*(Nscoeffs+1)/2``           | Using triangular number formula
@@ -700,8 +702,8 @@ def _mathscr_v(tau,                             # Input optical depths
         def mathscr_b(i):
             """
             Notable internal variables of mathscr_b
-            |     Variable     |                 Shape                 |
-            | ---------------- | ------------------------------------- |
+            |     Variable     |                  Shape                  |
+            | ---------------- | --------------------------------------- |
             | j_arr            | ``i + 1``                               |
             | s_poly_coeffs_nj | ``i + 1``                               |
             | OUTPUT           | ``Nscoeffs x (i + 1) x NQuad``          |
@@ -722,7 +724,7 @@ def _mathscr_v(tau,                             # Input optical depths
         shape = np.shape(K)
         i_arr = np.arange(Nscoeffs)
         i_arr_repeat = np.repeat(i_arr, i_arr + 1)
-        j_arr = np.concatenate([np.arange(i + 1) for i in range(Nscoeffs)])
+        j_arr = np.concatenate([i_arr[:i] for i in range(1, Nscoeffs + 1)])
         s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
 
         mathscr_v_coeffs = np.zeros((Nscoeffs, shape[0], shape[1]))
