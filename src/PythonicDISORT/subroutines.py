@@ -760,7 +760,7 @@ def _mathscr_v(tau,                              # Input optical depths
 
 def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):
     """Performs pointwise comparisons between results from Stamnes' DISORT,
-    which are stored in .npz files, against results from PythonicDISORT. Used in our PyTests.
+    which are stored in ``.npz`` files, against results from PythonicDISORT. Used in our PyTests.
 
     """
     # Load saved results from Stamnes' DISORT

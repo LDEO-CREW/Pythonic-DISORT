@@ -153,7 +153,7 @@ def _solve_for_gen_and_part_sols(
                 alpha_arr[ind, :, :] = alpha
                 beta_arr[ind, :, :] = beta
                 no_shortcut_indices.append(ind)
-                if m_equals_0 and there_is_iso_source:
+                if m_equals_0 and there_is_iso_source: # Keep the list empty if there is no isotropic source
                     no_shortcut_indices_0.append(l)
                 
             else:
@@ -192,7 +192,7 @@ def _solve_for_gen_and_part_sols(
             / K_arr[:, None, :]
         )
 
-        # Eigenvector matrix
+        # Eigenvector matrices
         G_arr = np.concatenate(
             (
                 (eigenvecs_GpG_arr - eigenvecs_GmG_arr) / 2,
@@ -203,7 +203,7 @@ def _solve_for_gen_and_part_sols(
         
         G_collect[no_shortcut_indices, :, :] = G_arr
         K_collect[no_shortcut_indices, :] = K_arr
-        if len(no_shortcut_indices_0) > 0:
+        if len(no_shortcut_indices_0) > 0: # If there is no isotropic source this list will be empty
             G_inv_collect_0[no_shortcut_indices_0, :, :] = np.linalg.inv(
                 G_collect[: len(no_shortcut_indices_0), :, :]
             )
