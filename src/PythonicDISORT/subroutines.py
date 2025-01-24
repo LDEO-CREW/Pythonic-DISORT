@@ -26,7 +26,7 @@ def transform_interval(arr, c, d, a, b):
         The transformed 1D array.
 
     """
-    return (((arr - a) * (d - c)) / (b - a)) + c
+    return (arr - a) * (d - c) / (b - a) + c
 
 
 
@@ -141,7 +141,7 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     Nphi_pos = Nphi // 2
     phi_arr_pos = np.cos(pi * np.arange(Nphi_pos) / Nphi)
     phi_arr = np.concatenate([-phi_arr_pos, [0], np.flip(phi_arr_pos)])
-    diff = np.append(2, 2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2))
+    diff = np.insert(2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2), 0, 2)
     weights_phi_pos = sc.fft.idct(diff, type=1)
     weights_phi_pos[0] /= 2
     full_weights_phi = np.hstack((weights_phi_pos, np.flip(weights_phi_pos[:-1])))
@@ -409,7 +409,7 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
     if not len(TEMPER) == len(tau_arr) + 1:
         raise ValueError("Missing temperature specification at some boundaries / interfaces.")
     
-    tau_arr_with_0 = np.append(0, tau_arr)
+    tau_arr_with_0 = np.insert(tau_arr, 0, 0)
     blackbody_emission_at_each_boundary = sc.integrate.quad_vec(lambda WVNM: Planck(TEMPER, WVNM), WVNMLO, WVNMHI, **kwargs)[0]
     
     return linear_spline_coefficients(tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False)
@@ -477,6 +477,45 @@ def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
     ]
     return cached_BDRF_Fourier_modes
 
+
+
+def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
+    """Given a polynomial C_0 + C_1 x + ... C_n x^n and the affine transformation
+    y -> ax + b, determine the coefficients of the polynomial D_0 + D_1 y + ... D_n y^n.
+
+    Parameters
+    ----------
+    poly_coeffs : 2darray
+        Array with columns [C_0, C_1, ..., C_n]. 
+        The rows correspond to different affine transformations.
+    a_arr : 1darray
+        Scale factors.
+    b_arr : 1darray
+        Translations.
+
+    Returns
+    -------
+    transformed_poly_coeffs : 2darray
+        Array with columns [D_0, D_1, ..., D_n]. 
+        The rows correspond to different affine transformations.
+    """
+    if np.any(a_arr) == 0:
+        raise ValueError("The scale factors must be non-zero.") 
+    
+    Ntransformations, Ncoeffs = np.shape(poly_coeffs)
+    Ncoeffs_arange = np.arange(Ncoeffs)
+    pascal = sc.linalg.pascal(Ncoeffs, kind="upper")
+    pow_for_shifts = np.where(
+        pascal == 0, 0, Ncoeffs_arange[None, :] - Ncoeffs_arange[:, None]
+    )
+
+    T = (
+        pascal[None, :, :]
+        * (1 / a_arr)[:, None, None] ** (Ncoeffs_arange[None, None, :])
+        * (-b_arr[:, None, None]) ** pow_for_shifts[None, :, :]
+    )  # Transformation matrix for the polynomial coefficients
+    
+    return np.einsum("lij, lj -> li", T, poly_coeffs, optimize=True)
 
 
 def interpolate(u):
@@ -619,7 +658,7 @@ def _mathscr_v(tau,                             # Input optical depths
                 autograd_compatible=False,      # Should the output functions be compatible with autograd?
                 ):
     """Particular solution for isotropic internal sources.
-    Refer to Section 3.6.1 of the Comprehensive Documentation.
+    Refer to section 3.6.1 of the Comprehensive Documentation.
     It has many seemingly redundant arguments to maximize 
     precomputation in the ``_assemble_intensity_and_fluxes`` 
     and ``_solve_for_coeffs`` functions which call it.

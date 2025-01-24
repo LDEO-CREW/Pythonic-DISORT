@@ -8,9 +8,9 @@ from PythonicDISORT.subroutines import generate_s_poly_coeffs
 from PythonicDISORT.subroutines import blackbody_contrib_to_BCs
 from PythonicDISORT.subroutines import generate_emissivity_from_BDRF
 
-# ===========================================================================================================
-# Test Problem 7:  Absorption + Scattering + All Possible Sources, Various Surface Reflectivities (One Layer)
-# ===========================================================================================================
+# ===========================================================================================================================
+# Test Problem 7:  Absorption + Scattering + All Possible Sources, Lambertian and Hapke Surface Reflectivities (One Layer)
+# ===========================================================================================================================
 
 def test_7a():
     print()
@@ -178,8 +178,8 @@ def test_7c():
 
     tau_arr = 1  # One layer of thickness 1 (Medium-thick atmosphere)
     omega_arr = 0.5  # Low scattering
-    NQuad = 20  # 20 streams (10 quadrature nodes for each hemisphere)
-    Leg_coeffs_all = 0.8 ** np.arange(NQuad + 1) # Henyey-Greenstein phase function with g = 0.8
+    NQuad = 12  # 12 streams (6 quadrature nodes for each hemisphere)
+    Leg_coeffs_all = 0.8 ** np.arange(NQuad * 2) # Henyey-Greenstein phase function with g = 0.8
     mu0 = 0.5  # Cosine of solar zenith angle (directly downwards)
     I0 = 200  # Intensity of direct beam
     phi0 = 0  # Azimuthal angle of direct beam
@@ -195,12 +195,13 @@ def test_7c():
     b_pos = blackbody_contrib_to_BCs(BTEMP, WVNMLO, WVNMHI, epsrel=1e-15) # Emissivity 1
     b_neg = blackbody_contrib_to_BCs(TTEMP, WVNMLO, WVNMHI, epsrel=1e-15) + 100 # Emissivity 1
 
+    f_arr = Leg_coeffs_all[NQuad]
+    NT_cor = True
+
     # Optional (unused)
     NLeg = None
     NFourier = None
     only_flux = False
-    f_arr = 0
-    NT_cor = False
     BDRF_Fourier_modes = []
     use_banded_solver_NLayers = 10
     autograd_compatible=False
@@ -216,6 +217,8 @@ def test_7c():
         b_pos=b_pos,
         b_neg=b_neg,
         s_poly_coeffs=s_poly_coeffs,
+        f_arr=f_arr,
+        NT_cor=NT_cor,
     )
     
     # Reorder mu_arr from smallest to largest
@@ -261,8 +264,8 @@ def test_7d():
 
     tau_arr = 1  # One layer of thickness 1 (Medium-thick atmosphere)
     omega_arr = 0.5  # Low scattering
-    NQuad = 20  # 20 streams (10 quadrature nodes for each hemisphere)
-    Leg_coeffs_all = 0.8 ** np.arange(NQuad + 1) # Henyey-Greenstein phase function with g = 0.8
+    NQuad = 12  # 12 streams (6 quadrature nodes for each hemisphere)
+    Leg_coeffs_all = 0.8 ** np.arange(NQuad * 2) # Henyey-Greenstein phase function with g = 0.8
     mu0 = 0.5  # Cosine of solar zenith angle (directly downwards)
     I0 = 200  # Intensity of direct beam
     phi0 = 0  # Azimuthal angle of direct beam
@@ -278,14 +281,15 @@ def test_7d():
     b_neg = blackbody_contrib_to_BCs(TTEMP, WVNMLO, WVNMHI, epsrel=1e-15) + 100 # Emissivity 1
     omega_s = 1
     BDRF_Fourier_modes=[lambda mu, neg_mup: np.full((len(mu), len(neg_mup)), omega_s)]
+    
+    f_arr = Leg_coeffs_all[NQuad]
+    NT_cor = True
 
     # Optional (unused)
     NLeg = None
     NFourier = None
     b_pos = 0
     only_flux = False
-    f_arr = 0
-    NT_cor = False
     use_banded_solver_NLayers = 10
     autograd_compatible=False
 
@@ -300,6 +304,8 @@ def test_7d():
         b_neg=b_neg,
         s_poly_coeffs=s_poly_coeffs,
         BDRF_Fourier_modes=BDRF_Fourier_modes,
+        f_arr=f_arr,
+        NT_cor=NT_cor,
     )
     
     # Reorder mu_arr from smallest to largest
@@ -361,7 +367,7 @@ def test_7e():
     tau_arr = 1  # One layer of thickness 1 (Medium-thick atmosphere)
     omega_arr = 0.5  # Low scattering
     NQuad = 12  # 12 streams (6 quadrature nodes for each hemisphere)
-    Leg_coeffs_all = 0.8 ** np.arange(NQuad + 1) # Henyey-Greenstein phase function with g = 0.8
+    Leg_coeffs_all = 0.8 ** np.arange(NQuad * 2) # Henyey-Greenstein phase function with g = 0.8
     mu0 = 0.5  # Cosine of solar zenith angle (directly downwards)
     I0 = 200  # Intensity of direct beam
     phi0 = 0  # Azimuthal angle of direct beam
@@ -388,12 +394,13 @@ def test_7e():
     emissivity = generate_emissivity_from_BDRF(NQuad // 2, BDRF_Fourier_modes[0])
     b_pos = emissivity * blackbody_contrib_to_BCs(BTEMP, WVNMLO, WVNMHI)
     b_neg = blackbody_contrib_to_BCs(TTEMP, WVNMLO, WVNMHI, epsrel=1e-15) + 100 # Emissivity 1
+    
+    f_arr = Leg_coeffs_all[NQuad]
     only_flux = True
 
     # Optional (unused)
     NLeg = None
     NFourier = None
-    f_arr = 0
     NT_cor = False
     use_banded_solver_NLayers = 10
     autograd_compatible=False
@@ -410,6 +417,7 @@ def test_7e():
         b_neg=b_neg,
         s_poly_coeffs=s_poly_coeffs,
         BDRF_Fourier_modes=BDRF_Fourier_modes,
+        f_arr=f_arr,
         only_flux=only_flux,
     )
     

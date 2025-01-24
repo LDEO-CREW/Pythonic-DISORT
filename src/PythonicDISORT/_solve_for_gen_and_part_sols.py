@@ -4,17 +4,17 @@ from math import pi
 
 
 def _solve_for_gen_and_part_sols(
-    NFourier,                   # Number of intensity Fourier modes
-    scaled_omega_arr,           # Delta-scaled single-scattering albedos
-    mu_arr_pos, mu_arr,         # Quadrature nodes for 1) upper 2) both hemispheres
-    M_inv, W,                   # 1) 1 / mu; 2) quadrature weights for each hemisphere
-    N, NQuad, NLeg,             # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients 
-    NLayers,                    # Number of layers
-    weighted_scaled_Leg_coeffs, # Weighted and delta-scaled Legendre coefficients
-    mu0, I0,                    # Properties of direct beam
-    there_is_beam_source,       # Is there a beam source?
-    Nscoeffs,                   # Number of isotropic source polynomial coefficients
-    there_is_iso_source,        # Is there an isotropic source?
+    NFourier,                    # Number of intensity Fourier modes
+    scaled_omega_arr,            # Delta-scaled single-scattering albedos
+    mu_arr_pos, mu_arr,          # Quadrature nodes for 1) upper 2) both hemispheres
+    M_inv, W,                    # 1) 1 / mu; 2) quadrature weights for each hemisphere
+    N, NQuad, NLeg,              # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients 
+    NLayers,                     # Number of layers
+    weighted_scaled_Leg_coeffs,  # Weighted and delta-scaled Legendre coefficients
+    mu0, I0,                     # Properties of the direct beam
+    there_is_beam_source,        # Is there a beam source?
+    Nscoeffs,                    # Number of isotropic source polynomial coefficients
+    there_is_iso_source,         # Is there an isotropic source?
 ):
     """
     Diagonalizes the coefficient matrix of the system of ordinary differential equations (ODEs) 
@@ -60,7 +60,7 @@ def _solve_for_gen_and_part_sols(
 
     """
     ############################### Assemble system and diagonalize coefficient matrix #########################################
-    ########################### Refer to Section 3.4.2 of the Comprehensive Documentation  #####################################
+    ########################### Refer to section 3.4.2 of the Comprehensive Documentation  #####################################
     
     # Initialization
     # --------------------------------------------------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def _solve_for_gen_and_part_sols(
                 
                 # --------------------------------------------------------------------------------------------------------------------------
                 
-                # Particular solution for the direct beam source (refer to Section 3.6.1 of the Comprehensive Documentation)
+                # Particular solution for the direct beam source (refer to section 3.6.1 of the Comprehensive Documentation)
                 # --------------------------------------------------------------------------------------------------------------------------
                 if there_is_beam_source:
                     # Generate X
@@ -171,7 +171,7 @@ def _solve_for_gen_and_part_sols(
                 
     if len(no_shortcut_indices) > 0:
     
-        # Diagonalization of coefficient matrix (refer to Section 3.4.2 of the Comprehensive Documentation)
+        # Diagonalization of coefficient matrix (refer to section 3.4.2 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         alpha_arr = alpha_arr[: len(no_shortcut_indices), :, :]
         beta_arr = beta_arr[: len(no_shortcut_indices), :, :]

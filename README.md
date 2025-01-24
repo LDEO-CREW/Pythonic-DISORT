@@ -43,9 +43,11 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 * Test Problem 2: Rayleigh Scattering, Beam Source
 * Test Problem 3: Henyey-Greenstein Scattering
 * Test Problem 4: Haze-L Scattering, Beam Source
-* Test Problem 5: Cloud C.1 Scattering, Beam Source (Test 5BDRF has Lambertian BDRF with albedo 1)
-* Test Problem 8:  Absorbing/Isotropic-Scattering Medium With Two Computational Layers 
-* Test Problem 9:  General Emitting/Absorbing/Scattering Medium with Every Computational Layer Different
+* Test Problem 5: Cloud C.1 Scattering, Beam Source
+* Test Problem 6: No Scattering, Increasingly Complex Sources (relevant for modeling longwave radiation)
+* Test Problem 7: Absorption + Scattering + All Possible Sources, Lambertian and Hapke Surface Reflectivities (one layer)
+* Test Problem 8: Absorbing / Isotropic-Scattering Medium With (two layers)
+* Test Problem 9: General Emitting / Absorbing / Scattering Medium with (many different layers)
 * Test Problem 11: Single-Layer vs. Multiple Layers (no corresponding Jupyter Notebook)
 
 # Installation

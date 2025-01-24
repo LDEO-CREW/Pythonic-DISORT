@@ -16,13 +16,13 @@ def _assemble_intensity_and_fluxes(
     is_atmos_multilayered,              # Is the atmosphere multilayered?
     weighted_scaled_Leg_coeffs,         # Weighted and delta-scaled Legendre coefficients
     BDRF_Fourier_modes,                 # BDRF Fourier modes
-    mu0, I0, rescale_factor, phi0,             # Properties of direct beam. If I0 was rescaled to 1, rescale_factor is the original I0
+    mu0, I0, rescale_factor, phi0,      # Properties of the direct beam
     there_is_beam_source,               # Is there a beam source?
     b_pos, b_neg,                       # Dirichlet BCs
     b_pos_is_scalar, b_neg_is_scalar,   # Is each Dirichlet BCs scalar and so isotropic?
     b_pos_is_vector, b_neg_is_vector,   # Is each Dirichlet BCs vector?
     Nscoeffs,                           # Number of isotropic source polynomial coefficients
-    s_poly_coeffs,                      # Polynomial coefficients of isotropic source
+    scaled_s_poly_coeffs,               # Delta-scaled polynomial coefficients of isotropic source
     there_is_iso_source,                # Is there an isotropic source?
     scale_tau,                          # Delta-scale factor for tau
     only_flux,                          # Only compute fluxes?
@@ -41,42 +41,42 @@ def _assemble_intensity_and_fluxes(
     documentation, explanation and derivation.
     
     Arguments of _assemble_intensity_and_fluxes
-    |            Variable            |            Type / Shape            |
-    | ------------------------------ | ---------------------------------- |
-    | `scaled_omega_arr`             | `NLayers`                          |
-    | `tau_arr`                      | `NLayers`                          |
-    | `scaled_tau_arr_with_0`        | `NLayers + 1`                      |
-    | `mu_arr_pos`                   | `NQuad/2`                          |
-    | `mu_arr`                       | `NQuad`                            |
-    | `M_inv`                        | `NQuad/2`                          |
-    | `W`                            | `NQuad/2`                          |
-    | `N`                            | scalar                             |
-    | `NQuad`                        | scalar                             |
-    | `NLeg`                         | scalar                             |
-    | `NFourier`                     | scalar                             |
-    | `NLayers`                      | scalar                             |
-    | `NBDRF`                        | scalar                             |
-    | `is_atmos_multilayered`        | boolean                            |
-    | `weighted_scaled_Leg_coeffs`   | `NLayers x NLeg`                   |
-    | `BDRF_Fourier_modes`           | `NBDRF`                            |
-    | `mu0`                          | scalar                             |
-    | `I0`                           | scalar                             |
-    | `rescale_factor`               | scalar                             |
-    | `phi0`                         | scalar                             |
-    | `there_is_beam_source`         | scalar                             |
-    | `b_pos`                        | `NQuad/2 x NFourier` or scalar     |
-    | `b_neg`                        | `NQuad/2 x NFourier` or scalar     |
-    | `b_pos_is_scalar`              | boolean                            |
-    | `b_neg_is_scalar`              | boolean                            |  
-    | `b_pos_is_vector`              | boolean                            |
-    | `b_neg_is_vector`              | boolean                            |     
-    | `Nscoeffs`                     | scalar                             |    
-    | `s_poly_coeffs`                | `NLayers x Nscoeffs` or `Nscoeffs` |
-    | `there_is_iso_source`          | boolean                            |
-    | `scale_tau`                    | `NLayers`                          |
-    | `only_flux`                    | boolean                            |
-    | `use_banded_solver_NLayers`    | scalar                             |
-    | `autograd_compatible`          | boolean                            |
+    |            Variable            |                 Type / Shape                 |
+    | ------------------------------ | -------------------------------------------- |
+    | `scaled_omega_arr`             | `NLayers`                                    |
+    | `tau_arr`                      | `NLayers`                                    |
+    | `scaled_tau_arr_with_0`        | `NLayers + 1`                                |
+    | `mu_arr_pos`                   | `NQuad/2`                                    |
+    | `mu_arr`                       | `NQuad`                                      |
+    | `M_inv`                        | `NQuad/2`                                    |
+    | `W`                            | `NQuad/2`                                    |
+    | `N`                            | scalar                                       |
+    | `NQuad`                        | scalar                                       |
+    | `NLeg`                         | scalar                                       |
+    | `NFourier`                     | scalar                                       |
+    | `NLayers`                      | scalar                                       |
+    | `NBDRF`                        | scalar                                       |
+    | `is_atmos_multilayered`        | boolean                                      |
+    | `weighted_scaled_Leg_coeffs`   | `NLayers x NLeg`                             |
+    | `BDRF_Fourier_modes`           | `NBDRF`                                      |
+    | `mu0`                          | scalar                                       |
+    | `I0`                           | scalar                                       |
+    | `rescale_factor`               | scalar                                       |
+    | `phi0`                         | scalar                                       |
+    | `there_is_beam_source`         | scalar                                       |
+    | `b_pos`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  |
+    | `b_neg`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  | 
+    | `b_pos_is_scalar`              | boolean                                      |
+    | `b_neg_is_scalar`              | boolean                                      |  
+    | `b_pos_is_vector`              | boolean                                      |
+    | `b_neg_is_vector`              | boolean                                      |     
+    | `Nscoeffs`                     | scalar                                       |    
+    | `scaled_s_poly_coeffs`         | `NLayers x Nscoeffs`                         |
+    | `there_is_iso_source`          | boolean                                      |
+    | `scale_tau`                    | `NLayers`                                    |
+    | `only_flux`                    | boolean                                      |
+    | `use_banded_solver_NLayers`    | scalar                                       |
+    | `autograd_compatible`          | boolean                                      |
     
     Notable internal variables of _assemble_intensity_and_fluxes
     |     Variable      |             Type / Shape               |
@@ -139,7 +139,6 @@ def _assemble_intensity_and_fluxes(
         K_collect,
         B_collect,
         G_inv_collect_0,
-        tau_arr,
         scaled_tau_arr_with_0,
         mu_arr, mu_arr_pos, mu_arr_pos * W,
         N, NQuad,
@@ -152,7 +151,7 @@ def _assemble_intensity_and_fluxes(
         b_pos_is_scalar, b_neg_is_scalar,
         b_pos_is_vector, b_neg_is_vector,
         Nscoeffs,
-        s_poly_coeffs,
+        scaled_s_poly_coeffs,
         there_is_iso_source,
         use_banded_solver_NLayers,
     )
@@ -164,7 +163,7 @@ def _assemble_intensity_and_fluxes(
         
     if not only_flux:
  
-        # Construct the intensity function (refer to Section 3.7 of the Comprehensive Documentation)
+        # Construct the intensity function (refer to section 3.7 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         def u(tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
             """
@@ -232,8 +231,8 @@ def _assemble_intensity_and_fluxes(
             if there_is_iso_source:
                 l_uniq, l_inv = np.unique(l, return_inverse=True)
                 _mathscr_v_contribution = _mathscr_v(
-                    tau, l_inv, Nscoeffs,
-                    s_poly_coeffs[l_uniq],
+                    scaled_tau, l_inv, Nscoeffs,
+                    scaled_s_poly_coeffs[l_uniq],
                     G_collect_0[l_uniq],
                     K_collect_0[l_uniq],
                     G_inv_collect_0[l_uniq],
@@ -394,8 +393,8 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                tau, l_inv, Nscoeffs,
-                s_poly_coeffs[l_uniq],
+                scaled_tau, l_inv, Nscoeffs,
+                scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq],
                 K_collect_0[l_uniq],
                 G_inv_collect_0[l_uniq],
@@ -415,7 +414,7 @@ def _assemble_intensity_and_fluxes(
             return rescale_factor * np.squeeze(u0)
     # --------------------------------------------------------------------------------------------------------------------------
     
-    # Construct the flux functions (refer to Section 3.8 of the Comprehensive Documentation)
+    # Construct the flux functions (refer to section 3.8 of the Comprehensive Documentation)
     # --------------------------------------------------------------------------------------------------------------------------
     GC_pos = GC_collect_0[:, :N, :]
     GC_neg = GC_collect_0[:, N:, :]
@@ -451,8 +450,8 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                tau, l_inv, Nscoeffs,
-                s_poly_coeffs[l_uniq],
+                scaled_tau, l_inv, Nscoeffs,
+                scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, :N, :],
                 K_collect_0[l_uniq],
                 G_inv_collect_0[l_uniq],
@@ -532,8 +531,8 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                tau, l_inv, Nscoeffs,
-                s_poly_coeffs[l_uniq],
+                scaled_tau, l_inv, Nscoeffs,
+                scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, N:, :],
                 K_collect_0[l_uniq],
                 G_inv_collect_0[l_uniq],

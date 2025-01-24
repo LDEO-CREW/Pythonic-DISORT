@@ -7,27 +7,26 @@ from math import pi
 
 
 def _solve_for_coeffs(
-    NFourier,                               # Number of intensity Fourier modes
-    G_collect,                              # Eigenvector matrices
-    K_collect,                              # Eigenvalues
-    B_collect,                              # Coefficients vectors for particular solutions
-    G_inv_collect_0,                        # Inverse of eigenvector matrix for the 0th Fourier mode
-    tau_arr,                                # Lower boundary of layers
-    scaled_tau_arr_with_0,                  # Delta-scaled lower boundary of layers with 0 inserted in front
-    mu_arr, mu_arr_pos, mu_arr_pos_times_W, # Quadrature nodes for 1) both 2) upper hemispheres; 3) upper hemisphere quadrature nodes times weights
-    N, NQuad,                               # Number of 1) upper 2) both hemispheres quadrature nodes
-    NLayers, NBDRF,                         # Number of 1) layers; 2) BDRF Fourier modes
-    is_atmos_multilayered,                  # Is the atmosphere multilayered?
-    BDRF_Fourier_modes,                     # BDRF Fourier modes
-    mu0, I0,                                # Properties of direct beam
-    there_is_beam_source,                   # Is there a beam source?
-    b_pos, b_neg,                           # Dirichlet BCs
-    b_pos_is_scalar, b_neg_is_scalar,       # Is each Dirichlet BCs scalar and so isotropic?
-    b_pos_is_vector, b_neg_is_vector,       # Is each Dirichlet BCs vector?
-    Nscoeffs,                               # Number of isotropic source polynomial coefficients
-    s_poly_coeffs,                          # Polynomial coefficients of isotropic source           
-    there_is_iso_source,                    # Is there an isotropic source?
-    use_banded_solver_NLayers,              # Number of layers above or equal which to use `scipy.linalg.solve_banded`
+    NFourier,                                 # Number of intensity Fourier modes
+    G_collect,                                # Eigenvector matrices
+    K_collect,                                # Eigenvalues
+    B_collect,                                # Coefficients vectors for particular solutions
+    G_inv_collect_0,                          # Inverse of eigenvector matrix for the 0th Fourier mode
+    scaled_tau_arr_with_0,                    # Delta-scaled lower boundary of layers with 0 inserted in front
+    mu_arr, mu_arr_pos, mu_arr_pos_times_W,   # Quadrature nodes for 1) both 2) upper hemispheres; 3) upper hemisphere quadrature nodes times weights
+    N, NQuad,                                 # Number of 1) upper 2) both hemispheres quadrature nodes
+    NLayers, NBDRF,                           # Number of 1) layers; 2) BDRF Fourier modes
+    is_atmos_multilayered,                    # Is the atmosphere multilayered?
+    BDRF_Fourier_modes,                       # BDRF Fourier modes
+    mu0, I0,                                  # Properties of the direct beam
+    there_is_beam_source,                     # Is there a beam source?
+    b_pos, b_neg,                             # Dirichlet BCs
+    b_pos_is_scalar, b_neg_is_scalar,         # Is each Dirichlet BCs scalar and so isotropic?
+    b_pos_is_vector, b_neg_is_vector,         # Is each Dirichlet BCs vector?
+    Nscoeffs,                                 # Number of isotropic source polynomial coefficients
+    scaled_s_poly_coeffs,                     # Polynomial coefficients of isotropic source           
+    there_is_iso_source,                      # Is there an isotropic source?
+    use_banded_solver_NLayers,                # Number of layers above or equal which to use `scipy.linalg.solve_banded`
 ):
     """
     Uses the boundary conditions to solve for the unknown coefficients 
@@ -39,37 +38,36 @@ def _solve_for_coeffs(
     The labels in this file reference labels in the Jupyter Notebook, especially sections 3 and 4.
 
     Arguments of _solve_for_coeffs
-    |            Variable            |              Type / Shape              |
-    | ------------------------------ | -------------------------------------- |
-    | `NFourier`                     | scalar                                 |
-    | `G_collect`                    | `NFourier x NLayers x NQuad x NQuad`   |
-    | `K_collect`                    | `NFourier x NLayers x NQuad`           |
-    | `B_collect`                    | `NFourier x NLayers x NQuad` or `None` |
-    | `G_inv_collect_0`              | `NLayers x NQuad x NQuad` or `None`    |
-    | `tau_arr`                      | `NLayers`                              |
-    | `scaled_tau_arr_with_0`        | `NLayers + 1`                          |
-    | `mu_arr`                       | `NQuad`                                |
-    | `mu_arr_pos`                   | `NQuad/2`                              |
-    | `mu_arr_pos_times_W`           | `NQuad/2`                              |
-    | `N`                            | scalar                                 |
-    | `NQuad`                        | scalar                                 |
-    | `NLayers`                      | scalar                                 |
-    | `NBDRF`                        | scalar                                 |
-    | `is_atmos_multilayered`        | boolean                                |
-    | `BDRF_Fourier_modes`           | `NBDRF`                                |
-    | `mu0`                          | scalar                                 |
-    | `I0`                           | scalar                                 |
-    | `there_is_beam_source`         | boolean                                |
-    | `b_pos`                        | `NQuad/2 x NFourier` or scalar         |
-    | `b_neg`                        | `NQuad/2 x NFourier` or scalar         |
-    | `b_pos_is_scalar`              | boolean                                |
-    | `b_neg_is_scalar`              | boolean                                |
-    | `b_pos_is_vector`              | boolean                                |
-    | `b_neg_is_vector`              | boolean                                |
-    | `Nscoeffs`                     | scalar                                 |
-    | `s_poly_coeffs`                | `NLayers x Nscoeffs` or `Nscoeffs`     |
-    | `there_is_iso_source`          | boolean                                |
-    | `use_banded_solver_NLayers`    | scalar                                 |
+    |            Variable            |                  Type / Shape                |
+    | ------------------------------ | -------------------------------------------- |
+    | `NFourier`                     | scalar                                       |
+    | `G_collect`                    | `NFourier x NLayers x NQuad x NQuad`         |
+    | `K_collect`                    | `NFourier x NLayers x NQuad`                 |
+    | `B_collect`                    | `NFourier x NLayers x NQuad` or `None`       |
+    | `G_inv_collect_0`              | `NLayers x NQuad x NQuad` or `None`          |
+    | `scaled_tau_arr_with_0`        | `NLayers + 1`                                |
+    | `mu_arr`                       | `NQuad`                                      |
+    | `mu_arr_pos`                   | `NQuad/2`                                    |
+    | `mu_arr_pos_times_W`           | `NQuad/2`                                    |
+    | `N`                            | scalar                                       |
+    | `NQuad`                        | scalar                                       |
+    | `NLayers`                      | scalar                                       |
+    | `NBDRF`                        | scalar                                       |
+    | `is_atmos_multilayered`        | boolean                                      |
+    | `BDRF_Fourier_modes`           | `NBDRF`                                      |
+    | `mu0`                          | scalar                                       |
+    | `I0`                           | scalar                                       |
+    | `there_is_beam_source`         | boolean                                      |
+    | `b_pos`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  |
+    | `b_neg`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  | 
+    | `b_pos_is_scalar`              | boolean                                      |
+    | `b_neg_is_scalar`              | boolean                                      |
+    | `b_pos_is_vector`              | boolean                                      |
+    | `b_neg_is_vector`              | boolean                                      |
+    | `Nscoeffs`                     | scalar                                       |
+    | `scaled_s_poly_coeffs`         | `NLayers x Nscoeffs`                         |
+    | `there_is_iso_source`          | boolean                                      |
+    | `use_banded_solver_NLayers`    | scalar                                       |
     
     Notable internal variables of _solve_for_coeffs
     |   Variable   |                 Shape                |
@@ -78,7 +76,7 @@ def _solve_for_coeffs(
 
     """
     ################################## Solve for coefficients of homogeneous solution ##########################################
-    ############# Refer to Section 3.6.2 (single-layer) and 4 (multi-layer) of the Comprehensive Documentation #################
+    ############# Refer to section 3.6.2 (single-layer) and 4 (multi-layer) of the Comprehensive Documentation #################
     
     dim = NLayers * NQuad
     GC_collect = np.empty((NFourier, NLayers, NQuad, NQuad))
@@ -97,7 +95,7 @@ def _solve_for_coeffs(
             B_collect_m = B_collect[m, :, :]
             
         # Generate mathscr_D and mathscr_X (BDRF terms)
-        # Just for this part, refer to Section 3.4.2 of the Comprehensive Documentation 
+        # Just for this part, refer to section 3.4.2 of the Comprehensive Documentation 
         # --------------------------------------------------------------------------------------------------------------------------
         if BDRF_bool:
             mathscr_D_neg = (1 + m_equals_0 * 1) * BDRF_Fourier_modes[m](mu_arr_pos, mu_arr_pos)
@@ -136,10 +134,10 @@ def _solve_for_coeffs(
                         np.array([0]), 
                         np.array([0]),
                         Nscoeffs,
-                        s_poly_coeffs[0:1, :],
-                        G_collect_m[0:1, N:, :],
-                        K_collect_m[0:1, :],
-                        G_inv_collect_0[0:1, :, :],
+                        scaled_s_poly_coeffs[[0], :],
+                        G_collect_m[[0], N:, :],
+                        K_collect_m[[0], :],
+                        G_inv_collect_0[[0], :, :],
                         mu_arr,
                     ).ravel()
         
@@ -148,20 +146,20 @@ def _solve_for_coeffs(
                 indices = np.arange(NLayers - 1)
                 _mathscr_v_contribution_middle = (
                     _mathscr_v(
-                        tau_arr[:-1],
+                        scaled_tau_arr_with_0[1:-1],
                         indices,
                         Nscoeffs,
-                        s_poly_coeffs[indices + 1],
+                        scaled_s_poly_coeffs[indices + 1],
                         G_collect_m[indices + 1],
                         K_collect_m[indices + 1],
                         G_inv_collect_0[indices + 1],
                         mu_arr,
                     )
                     - _mathscr_v(
-                        tau_arr[:-1],
+                        scaled_tau_arr_with_0[1:-1],
                         indices,
                         Nscoeffs,
-                        s_poly_coeffs[indices],
+                        scaled_s_poly_coeffs[indices],
                         G_collect_m[indices],
                         K_collect_m[indices],
                         G_inv_collect_0[indices],
@@ -170,13 +168,13 @@ def _solve_for_coeffs(
                 ).ravel(order='F')
             
             _mathscr_v_contribution_bottom = -_mathscr_v(
-                    tau_arr[-1:], 
+                    scaled_tau_arr_with_0[[-1]], 
                     np.array([0]),
                     Nscoeffs,
-                    s_poly_coeffs[-1:, :],
-                    G_collect_m[-1:, :N, :],
-                    K_collect_m[-1:, :],
-                    G_inv_collect_0[-1:, :, :],
+                    scaled_s_poly_coeffs[[-1], :],
+                    G_collect_m[[-1], :N, :],
+                    K_collect_m[[-1], :],
+                    G_inv_collect_0[[-1], :, :],
                     mu_arr
                 ).ravel()
             if NBDRF > 0:
@@ -184,13 +182,13 @@ def _solve_for_coeffs(
                     _mathscr_v_contribution_bottom
                     + R
                     @ _mathscr_v(
-                        tau_arr[-1:],
+                        scaled_tau_arr_with_0[[-1]],
                         np.array([0]),
                         Nscoeffs,
-                        s_poly_coeffs[-1:, :],
-                        G_collect_m[-1:, N:, :],
-                        K_collect_m[-1:, :],
-                        G_inv_collect_0[-1:, :, :],
+                        scaled_s_poly_coeffs[[-1], :],
+                        G_collect_m[[-1], N:, :],
+                        K_collect_m[[-1], :],
+                        G_inv_collect_0[[-1], :, :],
                         mu_arr
                     ).ravel()
                 )
@@ -244,7 +242,7 @@ def _solve_for_coeffs(
             RHS = np.concatenate([b_neg_m, RHS_middle, b_pos_m]) + _mathscr_v_contribution
         # --------------------------------------------------------------------------------------------------------------------------
         
-        # Assemble LHS (much of this code is replicated in Section 4 of the Comprehensive Documentation)
+        # Assemble LHS (much of this code is replicated in section 4 of the Comprehensive Documentation)
         G_0_nn = G_collect_m[0, N:, :N]
         G_0_np = G_collect_m[0, N:, N:]
         G_L_pn = G_collect_m[-1, :N, :N]
