@@ -384,9 +384,10 @@ def linear_spline_coefficients(x, y, check_inputs=True):
 
 
 def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
-    """Generate ``s_poly_coeffs`` as required by ``pydisort``.
-    This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT,
-    however, users will have to manually adjust emissivities.
+    """Generate DISORT-equivalent ``s_poly_coeffs`` for input into ``pydisort``.
+    This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT.
+    Users will have to manually adjust emissivities, however, and they should note that PythonicDISORT allows much
+    more flexibility in choosing blackbody emission profiles than DISORT.
     
     Parameters
     ----------
