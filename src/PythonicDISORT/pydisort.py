@@ -44,7 +44,7 @@ def pydisort(
     omega_arr : array or float
         Single-scattering albedo of each atmospheric layer.
     NQuad : int
-        Number of ``mu`` quadrature nodes.
+        Number of ``mu`` quadrature nodes, i.e. number of streams.
     Leg_coeffs_all : 2darray
         All available unweighted phase function Legendre coefficients.
         Each row pertains to an atmospheric layer (from top to bottom).
@@ -61,10 +61,10 @@ def pydisort(
     NFourier : optional, int
         Number of Fourier modes to use to construct the intensity function.
     b_pos : optional, 2darray or float
-        Dirichlet boundary condition for the upward direction.
+        Dirichlet condition at the bottom boundary for the upward direction.
         Each column pertains to a Fourier mode (ascending order).
     b_neg : optional, 2darray or float
-        Dirichlet boundary condition for the downward direction.
+        Dirichlet condition at the top boundary for the downward direction.
         Each column pertains to a Fourier mode (ascending order).
     only_flux : optional, bool
         Do NOT compute the intensity function?
@@ -86,7 +86,7 @@ def pydisort(
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
     autograd_compatible : optional, bool
         If ``True``, the autograd package: https://github.com/HIPS/autograd can be used to compute
-        the tau-derivatives of the output functions but ``pydisort`` will be less efficient.  
+        the ``tau``-derivatives of the output functions but ``pydisort`` will be less efficient.  
 
     Returns
     -------
@@ -97,9 +97,7 @@ def pydisort(
         Returns the diffuse flux magnitudes (same type and size as ``tau``).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.
-        For example, ``Fp(1, is_antiderivative_wrt_tau=True) - Fp(0, is_antiderivative_wrt_tau=True)`` 
-        will produce the tau-integral over ``[1, 0]`` assuming both values belong to the same layer, and
-        ``Fp(tau_arr, is_antiderivative_wrt_tau = True) - Fp(np.insert(tau_arr[:-1] + 1e-15, 0, 0), is_antiderivative_wrt_tau = True)``
+        For example, ``Fp(tau_arr, is_antiderivative_wrt_tau = True) - Fp(np.insert(tau_arr[:-1] + 1e-15, 0, 0), is_antiderivative_wrt_tau = True)``
         will produce an array of the tau-integral over each layer.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     Fm(tau) : function
