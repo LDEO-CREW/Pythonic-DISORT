@@ -618,10 +618,9 @@ def interpolate(u):
          
 
 
-def coo_to_diag_ordered_form(data, row_ind, col_ind, Nsuperdiags=None, Nsubdiags=None):
+def to_diag_ordered_form(A, Nsuperdiags, Nsubdiags):
     """
-    Given the parameters of a coordinate format (coo) sparse matrix,
-    generate the diagonal ordered form required by ``scipy.linalg.solve_banded``.
+    Convert some matrix A to the diagonal ordered form required by ``scipy.linalg.solve_banded``.
 
     Parameters
     ----------
@@ -637,13 +636,8 @@ def coo_to_diag_ordered_form(data, row_ind, col_ind, Nsuperdiags=None, Nsubdiags
     2darray
         The diagonal ordered form matrix as required by ``scipy.linalg.solve_banded``.
     """
-    if Nsuperdiags == None:
-        Nsuperdiags = np.max(col_ind - row_ind)
-    if Nsubdiags == None:
-        Nsubdiags = np.max(row_ind - col_ind)
-    
-    Ndiags = Nsuperdiags + Nsubdiags
-    diag_ordered_mat = np.zeros((
+    n = A.shape[0]
+    indices = np.arange(n)
 
     return np.concatenate(
         [
@@ -658,16 +652,6 @@ def coo_to_diag_ordered_form(data, row_ind, col_ind, Nsuperdiags=None, Nsubdiags
         ],
         axis=0,
     )
-
-
-
-def _nd_slice_to_indexes(nd_slice):
-    """Code taken from https://stackoverflow.com/questions/64097025/how-to-convert-n-d-slice-to-indexes-in-numpy.
-    This function is used to efficiently construct sparse COO matrices.
-    
-    """
-    grid = np.mgrid[{tuple: nd_slice, slice: (nd_slice,)}[type(nd_slice)]]
-    return tuple(grid[i].ravel() for i in range(grid.shape[0]))
 
 
     
