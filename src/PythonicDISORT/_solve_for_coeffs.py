@@ -87,7 +87,7 @@ def _solve_for_coeffs(
     # The following loops can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     for m in range(NFourier):
         m_equals_0 = (m == 0)
-        BDRF_bool = (NBDRF > m) 
+        there_is_BDRF_mode = (NBDRF > m) 
         
         G_collect_m = G_collect[m, :, :, :]
         K_collect_m = K_collect[m, :, :]
@@ -97,7 +97,7 @@ def _solve_for_coeffs(
         # Generate mathscr_D and mathscr_X (BDRF terms)
         # Just for this part, refer to section 3.4.2 of the Comprehensive Documentation 
         # --------------------------------------------------------------------------------------------------------------------------
-        if BDRF_bool:
+        if there_is_BDRF_mode:
             mathscr_D_neg = (1 + m_equals_0 * 1) * BDRF_Fourier_modes[m](mu_arr_pos, mu_arr_pos)
             R = mathscr_D_neg * mu_arr_pos_times_W[None, :]
 
@@ -212,7 +212,7 @@ def _solve_for_coeffs(
                     * np.exp(-scaled_tau_arr_with_0 / mu0)[l_range, None]
                 ).ravel()
                 
-            if BDRF_bool:
+            if there_is_BDRF_mode:
                 RHS = (
                     np.concatenate(
                         [
@@ -260,7 +260,7 @@ def _solve_for_coeffs(
             G_0_np
             * np.exp(K_collect_m[0, :N] * scaled_tau_arr_with_0[1])[None, :]
         )
-        if BDRF_bool:
+        if there_is_BDRF_mode:
             LHS[-N:, -NQuad : -N] = (G_L_pn - R @ G_L_nn) * E_Lm1L[None, :]
             LHS[-N:, -N:] = G_L_pp - R @ G_L_np
         else:

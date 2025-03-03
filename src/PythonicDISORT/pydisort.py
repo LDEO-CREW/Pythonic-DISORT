@@ -232,8 +232,8 @@ def pydisort(
         raise ValueError("The number of phase function Legendre coefficients must be positive.") 
     if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
         raise ValueError("The first phase function Legendre coefficient must equal 1.") 
-    if not (np.all(0 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)):
-        raise ValueError("The phase function Legendre coefficients must all be between 0 and 1.") 
+    if not (np.all(-1 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)):
+        raise ValueError("The phase function Legendre coefficients must all be between -1 and 1.") 
     if not NLeg <= NLeg_all:
         raise ValueError("`NLeg` cannot be larger than the number of phase function Legendre coefficients provided.")
     # Ensure that the first dimension of the following inputs corresponds to the number of layers
@@ -263,9 +263,9 @@ def pydisort(
     if I0 < 0:
         raise ValueError("The incident beam must have positive intensity.")
     if there_is_beam_source:
-        if not 0 < mu0 and mu0 <= 1:
+        if not (0 < mu0 and mu0 <= 1):
             raise ValueError("The cosine of the polar angle of the incident beam must be between 0 and 1, excluding 0.")
-        if not 0 <= phi0 and phi0 < 2 * pi:
+        if not (0 <= phi0 and phi0 < 2 * pi):
             raise ValueError("Provide the principal azimuthal angle for the incident beam (must be between 0 and 2pi, excluding 2pi).")
     # Ensure that the BC inputs are of the correct shape
     if len(np.atleast_1d(b_pos)) == 1:
