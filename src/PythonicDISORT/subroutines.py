@@ -458,14 +458,15 @@ def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
     mu0 : float
         Cosine of polar angle of the incident beam.
     BDRF_Fourier_modes : list of functions
-        BDRF Fourier modes, each a function with arguments ``mu, -mu_p`` of type array
-        and which output has the same dimensions as the outer product of the two arrays.
+        BDRF Fourier modes, each a scalar, or a function with arguments ``mu, -mu_p`` of type array
+        which output has the same dimensions as the outer product of the two arrays.
 
     Returns
     -------
     cached_BDRF_Fourier_modes : list of functions
         Cached BDRF Fourier modes, each a function with arguments ``mu, -mu_p`` of type array
-        and which output has the same dimensions as the outer product of the two arrays.
+        and which output is a scalar (if the Fourier mode was a scalar) 
+        or has the same dimensions as the outer product of the two arrays.
     """
     NBDRF = len(BDRF_Fourier_modes)
     mu_arr_pos = Gauss_Legendre_quad(N)[0]
