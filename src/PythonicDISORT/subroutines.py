@@ -471,7 +471,7 @@ def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
     NBDRF = len(BDRF_Fourier_modes)
     mu_arr_pos = Gauss_Legendre_quad(N)[0]
 
-    [
+    BDRF_Fourier_modes_evaluated = [
         (
             None
             if np.isscalar(BDRF_Fourier_modes[m])
