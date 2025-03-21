@@ -76,8 +76,8 @@ def pydisort(
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
     BDRF_Fourier_modes : optional, list of functions
-        BDRF Fourier modes, each a function with arguments ``mu, -mu_p`` of type array
-        and which output has the same dimensions as the outer product of the two arrays.
+        BDRF Fourier modes, each a scalar, or a function with arguments ``mu, -mu_p`` of type array
+        which output has the same dimensions as the outer product of the two arrays.
     s_poly_coeffs : optional, array
         Polynomial coefficients of isotropic internal sources.
         Each row pertains to an atmospheric layer (from top to bottom).

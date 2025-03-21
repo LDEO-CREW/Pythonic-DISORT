@@ -98,13 +98,19 @@ def _solve_for_coeffs(
         # Just for this part, refer to section 3.4.2 of the Comprehensive Documentation 
         # --------------------------------------------------------------------------------------------------------------------------
         if there_is_BDRF_mode:
-            mathscr_D_neg = (1 + m_equals_0 * 1) * BDRF_Fourier_modes[m](mu_arr_pos, mu_arr_pos)
-            R = mathscr_D_neg * mu_arr_pos_times_W[None, :]
-
-            if there_is_beam_source:
-                mathscr_X_pos = (mu0 * I0 / pi) * BDRF_Fourier_modes[m](
-                    mu_arr_pos, np.array([mu0])
-                )[:, 0]
+            BDRF_Fourier_modes_m = BDRF_Fourier_modes[m]
+            if np.isscalar(BDRF_Fourier_modes_m):
+                mathscr_D_neg = (1 + m_equals_0 * 1) * BDRF_Fourier_modes_m
+                R = mathscr_D_neg * mu_arr_pos_times_W[None, :]
+                if there_is_beam_source:
+                    mathscr_X_pos = (mu0 * I0 / pi) * BDRF_Fourier_modes_m
+            else:
+                mathscr_D_neg = (1 + m_equals_0 * 1) * BDRF_Fourier_modes_m(mu_arr_pos, mu_arr_pos)
+                R = mathscr_D_neg * mu_arr_pos_times_W[None, :]
+                if there_is_beam_source:
+                    mathscr_X_pos = (mu0 * I0 / pi) * BDRF_Fourier_modes_m(
+                        mu_arr_pos, np.array([mu0])
+                    )[:, 0]
         # --------------------------------------------------------------------------------------------------------------------------
     
         # Assemble RHS

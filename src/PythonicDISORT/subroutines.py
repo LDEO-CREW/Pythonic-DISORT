@@ -470,17 +470,28 @@ def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
     NBDRF = len(BDRF_Fourier_modes)
     mu_arr_pos = Gauss_Legendre_quad(N)[0]
 
-    BDRF_Fourier_modes_evaluated = [
-        BDRF_Fourier_modes[m](mu_arr_pos, np.append(mu_arr_pos, mu0)) for m in range(NBDRF)
-    ]
-    cached_BDRF_Fourier_modes = [
+    [
         (
-            lambda mu, neg_mup, m=m: BDRF_Fourier_modes_evaluated[m][:, [-1]]
-            if len(neg_mup) == 1
-            else BDRF_Fourier_modes_evaluated[m][:, :-1]
+            None
+            if np.isscalar(BDRF_Fourier_modes[m])
+            else BDRF_Fourier_modes[m](mu_arr_pos, np.append(mu_arr_pos, mu0))
         )
         for m in range(NBDRF)
     ]
+
+    cached_BDRF_Fourier_modes = [
+        (
+            lambda mu, neg_mup, m=m: BDRF_Fourier_modes[m]
+            if np.isscalar(BDRF_Fourier_modes[m])
+            else (
+                BDRF_Fourier_modes_evaluated[m][:, [-1]]
+                if len(neg_mup) == 1
+                else BDRF_Fourier_modes_evaluated[m][:, :-1]
+            )
+        )
+        for m in range(NBDRF)
+    ]
+
     return cached_BDRF_Fourier_modes
 
 
