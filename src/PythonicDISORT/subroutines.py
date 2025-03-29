@@ -11,13 +11,13 @@ def transform_interval(arr, c, d, a, b):
     ----------
     arr : array
         The 1D array to transform.
-    c : float
+    c : scalar
         The beginning of interval [c, d].
-    d : float
+    d : scalar
         The end of interval [c, d].
-    a : float, optional
+    a : scalar, optional
         The beginning of interval [a, b].
-    b : float, optional
+    b : scalar, optional
         The end of interval [a, b].
 
     Returns
@@ -37,13 +37,13 @@ def transform_weights(weights, c, d, a, b):
     ----------
     weights : array
         The weights to transform.
-    c : float
+    c : scalar
         The beginning of interval [c, d].
-    d : float
+    d : scalar
         The end of interval [c, d].
-    a : float, optional
+    a : scalar, optional
         The beginning of interval [a, b].
-    b : float, optional
+    b : scalar, optional
         The end of interval [a, b].
 
     Returns
@@ -94,9 +94,9 @@ def Gauss_Legendre_quad(N, c=0, d=1):
     ----------
     N : int (will be converted to int)
         Number of quadrature nodes.
-    c : float, optional
+    c : scalar, optional
         Start of integration interval.
-    d : float, optional
+    d : scalar, optional
         End of integration interval.
 
     Returns
@@ -120,9 +120,9 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     ----------
     Nphi : int
         Number of quadrature nodes.
-    c : float, optional
+    c : scalar, optional
         Start of integration interval.
-    d : float, optional
+    d : scalar, optional
         End of integration interval.
 
     Returns
@@ -159,9 +159,9 @@ def generate_FD_mat(Ntau, a, b):
     ----------
     Nphi : int
         Number of grid nodes.
-    a : float, optional
+    a : scalar, optional
         Start of diffentiation interval.
-    b : float, optional
+    b : scalar, optional
         End of diffentiation interval.
 
     Returns
@@ -299,9 +299,9 @@ def Planck(T, WVNM):
 
     Parameters
     ----------
-    T : float or array
+    T : scalar or array
         Temperatures in kelvin.
-    WVNM : float
+    WVNM : scalar
         Wavenumber with units m^-1.
 
     Returns
@@ -314,11 +314,12 @@ def Planck(T, WVNM):
     not_zeros_ind = T != 0
     
     results = np.zeros(len(T))
-    results[~not_zeros_ind] = 0
-    
-    # Coded in this way to prevent overflow
-    expterm = np.exp(-100 * sc.constants.h * sc.constants.c * WVNM / (sc.constants.k * T[not_zeros_ind]))
-    results[not_zeros_ind] = (2e8 * sc.constants.h * sc.constants.c**2 * WVNM**3 * expterm) / (1 - expterm)
+    if np.sum(not_zeros_ind) > 0:
+        results[~not_zeros_ind] = 0
+        
+        # Coded in this way to prevent overflow
+        expterm = np.exp(-100 * sc.constants.h * sc.constants.c * WVNM / (sc.constants.k * T[not_zeros_ind]))
+        results[not_zeros_ind] = (2e8 * sc.constants.h * sc.constants.c**2 * WVNM**3 * expterm) / (1 - expterm)
         
     return np.squeeze(results)[()]
     
@@ -333,11 +334,11 @@ def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
     
     Parameters
     ----------
-    T : float or array
+    T : scalar or array
         Temperatures in kelvin.
-    WVNMLO : float
+    WVNMLO : scalar
         Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
-    WVNMHI : float
+    WVNMHI : scalar
         Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
@@ -391,14 +392,14 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
     
     Parameters
     ----------
-    tau_arr : array or float
+    tau_arr : array or scalar
         Optical depth of the lower boundary of each atmospheric layer.
     TEMPER : array
         Temperature in kelvin at each boundary / interface from top to bottom.
         This variable is identically named in Stamnes' DISORT.
-    WVNMLO : float
+    WVNMLO : scalar
         Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
-    WVNMHI : float
+    WVNMHI : scalar
         Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
@@ -432,17 +433,22 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
     ----------
     N : int
         Number of upper hemisphere quadrature nodes. Equal to ``NQuad // 2``.
-    zeroth_BDRF_Fourier_mode : function
+    zeroth_BDRF_Fourier_mode : function or scalar
         Zeroth BDRF Fourier mode with arguments ``mu, -mu_p`` of type array
         and which output has the same dimensions as the outer product of the two arrays.
+        A scalar input represents a constant function and in that case the output 
+        is simply one minus the scalar input.
 
     Returns
     -------
-    array
+    array or scalar
         Emissivity for the blackbody contribution to the lower boundary source ``b_neg``.
     """
-    mu_arr_pos, W = Gauss_Legendre_quad(N)
-    return 1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos) * mu_arr_pos[None, :] @ W
+    if np.isscalar(zeroth_BDRF_Fourier_mode):
+        return 1 - zeroth_BDRF_Fourier_mode
+    else:
+        mu_arr_pos, W = Gauss_Legendre_quad(N)
+        return 1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos) * mu_arr_pos[None, :] @ W
 
 
 
@@ -455,10 +461,11 @@ def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
     ----------
     N : int
         Number of upper hemisphere quadrature nodes. Equal to ``NQuad // 2``.
-    mu0 : float
+    mu0 : scalar
         Cosine of polar angle of the incident beam.
-    BDRF_Fourier_modes : list of functions
-        BDRF Fourier modes, each a scalar, or a function with arguments ``mu, -mu_p`` of type array
+    BDRF_Fourier_modes : list of functions and scalars
+        BDRF Fourier modes, each a scalar representing a constant function, 
+        or a function with arguments ``mu, -mu_p`` of type array
         which output has the same dimensions as the outer product of the two arrays.
 
     Returns
@@ -551,7 +558,7 @@ def interpolate(u):
     -------
     u_interpol : function
         Intensity function with arguments ``(mu, tau, phi)`` (for ``u``) 
-        or ``(mu, tau)`` (for ``u0``) each of type array or float.
+        or ``(mu, tau)`` (for ``u0``) each an array or scalar.
         Returns an ndarray with axes corresponding to variation with each argument in the same order.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.

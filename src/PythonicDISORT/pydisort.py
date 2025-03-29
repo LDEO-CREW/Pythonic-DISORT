@@ -39,9 +39,9 @@ def pydisort(
 
     Parameters
     ----------
-    tau_arr : array or float
+    tau_arr : array or scalar
         Optical depth of the lower boundary of each atmospheric layer.
-    omega_arr : array or float
+    omega_arr : array or scalar
         Single-scattering albedo of each atmospheric layer.
     NQuad : int
         Number of ``mu`` quadrature nodes, i.e. number of streams.
@@ -49,26 +49,26 @@ def pydisort(
         All available unweighted phase function Legendre coefficients.
         Each row pertains to an atmospheric layer (from top to bottom).
         Each coefficient should be between 0 and 1 inclusive.
-    mu0 : float
+    mu0 : scalar
         Cosine of polar angle of the incident beam.
-    I0 : float
+    I0 : scalar
         Intensity of the incident beam.
-    phi0 : float
+    phi0 : scalar
         Azimuthal angle of the incident beam.
     NLeg : optional, int
         Number of phase function Legendre coefficients
         to use in the pre-correction solver.
     NFourier : optional, int
         Number of Fourier modes to use to construct the intensity function.
-    b_pos : optional, 2darray or float
+    b_pos : optional, 2darray or scalar
         Dirichlet condition at the bottom boundary for the upward direction.
         Each column pertains to a Fourier mode (ascending order).
-    b_neg : optional, 2darray or float
+    b_neg : optional, 2darray or scalar
         Dirichlet condition at the top boundary for the downward direction.
         Each column pertains to a Fourier mode (ascending order).
     only_flux : optional, bool
         Do NOT compute the intensity function?
-    f_arr : optional, array or float
+    f_arr : optional, array or scalar
         Fractional scattering into peak for each atmospheric layer.
         Each row pertains to an atmospheric layer (from top to bottom).
         We recommend setting ``f_arr`` to ``Leg_coeffs_all[NQuad]``, 
@@ -90,10 +90,10 @@ def pydisort(
 
     Returns
     -------
-    mu_arr : array or float
+    mu_arr : array
         All ``mu`` (cosine of polar angle) quadrature nodes.
     Fp(tau) : function
-        (Energetic) Flux function with argument ``tau`` (type: array or float) for positive (upward) ``mu`` values.
+        (Energetic) Flux function with argument ``tau`` (type: array or scalar) for positive (upward) ``mu`` values.
         Returns the diffuse flux magnitudes (same type and size as ``tau``).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.
@@ -101,14 +101,14 @@ def pydisort(
         will produce an array of the tau-integral over each layer.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     Fm(tau) : function
-        (Energetic) Flux function with argument ``tau`` (type: array or float) for negative (downward) ``mu`` values.
+        (Energetic) Flux function with argument ``tau`` (type: array or scalar) for negative (downward) ``mu`` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
         same type and size as ``tau``.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     u0(tau) : function
-        Zeroth Fourier mode of the intensity with argument ``tau`` (type: array or float).
+        Zeroth Fourier mode of the intensity with argument ``tau`` (type: array or scalar).
         Returns an ndarray with axes corresponding to variation with ``mu`` and ``tau`` respectively.
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually
@@ -117,12 +117,12 @@ def pydisort(
         to switch to an antiderivative of the function with respect to ``tau``.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     u(tau, phi) : function, optional
-        Intensity function with arguments ``(tau, phi)`` each of type array or float.
+        Intensity function with arguments ``(tau, phi)`` each of type array or scalar.
         Returns an ndarray with axes corresponding to variation with ``mu, tau, phi`` respectively.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.
         Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the 
-        Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
+        Cauchy / Fourier convergence evaluation (type: scalar) for the last Fourier term.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     """
     

@@ -101,16 +101,17 @@ def _solve_for_gen_and_part_sols(
         # Loop over NLayers atmospheric layers
         # --------------------------------------------------------------------------------------------------------------------------          
         for l in range(NLayers):
-            weighted_asso_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, :][ells] * fac
+            weighted_scaled_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, :][ells]
+            scaled_omega_l = scaled_omega_arr[l]
+            omega_times_Leg_coeffs = (scaled_omega_l / 2) * weighted_scaled_Leg_coeffs_l
             
-            if np.any(weighted_asso_Leg_coeffs_l > 0): # There are shortcuts if the coefficients are all zero
-                scaled_omega_l = scaled_omega_arr[l]
+            if np.any(np.abs(omega_times_Leg_coeffs) > 1e-8): # There are shortcuts if multiple scattering is insignificant
                 
                 # Generate D
                 # --------------------------------------------------------------------------------------------------------------------------
-                D_temp = weighted_asso_Leg_coeffs_l[None, :] * asso_leg_term_pos.T
-                D_pos = (scaled_omega_l / 2) * D_temp @ asso_leg_term_pos
-                D_neg = (scaled_omega_l / 2) * D_temp @ asso_leg_term_neg
+                D_temp = omega_times_Leg_coeffs[None, :] * (fac[None, :] * asso_leg_term_pos.T)
+                D_pos = D_temp @ asso_leg_term_pos
+                D_neg = D_temp @ asso_leg_term_neg
                 
                 # --------------------------------------------------------------------------------------------------------------------------
                 
@@ -130,8 +131,8 @@ def _solve_for_gen_and_part_sols(
                     # Generate X
                     X_temp = (
                         (scaled_omega_l * I0 * (2 - (m == 0)) / (4 * pi))
-                        * weighted_asso_Leg_coeffs_l
-                        * asso_leg_term_mu0
+                        * weighted_scaled_Leg_coeffs_l
+                        * (fac * asso_leg_term_mu0)
                     )
                     X_pos = X_temp @ asso_leg_term_pos
                     X_neg = X_temp @ asso_leg_term_neg
@@ -148,7 +149,6 @@ def _solve_for_gen_and_part_sols(
                     B_collect[ind, :] = -np.linalg.solve(A, X_tilde) # We moved the minus sign out
                     
                 # --------------------------------------------------------------------------------------------------------------------------
-                
                 
                 alpha_arr[ind, :, :] = alpha
                 beta_arr[ind, :, :] = beta
@@ -173,15 +173,15 @@ def _solve_for_gen_and_part_sols(
     
         # Diagonalization of coefficient matrix (refer to section 3.4.2 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
-        alpha_arr = alpha_arr[: len(no_shortcut_indices), :, :]
-        beta_arr = beta_arr[: len(no_shortcut_indices), :, :]
+        alpha_arr = alpha_arr[no_shortcut_indices, :, :]
+        beta_arr = beta_arr[no_shortcut_indices, :, :]
 
         K_squared_arr, eigenvecs_GpG_arr = np.linalg.eig(
             np.einsum(
                 "lij, ljk -> lik", alpha_arr - beta_arr, alpha_arr + beta_arr, optimize=True
             ),
         )
-
+        
         # Eigenvalues arranged negative then positive, from largest to smallest magnitude
         K_arr = np.concatenate((-np.sqrt(K_squared_arr), np.sqrt(K_squared_arr)), axis=1)
         eigenvecs_GpG_arr = np.concatenate((eigenvecs_GpG_arr, eigenvecs_GpG_arr), axis=2)
@@ -205,7 +205,7 @@ def _solve_for_gen_and_part_sols(
         K_collect[no_shortcut_indices, :] = K_arr
         if len(no_shortcut_indices_0) > 0: # If there is no isotropic source this list will be empty
             G_inv_collect_0[no_shortcut_indices_0, :, :] = np.linalg.inv(
-                G_collect[: len(no_shortcut_indices_0), :, :]
+                G_collect[no_shortcut_indices_0, :, :]
             )
 
         # --------------------------------------------------------------------------------------------------------------------------
