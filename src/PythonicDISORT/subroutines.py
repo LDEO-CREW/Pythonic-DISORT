@@ -384,11 +384,12 @@ def linear_spline_coefficients(x, y, check_inputs=True):
 
 
 
-def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
+def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, omega_arr=None, **kwargs):
     """Generate DISORT-equivalent ``s_poly_coeffs`` for input into ``pydisort``.
     This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT.
-    Users will have to manually adjust emissivities, however, and they should note that PythonicDISORT allows much
-    more flexibility in choosing blackbody emission profiles than DISORT.
+    If ``omega_arr`` is specified, the coefficients will be multiplied by emissivity factors equal to ``1 - omega_arr`` 
+    per Kirchoff's law of thermal radiation, and Kirchoff's law is enforced in Stamnes' DISORT. 
+    Otherwise, the emissivities will be set to 1 and users can multiply their own emissivity factors.
     
     Parameters
     ----------
@@ -401,6 +402,8 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
         Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
     WVNMHI : scalar
         Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+    omega_arr : optional, array or scalar
+        Single-scattering albedo of each atmospheric layer.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
         
@@ -414,12 +417,35 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
     """
     tau_arr = np.atleast_1d(tau_arr)
     if not len(TEMPER) == len(tau_arr) + 1:
-        raise ValueError("Missing temperature specification at some boundaries / interfaces.")
-    
+        raise ValueError(
+            "Missing temperature specification at some boundaries / interfaces."
+        )
+
     tau_arr_with_0 = np.insert(tau_arr, 0, 0)
-    blackbody_emission_at_each_boundary = sc.integrate.quad_vec(lambda WVNM: Planck(TEMPER, WVNM), WVNMLO, WVNMHI, **kwargs)[0]
-    
-    return linear_spline_coefficients(tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False)
+    blackbody_emission_at_each_boundary = sc.integrate.quad_vec(
+        lambda WVNM: Planck(TEMPER, WVNM), WVNMLO, WVNMHI, **kwargs
+    )[0]
+
+    if omega_arr == None:
+        return (
+            linear_spline_coefficients(
+                tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False
+            )
+        )
+    elif np.isscalar(omega_arr):
+        return (
+            linear_spline_coefficients(
+                tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False
+            )
+            * (1 - omega_arr)
+        )
+    else:
+        return (
+            linear_spline_coefficients(
+                tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False
+            )
+            * (1 - omega_arr)[:, None]
+        )
 
 
 
@@ -448,7 +474,9 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
         return 1 - zeroth_BDRF_Fourier_mode
     else:
         mu_arr_pos, W = Gauss_Legendre_quad(N)
-        return 1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos) * mu_arr_pos[None, :] @ W
+    return (
+        1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos) * mu_arr_pos[None, :] @ W
+    )
 
 
 
@@ -778,7 +806,7 @@ def _mathscr_v(tau,                              # Input optical depths
     
 
 
-def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):
+def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None, div_threshold=1e-15):
     """Performs pointwise comparisons between results from Stamnes' DISORT,
     which are stored in ``.npz`` files, against results from PythonicDISORT. Used in our PyTests.
 
@@ -807,7 +835,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):
         diff_flux_up,
         flup,
         out=np.zeros_like(diff_flux_up),
-        where=flup > 1e-8,
+        where=flup > div_threshold,
     )
     print("Difference =", np.max(diff_flux_up))
     print("Difference ratio =", np.max(ratio_flux_up))
@@ -820,7 +848,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):
         diff_flux_down_diffuse,
         rfldn,
         out=np.zeros_like(diff_flux_down_diffuse),
-        where=rfldn > 1e-8,
+        where=rfldn > div_threshold,
     )
     print("Difference =", np.max(diff_flux_down_diffuse))
     print(
@@ -836,7 +864,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):
         diff_flux_down_direct,
         rfldir,
         out=np.zeros_like(diff_flux_down_direct),
-        where=rfldir > 1e-8,
+        where=rfldir > div_threshold,
     )
     print("Difference =", np.max(diff_flux_down_direct))
     print(
@@ -852,7 +880,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):
             diff,
             uu[mu_to_compare],
             out=np.zeros_like(diff),
-            where=uu[mu_to_compare] > 1e-8,
+            where=uu[mu_to_compare] > div_threshold,
         )
         max_diff_tau_index = np.argmax(np.max(np.max(diff, axis=0), axis=1))
         max_ratio_tau_index = np.argmax(np.max(np.max(diff_ratio, axis=0), axis=1))

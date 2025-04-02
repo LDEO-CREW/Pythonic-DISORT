@@ -230,10 +230,6 @@ def pydisort(
     # The user must supply at least as many phase function Legendre coefficients as intended for use
     if not NLeg > 0:
         raise ValueError("The number of phase function Legendre coefficients must be positive.") 
-    if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
-        raise ValueError("The first phase function Legendre coefficient must equal 1.") 
-    if not (np.all(-1 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)):
-        raise ValueError("The phase function Legendre coefficients must all be between -1 and 1.") 
     if not NLeg <= NLeg_all:
         raise ValueError("`NLeg` cannot be larger than the number of phase function Legendre coefficients provided.")
     # Ensure that the first dimension of the following inputs corresponds to the number of layers
@@ -245,6 +241,11 @@ def pydisort(
         raise ValueError("The length of `f_arr` does not match the number of layers as deduced from the length of `tau_arr`.")
     if there_is_iso_source and not np.shape(s_poly_coeffs)[0] == NLayers:
         raise ValueError("The zeroth dimension of the shape of `s_poly_coeffs` does not match the number of layers as deduced from the length of `tau_arr`.")
+    # Value checks on the phase function Legendre coefficients
+    if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
+        raise ValueError("The first phase function Legendre coefficient must equal 1.") 
+    if not (np.all(-1 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)):
+        raise ValueError("The phase function Legendre coefficients must all be between -1 and 1.") 
     # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NFourier)
     if not NQuad >= 2:
         raise ValueError("There must be at least two streams.")
@@ -353,9 +354,10 @@ def pydisort(
         scaled_s_poly_coeffs = (scaled_s_poly_coeffs / rescale_factor).copy()
     else:
         rescale_factor = np.max((I0, np.max(b_pos), np.max(b_neg)))
-        I0 = (I0 / rescale_factor).copy()
-        b_pos = (b_pos / rescale_factor).copy()
-        b_neg = (b_neg / rescale_factor).copy()
+        if rescale_factor != 0:
+            I0 = (I0 / rescale_factor).copy()
+            b_pos = (b_pos / rescale_factor).copy()
+            b_neg = (b_neg / rescale_factor).copy()
     # --------------------------------------------------------------------------------------------------------------------------
     
     if NT_cor and not only_flux and there_is_beam_source and np.any(f_arr > 0) and NLeg < NLeg_all:

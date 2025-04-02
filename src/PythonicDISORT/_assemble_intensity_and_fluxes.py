@@ -592,6 +592,6 @@ def _assemble_intensity_and_fluxes(
         # --------------------------------------------------------------------------------------------------------------------------
 
     if only_flux:
-        return flux_up, flux_down, u0#, GC_collect_0, K_collect_0, B_collect_0
+        return flux_up, flux_down, u0#, GC_collect_0, K_collect_0#, B_collect_0
     else:
         return flux_up, flux_down, u0, u
