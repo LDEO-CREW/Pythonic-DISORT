@@ -403,7 +403,7 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, omega_arr=None, **kw
     WVNMHI : scalar
         Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
     omega_arr : optional, array or scalar
-        Single-scattering albedo of each atmospheric layer.
+        Single-scattering albedo of each atmospheric layer which is required to compute the emissivity of each layer.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
         
@@ -426,7 +426,7 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, omega_arr=None, **kw
         lambda WVNM: Planck(TEMPER, WVNM), WVNMLO, WVNMHI, **kwargs
     )[0]
 
-    if omega_arr == None:
+    if omega_arr is None:
         return (
             linear_spline_coefficients(
                 tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False
@@ -806,21 +806,22 @@ def _mathscr_v(tau,                              # Input optical depths
     
 
 
-def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None, div_threshold=1e-15):
+def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):
     """Performs pointwise comparisons between results from Stamnes' DISORT,
     which are stored in ``.npz`` files, against results from PythonicDISORT. Used in our PyTests.
-
+    See the ``*_test`` Jupyter Notebooks to see how this function is used and the arguments that go into it.
+    
     """
     # Load saved results from Stamnes' DISORT
     flup = results["flup"]
     rfldn = results["rfldn"]
     rfldir = results["rfldir"]
-    if u != None:
+    if u is not None:
         uu = results["uu"]
 
     # Load comparison points
     tau_test_arr = results["tau_test_arr"]
-    if u != None:
+    if u is not None:
         phi_arr = results["phi_arr"]
 
     # Perform and print the comparisons
@@ -835,7 +836,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None, div
         diff_flux_up,
         flup,
         out=np.zeros_like(diff_flux_up),
-        where=flup > div_threshold,
+        where=(flup != 0),
     )
     print("Difference =", np.max(diff_flux_up))
     print("Difference ratio =", np.max(ratio_flux_up))
@@ -848,7 +849,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None, div
         diff_flux_down_diffuse,
         rfldn,
         out=np.zeros_like(diff_flux_down_diffuse),
-        where=rfldn > div_threshold,
+        where=(rfldn != 0),
     )
     print("Difference =", np.max(diff_flux_down_diffuse))
     print(
@@ -864,7 +865,7 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None, div
         diff_flux_down_direct,
         rfldir,
         out=np.zeros_like(diff_flux_down_direct),
-        where=rfldir > div_threshold,
+        where=(rfldir != 0),
     )
     print("Difference =", np.max(diff_flux_down_direct))
     print(
@@ -873,14 +874,15 @@ def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None, div
     )
     print()
     
-    if u != None:
+    if u is not None:
         # Intensity
-        diff = np.abs(uu - u(tau_test_arr, phi_arr)[reorder_mu])[mu_to_compare]
+        u_cache = u(tau_test_arr, phi_arr)[reorder_mu].reshape(np.shape(uu))
+        diff = np.abs(uu - u_cache)[mu_to_compare]
         diff_ratio = np.divide(
             diff,
             uu[mu_to_compare],
             out=np.zeros_like(diff),
-            where=uu[mu_to_compare] > div_threshold,
+            where=(uu[mu_to_compare] != 0),
         )
         max_diff_tau_index = np.argmax(np.max(np.max(diff, axis=0), axis=1))
         max_ratio_tau_index = np.argmax(np.max(np.max(diff_ratio, axis=0), axis=1))
