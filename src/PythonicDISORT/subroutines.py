@@ -712,6 +712,7 @@ def _mathscr_v(tau,                              # Input optical depths
                 G_inv,                           # Inverse of eigenvector matrix
                 mu_arr,                          # Quadrature nodes for both hemispheres
                 is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
+                autograd_compatible=False,       # Should the output functions be compatible with autograd?
                 ):
     """Particular solution for isotropic internal sources.
     Refer to section 3.6.1 of the Comprehensive Documentation.
@@ -731,6 +732,7 @@ def _mathscr_v(tau,                              # Input optical depths
     | ``G_inv``                     | ``NLayers<= x NQuad x NQuad`` or ``None`` |
     | ``mu_arr``                    | ``NQuad``                                 |
     | ``is_antiderivative_wrt_tau`` | boolean                                   |
+    | ``autograd_compatible``       | boolean                                   |
     
     Notable internal variables of _mathscr_v
     |     Variable     |                Shape                  | 
@@ -742,26 +744,52 @@ def _mathscr_v(tau,                              # Input optical depths
     | OUTPUT           | ``NQuad x Ntau``                      |
     """
     n = Nscoeffs - 1
-    shape = np.shape(K)
-    i_arr = np.arange(Nscoeffs)
-    i_arr_repeat = np.repeat(i_arr, i_arr + 1)
-    j_arr = np.concatenate([i_arr[:i] for i in range(1, Nscoeffs + 1)])
-    s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
+    
+    if autograd_compatible:
+        import autograd.numpy as np
+    
+        def mathscr_b(i):
+            """
+            Notable internal variables of mathscr_b
+            |     Variable     |                  Shape                  |
+            | ---------------- | --------------------------------------- |
+            | j_arr            | ``i + 1``                               |
+            | s_poly_coeffs_nj | ``i + 1``                               |
+            | OUTPUT           | ``Nscoeffs x (i + 1) x NQuad``          |
+            """
+        
+            j_arr = np.arange(i + 1)
+            s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
+            return np.sum(
+                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i))[None, None, :]
+                * K[:, :, None] ** -(i - j_arr + 1)[None, None, :]
+                * s_poly_coeffs_nj[:, None, :],
+                axis=-1,
+            )
+        mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
+    else:
+        import numpy as np
+        
+        shape = np.shape(K)
+        i_arr = np.arange(Nscoeffs)
+        i_arr_repeat = np.repeat(i_arr, i_arr + 1)
+        j_arr = np.concatenate([i_arr[:i] for i in range(1, Nscoeffs + 1)])
+        s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
 
-    mathscr_v_coeffs = np.zeros((Nscoeffs, shape[0], shape[1]))
-    np.add.at(
-        mathscr_v_coeffs,
-        i_arr_repeat,
-        np.moveaxis(
-            (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i_arr_repeat))[
-                None, None, :
-            ]
-            * K[:, :, None] ** -(i_arr_repeat - j_arr + 1)[None, None, :]
-            * s_poly_coeffs_nj[:, None, :],
-            -1,
-            0,
-        ),
-    )
+        mathscr_v_coeffs = np.zeros((Nscoeffs, shape[0], shape[1]))
+        np.add.at(
+            mathscr_v_coeffs,
+            i_arr_repeat,
+            np.moveaxis(
+                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i_arr_repeat))[
+                    None, None, :
+                ]
+                * K[:, :, None] ** -(i_arr_repeat - j_arr + 1)[None, None, :]
+                * s_poly_coeffs_nj[:, None, :],
+                -1,
+                0,
+            ),
+        )
     
     powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
     if is_antiderivative_wrt_tau:

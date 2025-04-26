@@ -25,6 +25,7 @@ def pydisort(
     s_poly_coeffs=np.array([[]]),
     use_banded_solver_NLayers=10,
     abs_mu_arr_lower_bound=0,
+    autograd_compatible=False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -86,6 +87,9 @@ def pydisort(
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
     abs_mu_arr_lower_bound : optional, float
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
+    autograd_compatible : optional, bool
+        If ``True``, the autograd package: https://github.com/HIPS/autograd can be used to compute
+        the ``tau``-derivatives of the output functions but ``pydisort`` will be less efficient. 
 
     Returns
     -------
@@ -172,6 +176,11 @@ def pydisort(
     | `scaled_mu0`                 | scalar               |
     """
     
+    if autograd_compatible:
+        import autograd.numpy as np
+    else:
+        import numpy as np
+    
     # Turn floats into arrays
     # --------------------------------------------------------------------------------------------------------------------------
     tau_arr = np.atleast_1d(tau_arr)
@@ -198,8 +207,8 @@ def pydisort(
     else:
         Nscoeffs = np.shape(s_poly_coeffs)[1]
     NLayers = len(tau_arr)
-    b_pos_is_float = False
-    b_neg_is_float = False
+    b_pos_is_scalar = False
+    b_neg_is_scalar = False
     b_pos_is_vector = False
     b_neg_is_vector = False
     thickness_arr = np.insert(np.diff(tau_arr), 0, tau_arr[0])
@@ -264,13 +273,13 @@ def pydisort(
             raise ValueError("Provide the principal azimuthal angle for the incident beam (must be between 0 and 2pi, excluding 2pi).")
     # Ensure that the BC inputs are of the correct shape
     if len(np.atleast_1d(b_pos)) == 1:
-        b_pos_is_float = True
+        b_pos_is_scalar = True
     elif len(b_pos) == N:
         b_pos_is_vector = True
     elif not np.shape(b_pos) == (N, NFourier):
         raise ValueError("The shape of the bottom boundary condition is incorrect.")
     if len(np.atleast_1d(b_neg)) == 1:
-        b_neg_is_float = True
+        b_neg_is_scalar = True
     elif len(b_neg) == N:
         b_neg_is_vector = True
     elif not np.shape(b_neg) == (N, NFourier):
@@ -377,7 +386,7 @@ def pydisort(
             mu0, I0, rescale_factor, phi0,
             there_is_beam_source,
             b_pos, b_neg,
-            b_pos_is_float, b_neg_is_float,
+            b_pos_is_scalar, b_neg_is_scalar,
             b_pos_is_vector, b_neg_is_vector,
             Nscoeffs,
             scaled_s_poly_coeffs,
@@ -385,6 +394,7 @@ def pydisort(
             scale_tau,
             only_flux,
             use_banded_solver_NLayers,
+            autograd_compatible,
         )
         
         # TMS correction for the intensity (see section 3.7.2)
@@ -594,6 +604,16 @@ def pydisort(
                             axis=1,
                         )
 
+                if autograd_compatible:
+                    if not any_pos_contribution:
+                        TMS_correction_pos = np.zeros((N, Ntau, Nphi))
+                    if not any_neg_contribution:
+                        TMS_correction_neg = np.zeros((N, Ntau, Nphi))
+                    return solution + np.concatenate(
+                        (contribution_from_other_layers_pos, contribution_from_other_layers_neg),
+                        axis=0,
+                    )
+                else:
                     if any_pos_contribution:
                         solution[:N, :, :] += contribution_from_other_layers_pos
                     if any_neg_contribution:
@@ -655,7 +675,13 @@ def pydisort(
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
             NT_corrections = TMS_correction(tau, phi, is_antiderivative_wrt_tau)
-            NT_corrections[N:, :, :] += IMS_correction(tau, phi, is_antiderivative_wrt_tau)
+            
+            if autograd_compatible:
+                NT_corrections = NT_corrections + np.concatenate(
+                    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi, is_antiderivative_wrt_tau)], axis=0
+                )
+            else:
+                NT_corrections[N:, :, :] += IMS_correction(tau, phi, is_antiderivative_wrt_tau)
             
             if return_Fourier_error or return_tau_arr:
                 u_star_outputs = u_star(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
@@ -683,7 +709,7 @@ def pydisort(
             mu0, I0, rescale_factor, phi0,
             there_is_beam_source,
             b_pos, b_neg,
-            b_pos_is_float, b_neg_is_float,
+            b_pos_is_scalar, b_neg_is_scalar,
             b_pos_is_vector, b_neg_is_vector,
             Nscoeffs,
             scaled_s_poly_coeffs,
@@ -691,4 +717,5 @@ def pydisort(
             scale_tau,
             only_flux,
             use_banded_solver_NLayers,
+            autograd_compatible,
         )
