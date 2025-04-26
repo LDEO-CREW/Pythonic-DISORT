@@ -24,7 +24,7 @@ def pydisort(
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
     use_banded_solver_NLayers=10,
-    autograd_compatible=False,
+    abs_mu_arr_lower_bound=0,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -39,9 +39,9 @@ def pydisort(
 
     Parameters
     ----------
-    tau_arr : array or scalar
+    tau_arr : array or float
         Optical depth of the lower boundary of each atmospheric layer.
-    omega_arr : array or scalar
+    omega_arr : array or float
         Single-scattering albedo of each atmospheric layer.
     NQuad : int
         Number of ``mu`` quadrature nodes, i.e. number of streams.
@@ -49,26 +49,26 @@ def pydisort(
         All available unweighted phase function Legendre coefficients.
         Each row pertains to an atmospheric layer (from top to bottom).
         Each coefficient should be between 0 and 1 inclusive.
-    mu0 : scalar
+    mu0 : float
         Cosine of polar angle of the incident beam.
-    I0 : scalar
+    I0 : float
         Intensity of the incident beam.
-    phi0 : scalar
+    phi0 : float
         Azimuthal angle of the incident beam.
     NLeg : optional, int
         Number of phase function Legendre coefficients
         to use in the pre-correction solver.
     NFourier : optional, int
         Number of Fourier modes to use to construct the intensity function.
-    b_pos : optional, 2darray or scalar
+    b_pos : optional, 2darray or float
         Dirichlet condition at the bottom boundary for the upward direction.
         Each column pertains to a Fourier mode (ascending order).
-    b_neg : optional, 2darray or scalar
+    b_neg : optional, 2darray or float
         Dirichlet condition at the top boundary for the downward direction.
         Each column pertains to a Fourier mode (ascending order).
     only_flux : optional, bool
         Do NOT compute the intensity function?
-    f_arr : optional, array or scalar
+    f_arr : optional, array or float
         Fractional scattering into peak for each atmospheric layer.
         Each row pertains to an atmospheric layer (from top to bottom).
         We recommend setting ``f_arr`` to ``Leg_coeffs_all[NQuad]``, 
@@ -76,7 +76,7 @@ def pydisort(
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
     BDRF_Fourier_modes : optional, list of functions
-        BDRF Fourier modes, each a scalar, or a function with arguments ``mu, -mu_p`` of type array
+        BDRF Fourier modes, each a float, or a function with arguments ``mu, -mu_p`` of type array
         which output has the same dimensions as the outer product of the two arrays.
     s_poly_coeffs : optional, array
         Polynomial coefficients of isotropic internal sources.
@@ -84,16 +84,15 @@ def pydisort(
         Arrange coefficients from lowest order term to highest.
     use_banded_solver_NLayers : optional, int
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
-    autograd_compatible : optional, bool
-        If ``True``, the autograd package: https://github.com/HIPS/autograd can be used to compute
-        the ``tau``-derivatives of the output functions but ``pydisort`` will be less efficient.  
+    abs_mu_arr_lower_bound : optional, float
+        At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
 
     Returns
     -------
     mu_arr : array
         All ``mu`` (cosine of polar angle) quadrature nodes.
     Fp(tau) : function
-        (Energetic) Flux function with argument ``tau`` (type: array or scalar) for positive (upward) ``mu`` values.
+        (Energetic) Flux function with argument ``tau`` (type: array or float) for positive (upward) ``mu`` values.
         Returns the diffuse flux magnitudes (same type and size as ``tau``).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.
@@ -101,14 +100,14 @@ def pydisort(
         will produce an array of the tau-integral over each layer.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     Fm(tau) : function
-        (Energetic) Flux function with argument ``tau`` (type: array or scalar) for negative (downward) ``mu`` values.
+        (Energetic) Flux function with argument ``tau`` (type: array or float) for negative (downward) ``mu`` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
         same type and size as ``tau``.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     u0(tau) : function
-        Zeroth Fourier mode of the intensity with argument ``tau`` (type: array or scalar).
+        Zeroth Fourier mode of the intensity with argument ``tau`` (type: array or float).
         Returns an ndarray with axes corresponding to variation with ``mu`` and ``tau`` respectively.
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually
@@ -117,12 +116,12 @@ def pydisort(
         to switch to an antiderivative of the function with respect to ``tau``.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     u(tau, phi) : function, optional
-        Intensity function with arguments ``(tau, phi)`` each of type array or scalar.
+        Intensity function with arguments ``(tau, phi)`` each of type array or float.
         Returns an ndarray with axes corresponding to variation with ``mu, tau, phi`` respectively.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of the function with respect to ``tau``.
         Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the 
-        Cauchy / Fourier convergence evaluation (type: scalar) for the last Fourier term.
+        Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     """
     
@@ -172,13 +171,8 @@ def pydisort(
     | `Leg_coeffs_residue_avg`     | `NLeg_all`           |
     | `scaled_mu0`                 | scalar               |
     """
-
-    if autograd_compatible:
-        import autograd.numpy as np
-    else:
-        import numpy as np
     
-    # Turn scalars into arrays
+    # Turn floats into arrays
     # --------------------------------------------------------------------------------------------------------------------------
     tau_arr = np.atleast_1d(tau_arr)
     omega_arr = np.atleast_1d(omega_arr)
@@ -204,8 +198,8 @@ def pydisort(
     else:
         Nscoeffs = np.shape(s_poly_coeffs)[1]
     NLayers = len(tau_arr)
-    b_pos_is_scalar = False
-    b_neg_is_scalar = False
+    b_pos_is_float = False
+    b_neg_is_float = False
     b_pos_is_vector = False
     b_neg_is_vector = False
     thickness_arr = np.insert(np.diff(tau_arr), 0, tau_arr[0])
@@ -222,7 +216,7 @@ def pydisort(
     if not np.all(tau_arr > 0):
         raise ValueError("tau values cannot be non-positive.")
     if not np.all(thickness_arr > 0):
-        raise ValueError("Layer thickness cannot be non-positive.")
+        raise ValueError("Layer thicknesses cannot be non-positive.")
     # Single-scattering albedo must be between 0 and 1, excluding 1
     if not (np.all(omega_arr >= 0) and np.all(omega_arr < 1)):
         raise ValueError("Single-scattering albedo must be between 0 and 1, excluding 1.") 
@@ -234,13 +228,13 @@ def pydisort(
         raise ValueError("`NLeg` cannot be larger than the number of phase function Legendre coefficients provided.")
     # Ensure that the first dimension of the following inputs corresponds to the number of layers
     if not np.shape(Leg_coeffs_all)[0] == NLayers:
-        raise ValueError("The zeroth dimension of the shape of `Leg_coeffs_all` does not match the number of layers as deduced from the length of `tau_arr`.")
+        raise ValueError("The zeroth dimension of the shape of `Leg_coeffs_all` does not match the number of layers which is deduced from the length of `tau_arr`.")
     if not len(omega_arr) == NLayers:
-        raise ValueError("The zeroth dimension of the shape of `omega_arr` does not match the number of layers as deduced from the length of `tau_arr`.")
+        raise ValueError("The zeroth dimension of the shape of `omega_arr` does not match the number of layers which is deduced from the length of `tau_arr`.")
     if np.any(f_arr != 0) and not len(f_arr) == NLayers:
-        raise ValueError("The length of `f_arr` does not match the number of layers as deduced from the length of `tau_arr`.")
+        raise ValueError("The length of `f_arr` does not match the number of layers which is deduced from the length of `tau_arr`.")
     if there_is_iso_source and not np.shape(s_poly_coeffs)[0] == NLayers:
-        raise ValueError("The zeroth dimension of the shape of `s_poly_coeffs` does not match the number of layers as deduced from the length of `tau_arr`.")
+        raise ValueError("The zeroth dimension of the shape of `s_poly_coeffs` does not match the number of layers which is deduced from the length of `tau_arr`.")
     # Value checks on the phase function Legendre coefficients
     if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
         raise ValueError("The first phase function Legendre coefficient must equal 1.") 
@@ -262,7 +256,7 @@ def pydisort(
         raise ValueError("There should be more streams than the number of phase function Legendre coefficients used.")
     # We require principal angles and a downward incident beam
     if I0 < 0:
-        raise ValueError("The incident beam must have positive intensity.")
+        raise ValueError("The intensity of the incident beam cannot be negative.")
     if there_is_beam_source:
         if not (0 < mu0 and mu0 <= 1):
             raise ValueError("The cosine of the polar angle of the incident beam must be between 0 and 1, excluding 0.")
@@ -270,13 +264,13 @@ def pydisort(
             raise ValueError("Provide the principal azimuthal angle for the incident beam (must be between 0 and 2pi, excluding 2pi).")
     # Ensure that the BC inputs are of the correct shape
     if len(np.atleast_1d(b_pos)) == 1:
-        b_pos_is_scalar = True
+        b_pos_is_float = True
     elif len(b_pos) == N:
         b_pos_is_vector = True
     elif not np.shape(b_pos) == (N, NFourier):
         raise ValueError("The shape of the bottom boundary condition is incorrect.")
     if len(np.atleast_1d(b_neg)) == 1:
-        b_neg_is_scalar = True
+        b_neg_is_float = True
     elif len(b_neg) == N:
         b_neg_is_vector = True
     elif not np.shape(b_neg) == (N, NFourier):
@@ -300,6 +294,8 @@ def pydisort(
     # --------------------------------------------------------------------------------------------------------------------------
     # For positive mu values (the weights are identical for both domains)
     mu_arr_pos, W = subroutines.Gauss_Legendre_quad(N)  # mu_arr_neg = -mu_arr_pos
+    if abs_mu_arr_lower_bound > 0:
+        mu_arr_pos = subroutines.transform_interval(mu_arr_pos, 0, 1, abs_mu_arr_lower_bound, 1) 
     mu_arr = np.concatenate([mu_arr_pos, -mu_arr_pos])
     M_inv = 1 / mu_arr_pos
     
@@ -346,6 +342,7 @@ def pydisort(
                 np.max(b_pos),
                 np.max(b_neg),
                 scaled_s_poly_coeffs[0, 0],
+                scaled_s_poly_coeffs[-1, :] @ (scaled_tau_arr_with_0[-1] ** np.arange(Nscoeffs))
             )
         )
         I0 = (I0 / rescale_factor).copy()
@@ -380,7 +377,7 @@ def pydisort(
             mu0, I0, rescale_factor, phi0,
             there_is_beam_source,
             b_pos, b_neg,
-            b_pos_is_scalar, b_neg_is_scalar,
+            b_pos_is_float, b_neg_is_float,
             b_pos_is_vector, b_neg_is_vector,
             Nscoeffs,
             scaled_s_poly_coeffs,
@@ -388,7 +385,6 @@ def pydisort(
             scale_tau,
             only_flux,
             use_banded_solver_NLayers,
-            autograd_compatible,
         )
         
         # TMS correction for the intensity (see section 3.7.2)
@@ -598,16 +594,6 @@ def pydisort(
                             axis=1,
                         )
 
-                if autograd_compatible:
-                    if not any_pos_contribution:
-                        TMS_correction_pos = np.zeros((N, Ntau, Nphi))
-                    if not any_neg_contribution:
-                        TMS_correction_neg = np.zeros((N, Ntau, Nphi))
-                    return solution + np.concatenate(
-                        (contribution_from_other_layers_pos, contribution_from_other_layers_neg),
-                        axis=0,
-                    )
-                else:
                     if any_pos_contribution:
                         solution[:N, :, :] += contribution_from_other_layers_pos
                     if any_neg_contribution:
@@ -669,13 +655,7 @@ def pydisort(
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
             NT_corrections = TMS_correction(tau, phi, is_antiderivative_wrt_tau)
-
-            if autograd_compatible:
-                NT_corrections = NT_corrections + np.concatenate(
-                    [np.zeros((N, len(tau), len(phi))), IMS_correction(tau, phi, is_antiderivative_wrt_tau)], axis=0
-                )
-            else:
-                NT_corrections[N:, :, :] += IMS_correction(tau, phi, is_antiderivative_wrt_tau)
+            NT_corrections[N:, :, :] += IMS_correction(tau, phi, is_antiderivative_wrt_tau)
             
             if return_Fourier_error or return_tau_arr:
                 u_star_outputs = u_star(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
@@ -703,7 +683,7 @@ def pydisort(
             mu0, I0, rescale_factor, phi0,
             there_is_beam_source,
             b_pos, b_neg,
-            b_pos_is_scalar, b_neg_is_scalar,
+            b_pos_is_float, b_neg_is_float,
             b_pos_is_vector, b_neg_is_vector,
             Nscoeffs,
             scaled_s_poly_coeffs,
@@ -711,5 +691,4 @@ def pydisort(
             scale_tau,
             only_flux,
             use_banded_solver_NLayers,
-            autograd_compatible,
         )

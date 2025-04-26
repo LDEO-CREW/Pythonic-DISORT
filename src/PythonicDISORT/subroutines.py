@@ -11,13 +11,13 @@ def transform_interval(arr, c, d, a, b):
     ----------
     arr : array
         The 1D array to transform.
-    c : scalar
+    c : float
         The beginning of interval [c, d].
-    d : scalar
+    d : float
         The end of interval [c, d].
-    a : scalar, optional
+    a : float, optional
         The beginning of interval [a, b].
-    b : scalar, optional
+    b : float, optional
         The end of interval [a, b].
 
     Returns
@@ -37,13 +37,13 @@ def transform_weights(weights, c, d, a, b):
     ----------
     weights : array
         The weights to transform.
-    c : scalar
+    c : float
         The beginning of interval [c, d].
-    d : scalar
+    d : float
         The end of interval [c, d].
-    a : scalar, optional
+    a : float, optional
         The beginning of interval [a, b].
-    b : scalar, optional
+    b : float, optional
         The end of interval [a, b].
 
     Returns
@@ -94,9 +94,9 @@ def Gauss_Legendre_quad(N, c=0, d=1):
     ----------
     N : int (will be converted to int)
         Number of quadrature nodes.
-    c : scalar, optional
+    c : float, optional
         Start of integration interval.
-    d : scalar, optional
+    d : float, optional
         End of integration interval.
 
     Returns
@@ -120,9 +120,9 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     ----------
     Nphi : int
         Number of quadrature nodes.
-    c : scalar, optional
+    c : float, optional
         Start of integration interval.
-    d : scalar, optional
+    d : float, optional
         End of integration interval.
 
     Returns
@@ -159,9 +159,9 @@ def generate_FD_mat(Ntau, a, b):
     ----------
     Nphi : int
         Number of grid nodes.
-    a : scalar, optional
+    a : float, optional
         Start of diffentiation interval.
-    b : scalar, optional
+    b : float, optional
         End of diffentiation interval.
 
     Returns
@@ -259,7 +259,7 @@ def generate_diff_act_flux_funcs(u0):
 
     """
     N = len(u0(0)) // 2
-    GL_weights = Gauss_Legendre_quad(N, 0, 1)[1]
+    GL_weights = Gauss_Legendre_quad(N)[1]
 
     # Note that the zeroth axis of the array u0(tau) captures variation with mu
     def flux_act_up(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False):
@@ -299,9 +299,9 @@ def Planck(T, WVNM):
 
     Parameters
     ----------
-    T : scalar or array
+    T : float or array
         Temperatures in kelvin.
-    WVNM : scalar
+    WVNM : float
         Wavenumber with units m^-1.
 
     Returns
@@ -334,11 +334,11 @@ def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
     
     Parameters
     ----------
-    T : scalar or array
+    T : float or array
         Temperatures in kelvin.
-    WVNMLO : scalar
+    WVNMLO : float
         Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
-    WVNMHI : scalar
+    WVNMHI : float
         Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
@@ -393,16 +393,16 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, omega_arr=None, **kw
     
     Parameters
     ----------
-    tau_arr : array or scalar
+    tau_arr : array or float
         Optical depth of the lower boundary of each atmospheric layer.
     TEMPER : array
         Temperature in kelvin at each boundary / interface from top to bottom.
         This variable is identically named in Stamnes' DISORT.
-    WVNMLO : scalar
+    WVNMLO : float
         Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
-    WVNMHI : scalar
+    WVNMHI : float
         Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
-    omega_arr : optional, array or scalar
+    omega_arr : optional, array or float
         Single-scattering albedo of each atmospheric layer which is required to compute the emissivity of each layer.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
@@ -459,7 +459,7 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
     ----------
     N : int
         Number of upper hemisphere quadrature nodes. Equal to ``NQuad // 2``.
-    zeroth_BDRF_Fourier_mode : function or scalar
+    zeroth_BDRF_Fourier_mode : function or float
         Zeroth BDRF Fourier mode with arguments ``mu, -mu_p`` of type array
         and which output has the same dimensions as the outer product of the two arrays.
         A scalar input represents a constant function and in that case the output 
@@ -467,7 +467,7 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
 
     Returns
     -------
-    array or scalar
+    array or float
         Emissivity for the blackbody contribution to the lower boundary source ``b_neg``.
     """
     if np.isscalar(zeroth_BDRF_Fourier_mode):
@@ -489,7 +489,7 @@ def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
     ----------
     N : int
         Number of upper hemisphere quadrature nodes. Equal to ``NQuad // 2``.
-    mu0 : scalar
+    mu0 : float
         Cosine of polar angle of the incident beam.
     BDRF_Fourier_modes : list of functions and scalars
         BDRF Fourier modes, each a scalar representing a constant function, 
@@ -572,7 +572,7 @@ def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
 
 
 
-def interpolate(u):
+def interpolate(u, mu_arr):
     """Polynomial (Barycentric) interpolation with respect to ``mu``. The output 
     is a function that is continuous and variable in all three arguments: ``mu``, ``tau`` and ``phi``.
     Discussed in sections 3.7 and 6.3 of the Comprehensive Documentation.
@@ -595,8 +595,9 @@ def interpolate(u):
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
 
     """
-    N = len(u(0, 0)) // 2
-    mu_arr_pos = Gauss_Legendre_quad(N)[0]
+    
+    N = len(mu_arr) // 2
+    mu_arr_pos = mu_arr[:N]
     
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
@@ -711,7 +712,6 @@ def _mathscr_v(tau,                              # Input optical depths
                 G_inv,                           # Inverse of eigenvector matrix
                 mu_arr,                          # Quadrature nodes for both hemispheres
                 is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
-                autograd_compatible=False,       # Should the output functions be compatible with autograd?
                 ):
     """Particular solution for isotropic internal sources.
     Refer to section 3.6.1 of the Comprehensive Documentation.
@@ -731,7 +731,6 @@ def _mathscr_v(tau,                              # Input optical depths
     | ``G_inv``                     | ``NLayers<= x NQuad x NQuad`` or ``None`` |
     | ``mu_arr``                    | ``NQuad``                                 |
     | ``is_antiderivative_wrt_tau`` | boolean                                   |
-    | ``autograd_compatible``       | boolean                                   |
     
     Notable internal variables of _mathscr_v
     |     Variable     |                Shape                  | 
@@ -743,52 +742,26 @@ def _mathscr_v(tau,                              # Input optical depths
     | OUTPUT           | ``NQuad x Ntau``                      |
     """
     n = Nscoeffs - 1
-    
-    if autograd_compatible:
-        import autograd.numpy as np
-    
-        def mathscr_b(i):
-            """
-            Notable internal variables of mathscr_b
-            |     Variable     |                  Shape                  |
-            | ---------------- | --------------------------------------- |
-            | j_arr            | ``i + 1``                               |
-            | s_poly_coeffs_nj | ``i + 1``                               |
-            | OUTPUT           | ``Nscoeffs x (i + 1) x NQuad``          |
-            """
-        
-            j_arr = np.arange(i + 1)
-            s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
-            return np.sum(
-                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i))[None, None, :]
-                * K[:, :, None] ** -(i - j_arr + 1)[None, None, :]
-                * s_poly_coeffs_nj[:, None, :],
-                axis=-1,
-            )
-        mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
-    else:
-        import numpy as np
-        
-        shape = np.shape(K)
-        i_arr = np.arange(Nscoeffs)
-        i_arr_repeat = np.repeat(i_arr, i_arr + 1)
-        j_arr = np.concatenate([i_arr[:i] for i in range(1, Nscoeffs + 1)])
-        s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
+    shape = np.shape(K)
+    i_arr = np.arange(Nscoeffs)
+    i_arr_repeat = np.repeat(i_arr, i_arr + 1)
+    j_arr = np.concatenate([i_arr[:i] for i in range(1, Nscoeffs + 1)])
+    s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
 
-        mathscr_v_coeffs = np.zeros((Nscoeffs, shape[0], shape[1]))
-        np.add.at(
-            mathscr_v_coeffs,
-            i_arr_repeat,
-            np.moveaxis(
-                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i_arr_repeat))[
-                    None, None, :
-                ]
-                * K[:, :, None] ** -(i_arr_repeat - j_arr + 1)[None, None, :]
-                * s_poly_coeffs_nj[:, None, :],
-                -1,
-                0,
-            ),
-        )
+    mathscr_v_coeffs = np.zeros((Nscoeffs, shape[0], shape[1]))
+    np.add.at(
+        mathscr_v_coeffs,
+        i_arr_repeat,
+        np.moveaxis(
+            (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i_arr_repeat))[
+                None, None, :
+            ]
+            * K[:, :, None] ** -(i_arr_repeat - j_arr + 1)[None, None, :]
+            * s_poly_coeffs_nj[:, None, :],
+            -1,
+            0,
+        ),
+    )
     
     powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
     if is_antiderivative_wrt_tau:
