@@ -173,7 +173,7 @@ def _assemble_intensity_and_fluxes(
             Pass `return_Fourier_error = True` (defaults to `False`) to return the 
             Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
             Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-            to switch to an antiderivative of the function with respect to `tau`.
+            to switch to an antiderivative of this function with respect to `tau`.
             """
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
@@ -324,7 +324,7 @@ def _assemble_intensity_and_fluxes(
         but reclassification of delta-scaled flux and other corrections must be done manually
         (for actinic flux `generate_diff_act_flux_funcs` will automatically perform the reclassification).
         Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of the function with respect to `tau`.
+        to switch to an antiderivative of this function with respect to `tau`.
         """
         tau = np.atleast_1d(tau)
         if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
@@ -429,7 +429,7 @@ def _assemble_intensity_and_fluxes(
         (Energetic) Flux function with argument `tau` (type: array or float) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (same type and size as `tau`).
         Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of the function with respect to `tau`.
+        to switch to an antiderivative of this function with respect to `tau`.
         """
         tau = np.atleast_1d(tau)
         if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
@@ -510,7 +510,7 @@ def _assemble_intensity_and_fluxes(
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
         same type and size as `tau`.
         Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of the function with respect to `tau`.
+        to switch to an antiderivative of this function with respect to `tau`.
         """
         tau = np.atleast_1d(tau)
         if np.any(tau < 0) or np.any(tau > tau_arr[-1]):

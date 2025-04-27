@@ -24,7 +24,6 @@ def pydisort(
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
     use_banded_solver_NLayers=10,
-    abs_mu_arr_lower_bound=0,
     autograd_compatible=False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
@@ -85,8 +84,6 @@ def pydisort(
         Arrange coefficients from lowest order term to highest.
     use_banded_solver_NLayers : optional, int
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
-    abs_mu_arr_lower_bound : optional, float
-        At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
     autograd_compatible : optional, bool
         If ``True``, the autograd package: https://github.com/HIPS/autograd can be used to compute
         the ``tau``-derivatives of the output functions but ``pydisort`` will be less efficient. 
@@ -99,7 +96,7 @@ def pydisort(
         (Energetic) Flux function with argument ``tau`` (type: array or float) for positive (upward) ``mu`` values.
         Returns the diffuse flux magnitudes (same type and size as ``tau``).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of the function with respect to ``tau``.
+        to switch to an antiderivative of this function with respect to ``tau``.
         For example, ``Fp(tau_arr, is_antiderivative_wrt_tau = True) - Fp(np.insert(tau_arr[:-1] + 1e-15, 0, 0), is_antiderivative_wrt_tau = True)``
         will produce an array of the tau-integral over each layer.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
@@ -108,7 +105,7 @@ def pydisort(
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
         same type and size as ``tau``.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of the function with respect to ``tau``.
+        to switch to an antiderivative of this function with respect to ``tau``.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     u0(tau) : function
         Zeroth Fourier mode of the intensity with argument ``tau`` (type: array or float).
@@ -117,13 +114,13 @@ def pydisort(
         but reclassification of delta-scaled flux and other corrections must be done manually
         (for actinic flux ``subroutines.generate_diff_act_flux_funcs`` will automatically perform the reclassification).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of the function with respect to ``tau``.
+        to switch to an antiderivative of this function with respect to ``tau``.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     u(tau, phi) : function, optional
         Intensity function with arguments ``(tau, phi)`` each of type array or float.
         Returns an ndarray with axes corresponding to variation with ``mu, tau, phi`` respectively.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of the function with respect to ``tau``.
+        to switch to an antiderivative of this function with respect to ``tau``.
         Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the 
         Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
@@ -303,8 +300,6 @@ def pydisort(
     # --------------------------------------------------------------------------------------------------------------------------
     # For positive mu values (the weights are identical for both domains)
     mu_arr_pos, W = subroutines.Gauss_Legendre_quad(N)  # mu_arr_neg = -mu_arr_pos
-    if abs_mu_arr_lower_bound > 0:
-        mu_arr_pos = subroutines.transform_interval(mu_arr_pos, 0, 1, abs_mu_arr_lower_bound, 1) 
     mu_arr = np.concatenate([mu_arr_pos, -mu_arr_pos])
     M_inv = 1 / mu_arr_pos
     

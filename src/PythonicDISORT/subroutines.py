@@ -12,13 +12,13 @@ def transform_interval(arr, c, d, a, b):
     arr : array
         The 1D array to transform.
     c : float
-        The beginning of interval [c, d].
+        Lower bound of interval [c, d].
     d : float
-        The end of interval [c, d].
+        Upper bound of interval [c, d].
     a : float, optional
-        The beginning of interval [a, b].
+        Lower bound of interval [a, b].
     b : float, optional
-        The end of interval [a, b].
+        Upper bound of interval [a, b].
 
     Returns
     -------
@@ -38,13 +38,13 @@ def transform_weights(weights, c, d, a, b):
     weights : array
         The weights to transform.
     c : float
-        The beginning of interval [c, d].
+        Lower bound of interval [c, d].
     d : float
-        The end of interval [c, d].
+        Upper bound of interval [c, d].
     a : float, optional
-        The beginning of interval [a, b].
+        Lower bound of interval [a, b].
     b : float, optional
-        The end of interval [a, b].
+        Upper bound of interval [a, b].
 
     Returns
     -------
@@ -95,9 +95,9 @@ def Gauss_Legendre_quad(N, c=0, d=1):
     N : int (will be converted to int)
         Number of quadrature nodes.
     c : float, optional
-        Start of integration interval.
+        Lower bound of integration interval.
     d : float, optional
-        End of integration interval.
+        Upper bound of integration interval.
 
     Returns
     -------
@@ -248,13 +248,13 @@ def generate_diff_act_flux_funcs(u0):
         Actinic flux function with argument ``tau`` (type: array) for positive (upward) ``mu`` values.
         Returns the diffuse flux magnitudes (type: array).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of the function with respect to ``tau``.
+        to switch to an antiderivative of this function with respect to ``tau``.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     Fm_act(tau) : function
         Actinic flux function with argument ``tau`` (type: array) for negative (downward) ``mu`` values.
         Returns the diffuse flux magnitudes (type: array).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of the function with respect to ``tau``.
+        to switch to an antiderivative of this function with respect to ``tau``.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
 
     """
@@ -474,9 +474,9 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
         return 1 - zeroth_BDRF_Fourier_mode
     else:
         mu_arr_pos, W = Gauss_Legendre_quad(N)
-    return (
-        1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos) * mu_arr_pos[None, :] @ W
-    )
+        return (
+            1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos) * mu_arr_pos[None, :] @ W
+        )
 
 
 
@@ -572,7 +572,7 @@ def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
 
 
 
-def interpolate(u, mu_arr):
+def interpolate(u):
     """Polynomial (Barycentric) interpolation with respect to ``mu``. The output 
     is a function that is continuous and variable in all three arguments: ``mu``, ``tau`` and ``phi``.
     Discussed in sections 3.7 and 6.3 of the Comprehensive Documentation.
@@ -589,15 +589,15 @@ def interpolate(u, mu_arr):
         or ``(mu, tau)`` (for ``u0``) each an array or scalar.
         Returns an ndarray with axes corresponding to variation with each argument in the same order.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of the function with respect to ``tau``.
+        to switch to an antiderivative of this function with respect to ``tau``.
         Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the 
         Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
 
     """
     
-    N = len(mu_arr) // 2
-    mu_arr_pos = mu_arr[:N]
+    N = len(u(0, 0)) // 2
+    mu_arr_pos = Gauss_Legendre_quad(N)[0]
     
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
