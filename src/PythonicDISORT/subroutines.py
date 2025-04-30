@@ -475,7 +475,7 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
     else:
         mu_arr_pos, W = Gauss_Legendre_quad(N)
         return (
-            1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos) * mu_arr_pos[None, :] @ W
+            1 - 2 * zeroth_BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos) * mu_arr_pos[None, :] @ W
         )
 
 

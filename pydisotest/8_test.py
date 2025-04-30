@@ -234,11 +234,12 @@ def test_8c():
     assert np.max(diff_ratio[diff > 1e-3], initial=0) < 1e-2
     # --------------------------------------------------------------------------------------------------
 
-def test_8ARTS():
+
+def test_8ARTS_A():
     print()
-    print("################################################ Test 8ARTS ##################################################")
+    print("################################################ Test 8ARTS_A ##################################################")
     print()
-    from inpydis import src, tau
+    from ARTS_data.inpydis import src, tau
 
     nv = len(src)
     pyth = np.empty((nv, 20, 8))
@@ -272,6 +273,98 @@ def test_8ARTS():
     use_banded_solver_NLayers = 10
     autograd_compatible = False
     
-    ARTS_results = np.load("Stamnes_results/8ARTS_test.npy")
+    ARTS_results = np.load("Stamnes_results/8ARTS_A_test.npy")
     assert np.max(np.abs(pyth[:, -1, -1] - ARTS_results) / ARTS_results) < 1e-2
+    # --------------------------------------------------------------------------------------------------
+
+
+def test_8ARTS_B():
+    print()
+    print("################################################ Test 8ARTS_B ##################################################")
+    print()
+    from ARTS_data.pydisort_data import (
+        optical_thicknesses,
+        single_scattering_albedo,
+        quadrature_dimension,
+        legendre_coefficients,
+        TEMPER,
+    )
+    from scipy.constants import speed_of_light
+
+    freqs = [31.5e9, 165e9, 666e9]
+    WVNM = np.array(freqs) / (100.0 * speed_of_light)
+    WVNMHI = np.ones(len(freqs)) * 50000
+    WVNMLO = np.zeros(len(freqs))
+
+    for ifreq in range(len(freqs)):
+        
+        ######################################### PYDISORT ##############################################
+
+        tau_arr = optical_thicknesses[ifreq]
+        omega_arr = single_scattering_albedo[ifreq]
+        NQuad = quadrature_dimension
+        # Stamnes' DISORT needs an extra coefficient but by our settings it will not be used
+        Leg_coeffs_all = np.hstack((legendre_coefficients[ifreq], np.zeros((len(tau_arr), 1))))
+        mu0 = 0
+        I0 = 0  # No direct beam
+        phi0 = 0
+
+        # Optional (used)
+        s_poly_coeffs = PythonicDISORT.subroutines.generate_s_poly_coeffs(
+            tau_arr, TEMPER, WVNMLO[ifreq], WVNMHI[ifreq], np.array(omega_arr)
+        )
+        b_pos = PythonicDISORT.subroutines.blackbody_contrib_to_BCs(
+            np.mean(TEMPER), WVNMLO[ifreq], WVNMHI[ifreq]
+        ) # Using an arbitrary temperature since surface temperature data is missing
+        b_neg = PythonicDISORT.subroutines.blackbody_contrib_to_BCs(
+            np.median(TEMPER), WVNMLO[ifreq], WVNMHI[ifreq]
+        ) # Using an arbitrary temperature since upper boundary temperature data is missing
+        
+        # Call pydisort function
+        mu_arr, flux_up, flux_down, u0, u = PythonicDISORT.pydisort(
+            tau_arr, omega_arr,
+            NQuad,
+            Leg_coeffs_all,
+            mu0, I0, phi0,
+            b_pos=b_pos,
+            b_neg=b_neg,
+            s_poly_coeffs=s_poly_coeffs
+        )
+        
+        #################################################################################################
+        ######################################### SETUP FOR TESTS #######################################
+        
+        # Reorder mu_arr from smallest to largest
+        reorder_mu = np.argsort(mu_arr)
+        mu_arr_RO = mu_arr[reorder_mu]
+
+        # We may not want to compare intensities around the direct beam
+        deg_around_beam_to_not_compare = 0
+        mu_to_compare = (
+            np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
+            > deg_around_beam_to_not_compare
+        )
+        mu_test_arr_RO = mu_arr_RO[mu_to_compare]
+        
+        ######################################### COMPARE RESULTS #######################################
+        #################################################################################################
+        
+        # Load saved results from Stamnes' DISORT
+        results = np.load("Stamnes_results/8ARTS_B" + str(ifreq) + "_test.npz")
+        
+        (
+            diff_flux_up,
+            ratio_flux_up,
+            diff_flux_down_diffuse,
+            ratio_flux_down_diffuse,
+            diff_flux_down_direct,
+            ratio_flux_down_direct,
+            diff,
+            diff_ratio,
+        ) = _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u)
+
+        assert np.max(ratio_flux_up[diff_flux_up > 1e-3], initial=0) < 1e-3
+        assert np.max(ratio_flux_down_diffuse[diff_flux_down_diffuse > 1e-3], initial=0) < 1e-3
+        assert np.max(ratio_flux_down_direct[diff_flux_down_direct > 1e-3], initial=0) < 1e-3
+        assert np.max(diff_ratio[diff > 1e-3], initial=0) < 1e-2
     # --------------------------------------------------------------------------------------------------
