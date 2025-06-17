@@ -226,6 +226,8 @@ def pydisort(
     # Single-scattering albedo must be between 0 and 1, excluding 1
     if not (np.all(omega_arr >= 0) and np.all(omega_arr < 1)):
         raise ValueError("Single-scattering albedo must be between 0 and 1, excluding 1.") 
+    if np.any(omega_arr > 1 - 1e-6):
+        warnings.warn("Some single-scattering albedos are very close to 1 which may cause numerical instability.")
     # There must be a positive number of Legendre coefficients each with magnitude <= 1
     # The user must supply at least as many phase function Legendre coefficients as intended for use
     if not NLeg > 0:
@@ -243,9 +245,12 @@ def pydisort(
         raise ValueError("The zeroth dimension of the shape of `s_poly_coeffs` does not match the number of layers which is deduced from the length of `tau_arr`.")
     # Value checks on the phase function Legendre coefficients
     if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
-        raise ValueError("The first phase function Legendre coefficient must equal 1.") 
+        warnings.warn("The zeroth index phase function Legendre coefficient must be, and has been corrected to, 1.")
+        Leg_coeffs_all[:, 0] = 1
     if not (np.all(-1 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)):
-        raise ValueError("The phase function Legendre coefficients must all be between -1 and 1.") 
+        raise ValueError("The phase function Legendre coefficients must all be between -1 and 1.")
+    if (np.any(-0.95 > Leg_coeffs_all[:, 1:]) and np.any(Leg_coeffs_all[:, 1:] > 0.95)):
+        warnings.warn("Some phase function Legendre coefficients have a magnitude that is very close to 1 (this excludes the zeroth index coefficient which must be 1) and this may cause numerical instability.")
     # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NFourier)
     if not NQuad >= 2:
         raise ValueError("There must be at least two streams.")
@@ -256,7 +261,7 @@ def pydisort(
     if not NFourier <= NLeg:
         raise ValueError("The number of Fourier modes to use in the solution must be less than or equal to the number of phase function Legendre coefficients used.")
     if NFourier > 64 and not only_flux:
-        warnings.warn("`NFourier` is large and may cause errors, consider decreasing `NFourier` to 64 and it probably should be even less.")
+        warnings.warn("`NFourier` is large and may cause errors, consider decreasing `NFourier` to 64 and it probably should be even less. By default `NFourier` equals `NQuad`.")
     # Not strictly necessary but there will be tremendous inaccuracies if this is violated
     if not NLeg <= NQuad:
         raise ValueError("There should be more streams than the number of phase function Legendre coefficients used.")
