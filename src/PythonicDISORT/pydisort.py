@@ -226,8 +226,6 @@ def pydisort(
     # Single-scattering albedo must be between 0 and 1, excluding 1
     if not (np.all(omega_arr >= 0) and np.all(omega_arr < 1)):
         raise ValueError("Single-scattering albedo must be between 0 and 1, excluding 1.") 
-    if np.any(omega_arr > 1 - 1e-6):
-        warnings.warn("Some single-scattering albedos are very close to 1 which may cause numerical instability.")
     # There must be a positive number of Legendre coefficients each with magnitude <= 1
     # The user must supply at least as many phase function Legendre coefficients as intended for use
     if not NLeg > 0:
@@ -249,8 +247,6 @@ def pydisort(
         Leg_coeffs_all[:, 0] = 1
     if not (np.all(-1 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)):
         raise ValueError("The phase function Legendre coefficients must all be between -1 and 1.")
-    if (np.any(-0.95 > Leg_coeffs_all[:, 1:]) and np.any(Leg_coeffs_all[:, 1:] > 0.95)):
-        warnings.warn("Some phase function Legendre coefficients have a magnitude that is very close to 1 (this excludes the zeroth index coefficient which must be 1) and this may cause numerical instability.")
     # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NFourier)
     if not NQuad >= 2:
         raise ValueError("There must be at least two streams.")
@@ -321,9 +317,8 @@ def pydisort(
         scale_tau = 1 - omega_arr * f_arr
         scaled_thickness_arr = scale_tau * thickness_arr
         scaled_tau_arr_with_0 = np.insert(np.cumsum(scaled_thickness_arr), 0, 0)
-        weighted_scaled_Leg_coeffs = ((Leg_coeffs - f_arr[:, None]) / (1 - f_arr[:, None])) * (
-            2 * np.arange(NLeg) + 1
-        )[None, :]
+        scaled_Leg_coeffs = (Leg_coeffs - f_arr[:, None]) / (1 - f_arr[:, None])
+        weighted_scaled_Leg_coeffs = scaled_Leg_coeffs * (2 * np.arange(NLeg) + 1)[None, :]
         scaled_omega_arr = (1 - f_arr) / scale_tau * omega_arr
 
         translations = scaled_tau_arr_with_0[:-1] - scale_tau * np.insert(tau_arr[:-1], 0, 0)
@@ -336,9 +331,17 @@ def pydisort(
         # This is a shortcut to the same results
         scale_tau = np.ones(NLayers)
         scaled_tau_arr_with_0 = np.insert(tau_arr, 0, 0)
-        weighted_scaled_Leg_coeffs = Leg_coeffs * (2 * np.arange(NLeg) + 1)[None, :]
+        scaled_Leg_coeffs = Leg_coeffs
+        weighted_scaled_Leg_coeffs = scaled_Leg_coeffs * (2 * np.arange(NLeg) + 1)[None, :]
         scaled_omega_arr = omega_arr
         scaled_s_poly_coeffs = s_poly_coeffs
+        
+    if np.any(scaled_omega_arr > 1 - 1e-6):
+        warnings.warn("Some delta-scaled single-scattering albedos are very close to 1 which may cause numerical instability.")
+    if (np.any(-0.95 > scaled_Leg_coeffs[:, 1:]) and np.any(scaled_Leg_coeffs[:, 1:] > 0.95)):
+        warnings.warn("Some delta-scaled phase function Legendre coefficients have a magnitude that is very close to 1" +
+        " (this excludes the zeroth index coefficient which must be 1) and this may cause numerical instability.")
+    
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Rescale of sources 
