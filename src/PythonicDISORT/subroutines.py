@@ -384,12 +384,11 @@ def linear_spline_coefficients(x, y, check_inputs=True):
 
 
 
-def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, omega_arr=None, **kwargs):
+def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
     """Generate DISORT-equivalent ``s_poly_coeffs`` for input into ``pydisort``.
     This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT.
-    If ``omega_arr`` is specified, the coefficients will be multiplied by emissivity factors equal to ``1 - omega_arr`` 
-    per Kirchoff's law of thermal radiation, and Kirchoff's law is enforced in Stamnes' DISORT. 
-    Otherwise, the emissivities will be set to 1 and users can multiply their own emissivity factors.
+    Note that the coefficients will be multiplied by emissivity factors equal to ``1 - omega_arr`` inside
+    `pydisort`, i.e. Kirchoff's law of thermal radiation is enforced, just like in Stamnes' DISORT. 
     
     Parameters
     ----------
@@ -402,8 +401,6 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, omega_arr=None, **kw
         Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
     WVNMHI : float
         Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
-    omega_arr : optional, array or float
-        Single-scattering albedo of each atmospheric layer which is required to compute the emissivity of each layer.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
         
@@ -426,26 +423,10 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, omega_arr=None, **kw
         lambda WVNM: Planck(TEMPER, WVNM), WVNMLO, WVNMHI, **kwargs
     )[0]
 
-    if omega_arr is None:
-        return (
-            linear_spline_coefficients(
-                tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False
-            )
-        )
-    elif np.isscalar(omega_arr):
-        return (
-            linear_spline_coefficients(
-                tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False
-            )
-            * (1 - omega_arr)
-        )
-    else:
-        return (
-            linear_spline_coefficients(
-                tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False
-            )
-            * (1 - omega_arr)[:, None]
-        )
+    return linear_spline_coefficients(
+        tau_arr_with_0, blackbody_emission_at_each_boundary, check_inputs=False
+    )
+
 
 
 

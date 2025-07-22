@@ -194,7 +194,7 @@ def test_9c():
     BTEMP = 700
     TTEMP = 550
     # Emissivity is (1 - omega_arr) by Kirchoff's law of thermal radiation
-    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI) * (1 - omega_arr)[:, None]
+    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI)
     b_pos = blackbody_contrib_to_BCs(BTEMP, WVNMLO, WVNMHI) * (1 - omega_s)
     b_neg = blackbody_contrib_to_BCs(TTEMP, WVNMLO, WVNMHI) + 1 # Emissivity 1
 
@@ -282,7 +282,7 @@ def test_9corrections():
     BTEMP = 700
     TTEMP = 550
     # Emissivity is (1 - omega_arr) by Kirchoff's law of thermal radiation
-    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI) * (1 - omega_arr)[:, None]
+    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI)
     b_pos = blackbody_contrib_to_BCs(BTEMP, WVNMLO, WVNMHI) * (1 - omega_s)
     b_neg = blackbody_contrib_to_BCs(TTEMP, WVNMLO, WVNMHI) + 1 # Emissivity 1
 

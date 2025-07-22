@@ -210,28 +210,12 @@ def _solve_for_gen_and_part_sols(
 
         # --------------------------------------------------------------------------------------------------------------------------
 
-        
-    if there_is_beam_source and there_is_iso_source:
-        return (
-            G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
-            K_collect.reshape((NFourier, NLayers, NQuad)),
-            B_collect.reshape((NFourier, NLayers, NQuad)),
-            G_inv_collect_0,
-        )
-    elif there_is_beam_source and not there_is_iso_source:
-        return (
-            G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
-            K_collect.reshape((NFourier, NLayers, NQuad)),
-            B_collect.reshape((NFourier, NLayers, NQuad)),
-        )
-    elif not there_is_beam_source and there_is_iso_source:
-        return (
-            G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
-            K_collect.reshape((NFourier, NLayers, NQuad)),
-            G_inv_collect_0,
-        )
-    else:
-        return (
-            G_collect.reshape((NFourier, NLayers, NQuad, NQuad)), 
-            K_collect.reshape((NFourier, NLayers, NQuad)),
-        )
+    outputs = (
+        G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
+        K_collect.reshape((NFourier, NLayers, NQuad)),
+    )
+    if there_is_beam_source:
+        outputs += (B_collect.reshape((NFourier, NLayers, NQuad)),)
+    if there_is_iso_source:
+        outputs += (G_inv_collect_0,)
+    return outputs

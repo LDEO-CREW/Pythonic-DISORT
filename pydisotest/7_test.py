@@ -31,7 +31,7 @@ def test_7a():
     WVNMLO = 300
     WVNMHI = 800
     # Emissivity is (1 - omega_arr) by Kirchoff's law of thermal radiation
-    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI) * (1 - omega_arr)
+    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI)
 
     # Optional (unused)
     NLeg = None
@@ -110,7 +110,7 @@ def test_7b():
     WVNMLO = 2702.99
     WVNMHI = 2703.01
     # Emissivity is (1 - omega_arr) by Kirchoff's law of thermal radiation
-    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI) * (1 - omega_arr)
+    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI)
 
     # Optional (unused)
     NLeg = None
@@ -191,7 +191,7 @@ def test_7c():
     BTEMP = 320
     TTEMP = 100
     # Emissivity is (1 - omega_arr) by Kirchoff's law of thermal radiation
-    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, epsrel=1e-15) * (1 - omega_arr)
+    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, epsrel=1e-15)
     b_pos = blackbody_contrib_to_BCs(BTEMP, WVNMLO, WVNMHI, epsrel=1e-15) # Emissivity 1
     b_neg = blackbody_contrib_to_BCs(TTEMP, WVNMLO, WVNMHI, epsrel=1e-15) + 100 # Emissivity 1
 
@@ -277,7 +277,7 @@ def test_7d():
     BTEMP = 320
     TTEMP = 100
     # Emissivity is (1 - omega_arr) by Kirchoff's law of thermal radiation
-    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, epsrel=1e-15) * (1 - omega_arr)
+    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, epsrel=1e-15)
     b_neg = blackbody_contrib_to_BCs(TTEMP, WVNMLO, WVNMHI, epsrel=1e-15) + 100 # Emissivity 1
     omega_s = 1
     BDRF_Fourier_modes=[lambda mu, neg_mup: np.full((len(mu), len(neg_mup)), omega_s)]
@@ -388,7 +388,7 @@ def test_7e():
     BTEMP = 320
     TTEMP = 100
     # Emissivity is (1 - omega_arr) by Kirchoff's law of thermal radiation
-    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, epsrel=1e-15) * (1 - omega_arr)
+    s_poly_coeffs=generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, epsrel=1e-15)
     # The emissivity of the surface should be consistent with the BDRF 
     # in accordance with Kirchoff's law of thermal radiation
     emissivity = generate_emissivity_from_BDRF(NQuad // 2, BDRF_Fourier_modes[0])

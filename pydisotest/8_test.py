@@ -311,7 +311,7 @@ def test_8ARTS_B():
 
         # Optional (used)
         s_poly_coeffs = PythonicDISORT.subroutines.generate_s_poly_coeffs(
-            tau_arr, TEMPER, WVNMLO[ifreq], WVNMHI[ifreq], np.array(omega_arr)
+            tau_arr, TEMPER, WVNMLO[ifreq], WVNMHI[ifreq],
         )
         b_pos = PythonicDISORT.subroutines.blackbody_contrib_to_BCs(
             np.mean(TEMPER), WVNMLO[ifreq], WVNMHI[ifreq]

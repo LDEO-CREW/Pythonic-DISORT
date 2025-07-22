@@ -325,7 +325,7 @@ def pydisort(
         scaled_s_poly_coeffs = (
             subroutines.affine_transform_poly_coeffs(s_poly_coeffs, scale_tau, translations)
             / scale_tau[:, None]  # Divide by d\tau^* / d\tau
-        )
+        ) * (1 - omega_arr[:, None])  # Enforce Kirchoff's Law of Thermal Radiation: absorptivity equals emissivity
 
     else:
         # This is a shortcut to the same results
@@ -334,7 +334,7 @@ def pydisort(
         scaled_Leg_coeffs = Leg_coeffs
         weighted_scaled_Leg_coeffs = scaled_Leg_coeffs * (2 * np.arange(NLeg) + 1)[None, :]
         scaled_omega_arr = omega_arr
-        scaled_s_poly_coeffs = s_poly_coeffs
+        scaled_s_poly_coeffs = s_poly_coeffs * (1 - omega_arr[:, None])  # Enforce Kirchoff's Law of Thermal Radiation: absorptivity equals emissivity
         
     if np.any(scaled_omega_arr > 1 - 1e-6):
         warnings.warn("Some delta-scaled single-scattering albedos are very close to 1 which may cause numerical instability.")
@@ -369,7 +369,7 @@ def pydisort(
             b_neg = (b_neg / rescale_factor).copy()
     # --------------------------------------------------------------------------------------------------------------------------
     
-    if NT_cor and not only_flux and there_is_beam_source and np.any(f_arr > 0) and NLeg < NLeg_all:
+    if NT_cor and not only_flux and there_is_beam_source and np.any(f_arr > 0) and NLeg < NLeg_all and np.any(omega_arr > 0):
         
         ############################### Perform NT corrections on the intensity but not the flux ###############################
         ############################### Refer to section 3.7.2 of the Comprehensive Documentation ##############################
