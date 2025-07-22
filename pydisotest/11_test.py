@@ -11,7 +11,7 @@ def test_11a():
     ######################################### PYDISORT ARGUMENTS #######################################
     tau_arr = np.arange(16) / 2 + 0.5
     NLayers = len(tau_arr)
-    omega_arr = np.full(NLayers, 1 - 1e-6)
+    omega_arr = np.full(NLayers, 0.8)
     NQuad = 16
     Leg_coeffs_all = np.tile(0.75 ** np.arange(32), (NLayers, 1))
     mu0 = 0.6
