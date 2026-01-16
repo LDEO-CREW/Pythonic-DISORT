@@ -245,8 +245,8 @@ def pydisort(
     if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
         warnings.warn("The zeroth index phase function Legendre coefficient must be, and has been corrected to, 1.")
         Leg_coeffs_all[:, 0] = 1
-    if not (np.all(-1 <= Leg_coeffs_all) and np.all(Leg_coeffs_all <= 1)):
-        raise ValueError("The phase function Legendre coefficients must all be between -1 and 1.")
+    if not (np.all(-1 < Leg_coeffs_all[:, 1:]) and np.all(Leg_coeffs_all[:, 1:] < 1)):
+        raise ValueError("The phase function Legendre coefficients must all be between -1 and 1 exclusive (only the zeroth coefficient can equal 1).")
     # Conditions on the number of quadrature angles (NQuad), Legendre coefficients (NLeg) and loops (NFourier)
     if not NQuad >= 2:
         raise ValueError("There must be at least two streams.")
@@ -338,7 +338,7 @@ def pydisort(
         
     if np.any(scaled_omega_arr > 1 - 1e-6):
         warnings.warn("Some delta-scaled single-scattering albedos are very close to 1 which may cause numerical instability.")
-    if (np.any(-0.95 > scaled_Leg_coeffs[:, 1:]) and np.any(scaled_Leg_coeffs[:, 1:] > 0.95)):
+    if (np.any(-0.95 > scaled_Leg_coeffs[:, 1:]) or np.any(scaled_Leg_coeffs[:, 1:] > 0.95)):
         warnings.warn("Some delta-scaled phase function Legendre coefficients have a magnitude that is very close to 1" +
         " (this excludes the zeroth index coefficient which must be 1) and this may cause numerical instability.")
     
