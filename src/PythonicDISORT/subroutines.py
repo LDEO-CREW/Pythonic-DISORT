@@ -1,7 +1,7 @@
 import numpy as np
 import scipy as sc
 from math import pi
-
+import warnings
 
 
 def transform_interval(arr, c, d, a, b):
@@ -461,21 +461,22 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
 
 
 
-def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
-    """If the same BDRF, number of streams and ``mu0`` will be used repeatedly,
+def cache_BDRF_Fourier_modes(N, BDRF_Fourier_modes, mu0=0):
+    """If the same BDRF and number of streams will be used repeatedly,
     consider using this function to cache ``BDRF_Fourier_modes`` and instead input
-    ``cached_BDRF_Fourier_modes`` into ``pydisort``.
+    ``cached_BDRF_Fourier_modes`` into ``pydisort``. It is also possible
+    to cache ``BDRF_Fourier_modes`` with respect to a fixed ``mu0``. 
 
     Parameters
     ----------
     N : int
         Number of upper hemisphere quadrature nodes. Equal to ``NQuad // 2``.
-    mu0 : float
-        Cosine of polar angle of the incident beam.
     BDRF_Fourier_modes : list of functions and scalars
         BDRF Fourier modes, each a scalar representing a constant function, 
         or a function with arguments ``mu, -mu_p`` of type array
         which output has the same dimensions as the outer product of the two arrays.
+    mu0 : float, optional
+        Cosine of polar angle of the incident beam.
 
     Returns
     -------
@@ -484,30 +485,61 @@ def cache_BDRF_Fourier_modes(N, mu0, BDRF_Fourier_modes):
         and which output is a scalar (if the Fourier mode was a scalar) 
         or has the same dimensions as the outer product of the two arrays.
     """
+    
+    if (0 < mu0 and mu0 <= 1):
+        mu0_caching = True
+    else:
+        mu0_caching = False
+        warnings.warn("No caching with respect to `mu0`.")
+    
     NBDRF = len(BDRF_Fourier_modes)
     mu_arr_pos = Gauss_Legendre_quad(N)[0]
-
-    BDRF_Fourier_modes_evaluated = [
-        (
-            None
-            if np.isscalar(BDRF_Fourier_modes[m])
-            else BDRF_Fourier_modes[m](mu_arr_pos, np.append(mu_arr_pos, mu0))
-        )
-        for m in range(NBDRF)
-    ]
-
-    cached_BDRF_Fourier_modes = [
-        (
-            lambda mu, neg_mup, m=m: BDRF_Fourier_modes[m]
-            if np.isscalar(BDRF_Fourier_modes[m])
-            else (
-                BDRF_Fourier_modes_evaluated[m][:, [-1]]
-                if len(neg_mup) == 1
-                else BDRF_Fourier_modes_evaluated[m][:, :-1]
+    
+    if mu0_caching:
+        BDRF_Fourier_modes_evaluated = [
+            (
+                BDRF_Fourier_modes[m]
+                if np.isscalar(BDRF_Fourier_modes[m])
+                else BDRF_Fourier_modes[m](mu_arr_pos, np.append(mu_arr_pos, mu0))
             )
-        )
-        for m in range(NBDRF)
-    ]
+            for m in range(NBDRF)
+        ]
+
+        cached_BDRF_Fourier_modes = [
+            (
+                lambda mu, neg_mup, m=m: BDRF_Fourier_modes_evaluated[m]
+                if np.isscalar(BDRF_Fourier_modes_evaluated[m])
+                else (
+                    BDRF_Fourier_modes_evaluated[m][:, [-1]]
+                    if len(neg_mup) == 1
+                    else BDRF_Fourier_modes_evaluated[m][:, :-1]
+                )
+            )
+            for m in range(NBDRF)
+        ]
+        
+    else:
+        BDRF_Fourier_modes_evaluated = [
+            (
+                BDRF_Fourier_modes[m]
+                if np.isscalar(BDRF_Fourier_modes[m])
+                else BDRF_Fourier_modes[m](mu_arr_pos, mu_arr_pos)
+            )
+            for m in range(NBDRF)
+        ]
+
+        cached_BDRF_Fourier_modes = [
+            (
+                lambda mu, neg_mup, m=m: BDRF_Fourier_modes_evaluated[m]
+                if np.isscalar(BDRF_Fourier_modes_evaluated[m])
+                else (
+                    BDRF_Fourier_modes[m](mu_arr_pos, neg_mup)
+                    if len(neg_mup) == 1
+                    else BDRF_Fourier_modes_evaluated[m]
+                )
+            )
+            for m in range(NBDRF)
+        ]
 
     return cached_BDRF_Fourier_modes
 

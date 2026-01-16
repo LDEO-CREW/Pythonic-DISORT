@@ -115,7 +115,6 @@ def _assemble_intensity_and_fluxes(
         weighted_scaled_Leg_coeffs,
         mu0, I0,
         there_is_beam_source,
-        Nscoeffs,
         there_is_iso_source,
     )
     if there_is_beam_source and there_is_iso_source:

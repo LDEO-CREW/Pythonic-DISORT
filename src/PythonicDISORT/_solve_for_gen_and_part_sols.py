@@ -13,7 +13,6 @@ def _solve_for_gen_and_part_sols(
     weighted_scaled_Leg_coeffs,  # Weighted and delta-scaled Legendre coefficients
     mu0, I0,                     # Properties of the direct beam
     there_is_beam_source,        # Is there a beam source?
-    Nscoeffs,                    # Number of isotropic source polynomial coefficients
     there_is_iso_source,         # Is there an isotropic source?
 ):
     """
@@ -42,7 +41,6 @@ def _solve_for_gen_and_part_sols(
     | `mu0`                          | scalar                             |
     | `I0`                           | scalar                             |
     | `there_is_beam_source`         | boolean                            |
-    | `Nscoeffs`                     | scalar                             |
     | `there_is_iso_source`          | boolean                            |
     
     Notable internal variables of _solve_for_gen_and_part_sols
