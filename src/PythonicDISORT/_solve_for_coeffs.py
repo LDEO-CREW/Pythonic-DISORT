@@ -249,12 +249,15 @@ def _solve_for_coeffs(
         # --------------------------------------------------------------------------------------------------------------------------
         
         # Assemble LHS (much of this code is replicated in section 4 of the Comprehensive Documentation)
-        G_0_nn = G_collect_m[0, N:, :N]
-        G_0_np = G_collect_m[0, N:, N:]
-        G_L_pn = G_collect_m[-1, :N, :N]
-        G_L_nn = G_collect_m[-1, N:, :N]
-        G_L_pp = G_collect_m[-1, :N, N:]
-        G_L_np = G_collect_m[-1, N:, N:]
+        G_0 = G_collect_m[0]
+        G_0_nn = G_0[N:, :N]
+        G_0_np = G_0[N:, N:]
+        
+        G_L = G_collect_m[-1]
+        G_L_pn = G_L[:N, :N]
+        G_L_nn = G_L[N:, :N]
+        G_L_pp = G_L[:N, N:]
+        G_L_np = G_L[N:, N:]
         E_Lm1L = np.exp(
             K_collect_m[-1, :N] * (scaled_tau_arr_with_0[-1] - scaled_tau_arr_with_0[-2])
         )
@@ -275,12 +278,16 @@ def _solve_for_coeffs(
 
         # Interlayer / continuity BCs
         for l in range(NLayers - 1):
-            G_l_pn = G_collect_m[l, :N, :N]
-            G_l_nn = G_collect_m[l, N:, :N]
-            G_l_ap = G_collect_m[l, :, N:]
-            G_lp1_an = G_collect_m[l + 1, :, :N]
-            G_lp1_pp = G_collect_m[l + 1, :N, N:]
-            G_lp1_np = G_collect_m[l + 1, N:, N:]
+            G_l = G_collect_m[l]
+            G_l_pn = G_l[:N, :N]
+            G_l_nn = G_l[N:, :N]
+            G_l_ap = G_l[:, N:]
+            
+            G_lp1 = G_collect_m[l + 1]
+            G_lp1_an = G_lp1[:, :N]
+            G_lp1_pp = G_lp1[:N, N:]
+            G_lp1_np = G_lp1[N:, N:]
+            
             scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
             scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
             scaled_tau_arr_lp1 = scaled_tau_arr_with_0[l + 2]
@@ -293,11 +300,11 @@ def _solve_for_coeffs(
             start_row = N + l * NQuad
             start_col = l * NQuad
             LHS[start_row : N + start_row, start_col : N + start_col] = G_l_pn * E_lm1l[None, :]
-            LHS[N + start_row : 2 * N + start_row, start_col : N + start_col] = G_l_nn * E_lm1l[None, :]
-            LHS[start_row : 2 * N + start_row, N + start_col : 2 * N + start_col] = G_l_ap
-            LHS[start_row : 2 * N + start_row, 2 * N + start_col : 3 * N + start_col] = -G_lp1_an
+            LHS[N + start_row : NQuad + start_row, start_col : N + start_col] = G_l_nn * E_lm1l[None, :]
+            LHS[start_row : NQuad + start_row, N + start_col : NQuad + start_col] = G_l_ap
+            LHS[start_row : NQuad + start_row, NQuad + start_col : 3 * N + start_col] = -G_lp1_an
             LHS[start_row : N + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_pp * E_llp1[None, :]
-            LHS[N + start_row : 2 * N + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_np * E_llp1[None, :]
+            LHS[N + start_row : NQuad + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_np * E_llp1[None, :]
             
         # --------------------------------------------------------------------------------------------------------------------------
         

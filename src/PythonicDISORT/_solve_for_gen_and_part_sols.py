@@ -63,16 +63,26 @@ def _solve_for_gen_and_part_sols(
     # Initialization
     # --------------------------------------------------------------------------------------------------------------------------
     ells_all = np.arange(NLeg)
-    ind = 0
+    signs_all = np.ones(NLeg)
+    signs_all[1::2] = -1
+    
+    G_trivial = np.zeros((NQuad, NQuad))
+    stride = NQuad + 1
+    G_trivial.ravel()[N : N + N * stride : stride] = 1
+    G_trivial.ravel()[NQuad * N : NQuad * N + N * stride : stride] = 1
     
     G_collect = np.empty((NFourier * NLayers, NQuad, NQuad))
     K_collect = np.empty((NFourier * NLayers, NQuad))
-    alpha_arr = np.empty((NFourier * NLayers, N, N))
-    beta_arr = np.empty((NFourier * NLayers, N, N))
+    A_arr = np.empty((NFourier * NLayers, NQuad, NQuad))
     no_shortcut_indices = []
     no_shortcut_indices_0 = []
+    ind = 0
     
     if there_is_beam_source:
+        I0_div_4pi = I0 / (4 * pi)
+        mu_arr_pos_mu0 = np.append(mu_arr_pos, -mu0)
+        
+        X_arr = np.empty((NFourier * NLayers, NQuad))
         B_collect = np.zeros((NFourier * NLayers, NQuad))
     if there_is_iso_source:
         G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
@@ -86,20 +96,26 @@ def _solve_for_gen_and_part_sols(
         # --------------------------------------------------------------------------------------------------------------------------
         m_equals_0 = (m == 0)
         ells = ells_all[m:]
-        degree_tile = np.tile(ells, (N, 1)).T
         fac = sc.special.poch(ells + m + 1, -2 * m)
-        signs = np.ones(NLeg - m)
-        signs[1::2] = -1
-
-        asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
+        signs = signs_all[:NLeg - m]
+        
+        if there_is_beam_source:
+            degree_tile = np.broadcast_to(ells[:, None], (NLeg - m, N + 1))
+            lpmv_all = sc.special.lpmv(m, degree_tile, mu_arr_pos_mu0)
+            asso_leg_term_pos = lpmv_all[:, :-1]
+            scalar_fac_asso_leg_term_mu0 = I0_div_4pi * (2 - m_equals_0) * fac * lpmv_all[:, -1]
+        else:
+            degree_tile = np.broadcast_to(ells[:, None], (NLeg - m, N))
+            asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
+            
         asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
-        asso_leg_term_mu0 = sc.special.lpmv(m, ells, -mu0)
+        fac_asso_leg_term_posT = fac[None, :] * asso_leg_term_pos.T
         # --------------------------------------------------------------------------------------------------------------------------
 
         # Loop over NLayers atmospheric layers
         # --------------------------------------------------------------------------------------------------------------------------          
         for l in range(NLayers):
-            weighted_scaled_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, :][ells]
+            weighted_scaled_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, m:]
             scaled_omega_l = scaled_omega_arr[l]
             omega_times_Leg_coeffs = (scaled_omega_l / 2) * weighted_scaled_Leg_coeffs_l
             
@@ -107,7 +123,7 @@ def _solve_for_gen_and_part_sols(
                 
                 # Generate D
                 # --------------------------------------------------------------------------------------------------------------------------
-                D_temp = omega_times_Leg_coeffs[None, :] * (fac[None, :] * asso_leg_term_pos.T)
+                D_temp = omega_times_Leg_coeffs[None, :] * fac_asso_leg_term_posT
                 D_pos = D_temp @ asso_leg_term_pos
                 D_neg = D_temp @ asso_leg_term_neg
                 
@@ -117,76 +133,64 @@ def _solve_for_gen_and_part_sols(
                 # Assemble the coefficient matrix and additional terms
                 # --------------------------------------------------------------------------------------------------------------------------
                 DW = D_pos * W[None, :]
-                np.fill_diagonal(DW, np.diag(DW) - 1)
+                DW.ravel()[::N + 1] -= 1
                 alpha = M_inv[:, None] * DW
                 beta = M_inv[:, None] * D_neg * W[None, :]
                 
                 # --------------------------------------------------------------------------------------------------------------------------
                 
-                # Particular solution for the direct beam source (refer to section 3.6.1 of the Comprehensive Documentation)
+                # Setup to solve for particular solution w.r.t. direct beam source (see section 3.6.1 of the Comprehensive Documentation)
                 # --------------------------------------------------------------------------------------------------------------------------
                 if there_is_beam_source:
                     # Generate X
                     X_temp = (
-                        (scaled_omega_l * I0 * (2 - (m == 0)) / (4 * pi))
+                        scalar_fac_asso_leg_term_mu0
+                        * scaled_omega_l 
                         * weighted_scaled_Leg_coeffs_l
-                        * (fac * asso_leg_term_mu0)
                     )
                     X_pos = X_temp @ asso_leg_term_pos
                     X_neg = X_temp @ asso_leg_term_neg
-                    X_tilde = np.concatenate([-M_inv * X_pos, M_inv * X_neg])
-                    
-                    A = np.concatenate(
-                        [
-                            np.concatenate([-alpha, -beta], axis=1),
-                            np.concatenate([beta, alpha], axis=1),
-                        ],
-                        axis=0,
-                    )
-                    np.fill_diagonal(A, np.diag(A) + 1 / mu0)
-                    B_collect[ind, :] = -np.linalg.solve(A, X_tilde) # We moved the minus sign out
+                    # Signs flipped due to the extra minus sign
+                    X_arr[ind, :N] = M_inv * X_pos
+                    X_arr[ind, N:] = -M_inv * X_neg
                     
                 # --------------------------------------------------------------------------------------------------------------------------
                 
-                alpha_arr[ind, :, :] = alpha
-                beta_arr[ind, :, :] = beta
+                A_arr[ind, N:, :N] = beta
+                A_arr[ind, N:, N:] = alpha
                 no_shortcut_indices.append(ind)
                 if m_equals_0 and there_is_iso_source: # Keep the list empty if there is no isotropic source
                     no_shortcut_indices_0.append(l)
                 
             else:
                 # This is a shortcut to the diagonalization results
-                G = np.zeros((NQuad, NQuad))
-                np.fill_diagonal(G[N:, :N], 1)
-                np.fill_diagonal(G[:N, N:], 1)
-                
-                G_collect[ind, :, :] = G
-                K_collect[ind, :] = -1 / mu_arr
+                G_collect[ind, :, :] = G_trivial
+                K_collect[ind, :N] = -M_inv
+                K_collect[ind, N:] = M_inv
                 if m_equals_0 and there_is_iso_source:
-                    G_inv_collect_0[l, :, :] = G
+                    G_inv_collect_0[l, :, :] = G_trivial
                     
             ind += 1
                 
     if len(no_shortcut_indices) > 0:
-    
+        A_arr = A_arr[no_shortcut_indices, :, :]
+        alpha_arr = A_arr[:, N:, N:]
+        beta_arr = A_arr[:, N:, :N]
+        
         # Diagonalization of coefficient matrix (refer to section 3.4.2 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
-        alpha_arr = alpha_arr[no_shortcut_indices, :, :]
-        beta_arr = beta_arr[no_shortcut_indices, :, :]
-
+        apb = alpha_arr + beta_arr
+        amb = alpha_arr - beta_arr
         K_squared_arr, eigenvecs_GpG_arr = np.linalg.eig(
-            np.einsum(
-                "lij, ljk -> lik", alpha_arr - beta_arr, alpha_arr + beta_arr, optimize=True
-            ),
+            np.einsum("lij, ljk -> lik", amb, apb, optimize=True)
         )
         
         # Eigenvalues arranged negative then positive, from largest to smallest magnitude
-        K_arr = np.concatenate((-np.sqrt(K_squared_arr), np.sqrt(K_squared_arr)), axis=1)
+        K_arr_p = np.sqrt(K_squared_arr)
+        K_arr = np.concatenate((-K_arr_p, K_arr_p), axis=1)
         eigenvecs_GpG_arr = np.concatenate((eigenvecs_GpG_arr, eigenvecs_GpG_arr), axis=2)
         eigenvecs_GmG_arr = (
-            np.einsum(
-                "lij, ljk -> lik", alpha_arr + beta_arr, eigenvecs_GpG_arr, optimize=True
-            )
+            np.einsum("lij, ljk -> lik", apb, eigenvecs_GpG_arr, optimize=True)
             / K_arr[:, None, :]
         )
 
@@ -207,6 +211,17 @@ def _solve_for_gen_and_part_sols(
             )
 
         # --------------------------------------------------------------------------------------------------------------------------
+        
+        if there_is_beam_source:
+        
+            # Solve for particular solution w.r.t. direct beam source (refer to section 3.6.1 of the Comprehensive Documentation)
+            # --------------------------------------------------------------------------------------------------------------------------
+            A_arr[:, :N, N:] = -A_arr[:, N:, :N]
+            A_arr[:, :N, :N] = -A_arr[:, N:, N:]
+            A_arr.reshape(-1, NQuad * NQuad)[:, ::NQuad + 1] += 1 / mu0
+            B_collect[no_shortcut_indices, :] = np.linalg.solve(A_arr, X_arr[no_shortcut_indices])
+            
+            # --------------------------------------------------------------------------------------------------------------------------
 
     outputs = (
         G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
