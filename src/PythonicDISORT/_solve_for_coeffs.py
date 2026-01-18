@@ -1,7 +1,7 @@
 from PythonicDISORT.subroutines import _mathscr_v
-from PythonicDISORT.subroutines import to_diag_ordered_form
 
 import numpy as np
+from numpy.lib.stride_tricks import as_strided
 import scipy as sc
 from math import pi
 
@@ -78,11 +78,34 @@ def _solve_for_coeffs(
     ################################## Solve for coefficients of homogeneous solution ##########################################
     ############# Refer to section 3.6.2 (single-layer) and 4 (multi-layer) of the Comprehensive Documentation #################
     
-    dim = NLayers * NQuad
     GC_collect = np.empty((NFourier, NLayers, NQuad, NQuad))
     use_banded_solver = (NLayers >= use_banded_solver_NLayers)
+    dim = NLayers * NQuad
+    
+    i_bot = dim - N # equals `j_bot_right`
+    j_bot_left = dim - NQuad
     if use_banded_solver:
-        Nsupsubdiags = 3 * N - 1 # The number of super-diagonals equals the number of sub-diagonals
+        Nsupsubdiags = 3 * N - 1
+        LHS_dof = np.zeros((6 * N - 1, dim), order="F") # diagonal ordered form
+        s0, s1 = LHS_dof.strides  # bytes
+        col_stride = s1 - s0  # moving +1 col and -1 row
+        
+        def _view_slanted(i0, j0, nrows):
+            """
+            Return a view into `LHS_dof` using slanted mapping.
+            The function uses `numpy.lib.stride_tricks.as_strided` which is performant but dangerous, 
+            which is why this function is not exposed in `PythonicDISORT.subroutines`.
+            See https://numpy.org/devdocs/reference/generated/numpy.lib.stride_tricks.as_strided.html.
+            
+            Assume the following exist in the outer scope:
+                `LHS_dof`, `Nsupsubdiags`, `s0`, `col_stride`
+            """
+            r0 = Nsupsubdiags + i0 - j0
+            base = LHS_dof[r0:r0 + nrows, j0:j0 + N]
+            return as_strided(base, shape=(nrows, N), strides=(s0, col_stride))
+            
+    else:
+        LHS = np.zeros((dim, dim))
     
     # The following loops can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     for m in range(NFourier):
@@ -112,6 +135,7 @@ def _solve_for_coeffs(
                         mu_arr_pos, np.array([mu0])
                     )[:, 0]
         # --------------------------------------------------------------------------------------------------------------------------
+    
     
         # Assemble RHS
         # --------------------------------------------------------------------------------------------------------------------------
@@ -246,12 +270,16 @@ def _solve_for_coeffs(
         else:
             RHS_middle = np.zeros(NQuad * (NLayers - 1))
             RHS = np.concatenate([b_neg_m, RHS_middle, b_pos_m]) + _mathscr_v_contribution
+            
         # --------------------------------------------------------------------------------------------------------------------------
         
-        # Assemble LHS (much of this code is replicated in section 4 of the Comprehensive Documentation)
+        
+        # Assemble LHS and solve (much of this code is replicated in section 4 of the Comprehensive Documentation)
+        # --------------------------------------------------------------------------------------------------------------------------
         G_0 = G_collect_m[0]
         G_0_nn = G_0[N:, :N]
         G_0_np = G_0[N:, N:]
+        E_01 = np.exp(K_collect_m[0, :N] * scaled_tau_arr_with_0[1])[None, :]
         
         G_L = G_collect_m[-1]
         G_L_pn = G_L[:N, :N]
@@ -260,66 +288,117 @@ def _solve_for_coeffs(
         G_L_np = G_L[N:, N:]
         E_Lm1L = np.exp(
             K_collect_m[-1, :N] * (scaled_tau_arr_with_0[-1] - scaled_tau_arr_with_0[-2])
-        )
+        )[None, :]
         
-        LHS = np.zeros((dim, dim))
-        # BCs for the entire atmosphere
-        LHS[:N, :N] = G_0_nn
-        LHS[:N, N : NQuad] = (
-            G_0_np
-            * np.exp(K_collect_m[0, :N] * scaled_tau_arr_with_0[1])[None, :]
-        )
-        if there_is_BDRF_mode:
-            LHS[-N:, -NQuad : -N] = (G_L_pn - R @ G_L_nn) * E_Lm1L[None, :]
-            LHS[-N:, -N:] = G_L_pp - R @ G_L_np
-        else:
-            LHS[-N:, -NQuad : -N] = G_L_pn * E_Lm1L[None, :]
-            LHS[-N:, -N:] = G_L_pp
+        ################################## Use `sc.linalg.solve_banded` ##################################
+        if use_banded_solver:      
+             
+            # ---------------- Top BC ----------------
+            G_0 = G_collect_m[0]
+            G_0_nn = G_0[N:, :N]     # (N,N)
+            G_0_np = G_0[N:, N:]     # (N,N)
 
-        # Interlayer / continuity BCs
-        for l in range(NLayers - 1):
-            G_l = G_collect_m[l]
-            G_l_pn = G_l[:N, :N]
-            G_l_nn = G_l[N:, :N]
-            G_l_ap = G_l[:, N:]
-            
-            G_lp1 = G_collect_m[l + 1]
-            G_lp1_an = G_lp1[:, :N]
-            G_lp1_pp = G_lp1[:N, N:]
-            G_lp1_np = G_lp1[N:, N:]
-            
-            scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
-            scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
-            scaled_tau_arr_lp1 = scaled_tau_arr_with_0[l + 2]
-            # Postive eigenvalues
-            K_l_pos = K_collect_m[l, N:]
-            K_lp1_pos = K_collect_m[l + 1, N:]
-            E_lm1l = np.exp(K_l_pos * (scaled_tau_arr_lm1 - scaled_tau_arr_l))
-            E_llp1 = np.exp(K_lp1_pos * (scaled_tau_arr_l - scaled_tau_arr_lp1))
-            
-            start_row = N + l * NQuad
-            start_col = l * NQuad
-            LHS[start_row : N + start_row, start_col : N + start_col] = G_l_pn * E_lm1l[None, :]
-            LHS[N + start_row : NQuad + start_row, start_col : N + start_col] = G_l_nn * E_lm1l[None, :]
-            LHS[start_row : NQuad + start_row, N + start_col : NQuad + start_col] = G_l_ap
-            LHS[start_row : NQuad + start_row, NQuad + start_col : 3 * N + start_col] = -G_lp1_an
-            LHS[start_row : N + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_pp * E_llp1[None, :]
-            LHS[N + start_row : NQuad + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_np * E_llp1[None, :]
-            
-        # --------------------------------------------------------------------------------------------------------------------------
+            _view_slanted(0, 0, N)[:] = G_0_nn
+            _view_slanted(0, N, N)[:] = G_0_np * E_01
+
+            # ---------------- Bottom BC ----------------
+            if there_is_BDRF_mode:
+                _view_slanted(i_bot, j_bot_left, N)[:] = (G_L_pn - R @ G_L_nn) * E_Lm1L
+                _view_slanted(i_bot, i_bot, N)[:] = G_L_pp - R @ G_L_np
+            else:
+                _view_slanted(i_bot, j_bot_left, N)[:] = G_L_pn * E_Lm1L
+                _view_slanted(i_bot, i_bot, N)[:] = G_L_pp
+
+            # ---------------- Interlayer / continuity BCs ----------------
+            for l in range(NLayers - 1):
+                G_l = G_collect_m[l]
+                G_l_pn = G_l[:N, :N]      # (N,N)
+                G_l_nn = G_l[N:, :N]      # (N,N)
+                G_l_ap = G_l[:, N:]       # (2N,N)
+
+                G_lp1 = G_collect_m[l + 1]
+                G_lp1_an = G_lp1[:, :N]   # (2N,N)
+                G_lp1_pp = G_lp1[:N, N:]  # (N,N)
+                G_lp1_np = G_lp1[N:, N:]  # (N,N)
+
+                tau_lm1 = scaled_tau_arr_with_0[l]
+                tau_l   = scaled_tau_arr_with_0[l + 1]
+                tau_lp1 = scaled_tau_arr_with_0[l + 2]
+
+                E_lm1l = np.exp(K_collect_m[l,     N:] * (tau_lm1 - tau_l))[None, :]    # (N,)
+                E_llp1 = np.exp(K_collect_m[l + 1, N:] * (tau_l   - tau_lp1))[None, :]  # (N,)
+
+                start_row = N + l * NQuad
+                start_col = l * NQuad
+
+                _view_slanted(start_row,     start_col,     N)[:] = G_l_pn * E_lm1l
+                _view_slanted(start_row + N, start_col,     N)[:] = G_l_nn * E_lm1l
+                _view_slanted(start_row,     start_col + N, NQuad)[:] = G_l_ap
+
+                _view_slanted(start_row,     start_col + NQuad, NQuad)[:] = -G_lp1_an
+                _view_slanted(start_row,     start_col + 3 * N, N)[:] = -G_lp1_pp * E_llp1
+                _view_slanted(start_row + N, start_col + 3 * N, N)[:] = -G_lp1_np * E_llp1
         
-        # Solve the system
-        if use_banded_solver:
             C_m = sc.linalg.solve_banded(
                 (Nsupsubdiags, Nsupsubdiags),
-                to_diag_ordered_form(LHS, Nsupsubdiags, Nsupsubdiags),
+                LHS_dof,
                 RHS,
                 True,
                 True,
                 False,
             )
+        
+        ##################################################################################################
+        ##################################### Use `np.linalg.solve` ######################################
         else:
+            # ---------------- Top BC ----------------
+            LHS[:N, :N] = G_0_nn
+            LHS[:N, N : NQuad] = G_0_np * E_01
+            
+            # ---------------- Bottom BC ----------------
+            if there_is_BDRF_mode:
+                LHS[-N:, -NQuad : -N] = (G_L_pn - R @ G_L_nn) * E_Lm1L
+                LHS[-N:, -N:] = G_L_pp - R @ G_L_np
+            else:
+                LHS[-N:, -NQuad : -N] = G_L_pn * E_Lm1L
+                LHS[-N:, -N:] = G_L_pp
+
+            # ---------------- Interlayer / continuity BCs ----------------
+            for l in range(NLayers - 1):
+                G_l = G_collect_m[l]
+                G_l_pn = G_l[:N, :N]
+                G_l_nn = G_l[N:, :N]
+                G_l_ap = G_l[:, N:]
+                
+                G_lp1 = G_collect_m[l + 1]
+                G_lp1_an = G_lp1[:, :N]
+                G_lp1_pp = G_lp1[:N, N:]
+                G_lp1_np = G_lp1[N:, N:]
+                
+                scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
+                scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
+                scaled_tau_arr_lp1 = scaled_tau_arr_with_0[l + 2]
+                
+                # Postive eigenvalues
+                E_lm1l = np.exp(K_collect_m[l, N:] * (scaled_tau_arr_lm1 - scaled_tau_arr_l))
+                E_llp1 = np.exp(K_collect_m[l + 1, N:] * (scaled_tau_arr_l - scaled_tau_arr_lp1))
+                
+                start_row = N + l * NQuad
+                start_col = l * NQuad
+                
+                LHS[start_row : N + start_row, start_col : N + start_col] = G_l_pn * E_lm1l
+                LHS[N + start_row : NQuad + start_row, start_col : N + start_col] = G_l_nn * E_lm1l
+                LHS[start_row : NQuad + start_row, N + start_col : NQuad + start_col] = G_l_ap
+                
+                LHS[start_row : NQuad + start_row, NQuad + start_col : 3 * N + start_col] = -G_lp1_an
+                LHS[start_row : N + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_pp * E_llp1
+                LHS[N + start_row : NQuad + start_row, 3 * N + start_col : 4 * N + start_col] = -G_lp1_np * E_llp1
+                
+            # Solve the system
             C_m = np.linalg.solve(LHS, RHS)
+                
+            ################################################################################################## 
+            # --------------------------------------------------------------------------------------------------------------------------
 
         GC_collect[m, :, :, :] = G_collect_m * C_m.reshape(NLayers, NQuad)[:, None, :]
         
