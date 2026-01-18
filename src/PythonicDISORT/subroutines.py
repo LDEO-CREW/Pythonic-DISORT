@@ -719,11 +719,12 @@ def to_diag_ordered_form(A, Nsuperdiags, Nsubdiags):
 def _mathscr_v(tau,                              # Input optical depths
                 l,                               # Layer index of each input optical depth
                 Nscoeffs,                        # Number of isotropic source polynomial coefficients
+                NL,                              # Number of atmospheric layers in subset;  `NL` <= `NLayers`
+                Ntau,                            # Number of optical depth evaluations
                 s_poly_coeffs,                   # Polynomial coefficients of isotropic source
                 G,                               # Eigenvector matrices
                 K,                               # Eigenvalues
-                G_inv,                           # Inverse of eigenvector matrix
-                mu_arr,                          # Quadrature nodes for both hemispheres
+                G_inv_mu_inv,                    # Inverse of eigenvector matrix @ (1 / `mu_arr`)
                 is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
                 autograd_compatible=False,       # Should the output functions be compatible with autograd?
                 ):
@@ -739,85 +740,111 @@ def _mathscr_v(tau,                              # Input optical depths
     | ``tau``                       | ``Ntau``                                  |
     | ``l``                         | ``Ntau``                                  |
     | ``Nscoeffs``                  | scalar                                    |
-    | ``s_poly_coeffs``             | ``NLayers x Nscoeffs``                    |
-    | ``G``                         | ``NLayers<= x NQuad x NQuad``             |
-    | ``K``                         | ``NLayers<= x NQuad``                     |
-    | ``G_inv``                     | ``NLayers<= x NQuad x NQuad`` or ``None`` |
-    | ``mu_arr``                    | ``NQuad``                                 |
+    | ``NL``                        | scalar                                    |
+    | ``Ntau``                      | scalar                                    |
+    | ``s_poly_coeffs``             | ``NL x Nscoeffs``                         |
+    | ``G``                         | ``NL x NQuad x NQuad``                    |
+    | ``K``                         | ``NL x NQuad``                            |
+    | ``G_inv_mu_inv``              | ``NL x NQuad``                            |
     | ``is_antiderivative_wrt_tau`` | boolean                                   |
     | ``autograd_compatible``       | boolean                                   |
     
-    Notable internal variables of _mathscr_v
-    |     Variable     |                Shape                  | 
-    | ---------------- | ------------------------------------- |
-    | i_arr            | ``Nscoeffs``                          |
-    | i_arr_repeat     | ``Nscoeffs*(Nscoeffs+1)/2``           | Using triangular number formula
-    | j_arr            | ``Nscoeffs*(Nscoeffs+1)/2``           | Using triangular number formula
-    | s_poly_coeffs_nj | ``NLayers x Nscoeffs*(Nscoeffs+1)/2`` |
-    | OUTPUT           | ``NQuad x Ntau``                      |
     """
-    n = Nscoeffs - 1
-    
     if autograd_compatible:
         import autograd.numpy as np
-    
-        def mathscr_b(i):
-            """
-            Notable internal variables of mathscr_b
-            |     Variable     |                  Shape                  |
-            | ---------------- | --------------------------------------- |
-            | j_arr            | ``i + 1``                               |
-            | s_poly_coeffs_nj | ``i + 1``                               |
-            | OUTPUT           | ``Nscoeffs x (i + 1) x NQuad``          |
-            """
-        
-            j_arr = np.arange(i + 1)
-            s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
-            return np.sum(
-                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i))[None, None, :]
-                * K[:, :, None] ** -(i - j_arr + 1)[None, None, :]
-                * s_poly_coeffs_nj[:, None, :],
-                axis=-1,
-            )
-        mathscr_v_coeffs = np.array(list(map(mathscr_b, range(Nscoeffs))))
     else:
         import numpy as np
-        
-        shape = np.shape(K)
-        i_arr = np.arange(Nscoeffs)
-        i_arr_repeat = np.repeat(i_arr, i_arr + 1)
-        j_arr = np.concatenate([i_arr[:i] for i in range(1, Nscoeffs + 1)])
-        s_poly_coeffs_nj = s_poly_coeffs[:, n - j_arr]
 
-        mathscr_v_coeffs = np.zeros((Nscoeffs, shape[0], shape[1]))
-        np.add.at(
-            mathscr_v_coeffs,
-            i_arr_repeat,
-            np.moveaxis(
-                (sc.special.factorial(n - j_arr) / sc.special.factorial(n - i_arr_repeat))[
-                    None, None, :
-                ]
-                * K[:, :, None] ** -(i_arr_repeat - j_arr + 1)[None, None, :]
-                * s_poly_coeffs_nj[:, None, :],
-                -1,
-                0,
-            ),
-        )
     
-    powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
-    if is_antiderivative_wrt_tau:
-        tau_poly = tau[:, None] ** (powers + 1) / (powers + 1)
+    if NL > Ntau * 2:
+        layers_used, l = np.unique(l, return_inverse=True)
+    
+        G = G[layers_used, :, :]                 
+        K = K[layers_used, :]                       
+        G_inv_mu_inv = G_inv_mu_inv[layers_used, :] 
+        s_poly_coeffs = s_poly_coeffs[layers_used, :] 
+
+    K_inv = 1 / K  # (NL, NQuad)
+
+    # --------------------- Nscoeffs == 1 ---------------------
+    if Nscoeffs == 1:
+        s0 = s_poly_coeffs[:, 0:1]
+        c0w = s0 * K_inv * G_inv_mu_inv  # (NL, 1) * (NL, NQuad) -> (NL, NQuad)
+
+        if is_antiderivative_wrt_tau:
+            p0 = tau                 
+        else:
+            p0 = np.ones(Ntau)       
+            
+        d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)
+
+        return d0[:, l] * p0[None, :]
+
+    # --------------------- Nscoeffs == 2 ---------------------
+    elif Nscoeffs == 2:
+        s1 = s_poly_coeffs[:, 1:2]  # (NL, )
+        s0 = s_poly_coeffs[:, 0:1]  # (NL, )
+
+        K_inv2 = K_inv * K_inv
+
+        c0w = s1 * K_inv * G_inv_mu_inv
+        c1w = (s0 * K_inv + s1 * K_inv2) * G_inv_mu_inv
+
+        if is_antiderivative_wrt_tau:
+            p0 = tau * tau / 2
+            p1 = tau
+        else:
+            p0 = tau
+            p1 = np.ones(Ntau)
+
+        d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)  # (NQuad, NL)
+        d1 = np.einsum("lij, lj -> il", G, c1w, optimize=True)  # (NQuad, NL)
+
+        return d0[:, l] * p0[None, :] + d1[:, l] * p1[None, :]
+
+    # --------------------- Nscoeffs > 2 ----------------------
     else:
-        tau_poly = tau[:, None] ** powers
-    
-    return np.einsum(
-        "tik, tc, ctk -> it",
-        G[l, :, :],
-        tau_poly,
-        (mathscr_v_coeffs * (G_inv @ (1 / mu_arr))[None, :, :])[:, l, :],
-        optimize=True,
-    )
-    
+        if Nscoeffs > 10:
+            warnings.warn("`Nscoeffs` is large and may cause instability.")
+        n = Nscoeffs - 1
+
+        # K_invP[..., powers] = K_inv^(powers + 1); (NL, NQuad, Nscoeffs)
+        K_invP = np.cumprod(
+            np.broadcast_to(K_inv[:, :, None], K_inv.shape + (Nscoeffs,)),
+            axis=-1
+        )
+
+        ii = np.arange(Nscoeffs, dtype=int)[:, None]
+        pp = np.arange(Nscoeffs, dtype=int)[None, :]
+        jj = ii - pp
+
+        # Factorials
+        fac = np.empty(Nscoeffs)
+        fac[0] = 1
+        if Nscoeffs > 1:
+            fac[1:] = np.cumprod(np.arange(1, Nscoeffs))
+        fac_rev = fac[::-1]
+        inv_fac_rev = 1 / fac_rev
+
+        weighted_mathscr_a = s_poly_coeffs[:, ::-1] * fac_rev[None, :]
+        
+        # Only take lower triangle values
+        lower_tri = np.where((jj >= 0)[None, :, :], np.take(weighted_mathscr_a, jj, axis=1), 0)
+        
+        unweighted_mathscr_b_sigma = np.einsum("lkp, lip -> lki", K_invP, lower_tri, optimize=True)
+        mathscr_b_sigma = (unweighted_mathscr_b_sigma * inv_fac_rev[None, None, :]).transpose(2, 0, 1)
+        mathscr_b_right = mathscr_b_sigma * G_inv_mu_inv[None, :, :]
+        mathscr_b = np.einsum("lqk, plk- > lqp", G, mathscr_b_right, optimize=True)
+
+        powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
+        if is_antiderivative_wrt_tau:
+            p = powers + 1
+            tau_poly = (tau[:, None] ** p) / p
+        else:
+            tau_poly = tau[:, None] ** powers
+
+        return np.einsum("tqp, tp -> qt", mathscr_b[l, :, :], tau_poly, optimize=True)
+
 
 
 def _compare(results, mu_to_compare, reorder_mu, flux_up, flux_down, u=None):

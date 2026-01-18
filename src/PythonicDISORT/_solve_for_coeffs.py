@@ -11,9 +11,9 @@ def _solve_for_coeffs(
     G_collect,                                # Eigenvector matrices
     K_collect,                                # Eigenvalues
     B_collect,                                # Coefficients vectors for particular solutions
-    G_inv_collect_0,                          # Inverse of eigenvector matrix for the 0th Fourier mode
+    G_inv_mu_inv,                             # Inverse of eigenvector matrix for the 0th Fourier mode
     scaled_tau_arr_with_0,                    # Delta-scaled lower boundary of layers with 0 inserted in front
-    mu_arr, mu_arr_pos, mu_arr_pos_times_W,   # Quadrature nodes for 1) both 2) upper hemispheres; 3) upper hemisphere quadrature nodes times weights
+    mu_arr_pos, mu_arr_pos_times_W,           # Upper hemisphere quadrature nodes (cosine polar angles); same but multiplied by weights
     N, NQuad,                                 # Number of 1) upper 2) both hemispheres quadrature nodes
     NLayers, NBDRF,                           # Number of 1) layers; 2) BDRF Fourier modes
     is_atmos_multilayered,                    # Is the atmosphere multilayered?
@@ -44,9 +44,8 @@ def _solve_for_coeffs(
     | `G_collect`                    | `NFourier x NLayers x NQuad x NQuad`         |
     | `K_collect`                    | `NFourier x NLayers x NQuad`                 |
     | `B_collect`                    | `NFourier x NLayers x NQuad` or `None`       |
-    | `G_inv_collect_0`              | `NLayers x NQuad x NQuad` or `None`          |
+    | `G_inv_mu_inv`                 | `NLayers x NQuad x NQuad` or `None`          |
     | `scaled_tau_arr_with_0`        | `NLayers + 1`                                |
-    | `mu_arr`                       | `NQuad`                                      |
     | `mu_arr_pos`                   | `NQuad/2`                                    |
     | `mu_arr_pos_times_W`           | `NQuad/2`                                    |
     | `N`                            | scalar                                       |
@@ -81,14 +80,16 @@ def _solve_for_coeffs(
     GC_collect = np.empty((NFourier, NLayers, NQuad, NQuad))
     use_banded_solver = (NLayers >= use_banded_solver_NLayers)
     dim = NLayers * NQuad
+    if not there_is_beam_source:
+        RHS_middle = np.zeros(NQuad * (NLayers - 1))
     
-    i_bot = dim - N # equals `j_bot_right`
+    i_bot = dim - N # Equals `j_bot_right`
     j_bot_left = dim - NQuad
     if use_banded_solver:
         Nsupsubdiags = 3 * N - 1
-        LHS_dof = np.zeros((6 * N - 1, dim), order="F") # diagonal ordered form
-        s0, s1 = LHS_dof.strides  # bytes
-        col_stride = s1 - s0  # moving +1 col and -1 row
+        LHS_dof = np.zeros((6 * N - 1, dim), order="F") # Diagonal ordered form
+        s0, s1 = LHS_dof.strides
+        col_stride = s1 - s0  # Stride when moving +1 col and -1 row
         
         def _view_slanted(i0, j0, nrows):
             """
@@ -163,49 +164,47 @@ def _solve_for_coeffs(
             _mathscr_v_contribution_top = -_mathscr_v(
                         np.array([0]), 
                         np.array([0]),
-                        Nscoeffs,
+                        Nscoeffs, 1, 1,
                         scaled_s_poly_coeffs[[0], :],
                         G_collect_m[[0], N:, :],
                         K_collect_m[[0], :],
-                        G_inv_collect_0[[0], :, :],
-                        mu_arr,
+                        G_inv_mu_inv[[0]],
                     ).ravel()
         
             _mathscr_v_contribution_middle = np.array([])
             if is_atmos_multilayered:
-                indices = np.arange(NLayers - 1)
+                NLayersm1 = NLayers - 1
+                indices = np.arange(NLayersm1)
+                indicesp1 = indices + 1
                 _mathscr_v_contribution_middle = (
                     _mathscr_v(
                         scaled_tau_arr_with_0[1:-1],
                         indices,
-                        Nscoeffs,
-                        scaled_s_poly_coeffs[indices + 1],
-                        G_collect_m[indices + 1],
-                        K_collect_m[indices + 1],
-                        G_inv_collect_0[indices + 1],
-                        mu_arr,
+                        Nscoeffs, NLayersm1, NLayersm1,
+                        scaled_s_poly_coeffs[indicesp1],
+                        G_collect_m[indicesp1],
+                        K_collect_m[indicesp1],
+                        G_inv_mu_inv[indicesp1],
                     )
                     - _mathscr_v(
                         scaled_tau_arr_with_0[1:-1],
                         indices,
-                        Nscoeffs,
+                        Nscoeffs, NLayersm1, NLayersm1,
                         scaled_s_poly_coeffs[indices],
                         G_collect_m[indices],
                         K_collect_m[indices],
-                        G_inv_collect_0[indices],
-                        mu_arr,
+                        G_inv_mu_inv[indices],
                     )
                 ).ravel(order='F')
             
             _mathscr_v_contribution_bottom = -_mathscr_v(
                     scaled_tau_arr_with_0[[-1]], 
                     np.array([0]),
-                    Nscoeffs,
+                    Nscoeffs, 1, 1,
                     scaled_s_poly_coeffs[[-1], :],
                     G_collect_m[[-1], :N, :],
                     K_collect_m[[-1], :],
-                    G_inv_collect_0[[-1], :, :],
-                    mu_arr
+                    G_inv_mu_inv[[-1]],
                 ).ravel()
             if NBDRF > 0:
                 _mathscr_v_contribution_bottom = (
@@ -214,12 +213,11 @@ def _solve_for_coeffs(
                     @ _mathscr_v(
                         scaled_tau_arr_with_0[[-1]],
                         np.array([0]),
-                        Nscoeffs,
+                        Nscoeffs, 1, 1,
                         scaled_s_poly_coeffs[[-1], :],
                         G_collect_m[[-1], N:, :],
                         K_collect_m[[-1], :],
-                        G_inv_collect_0[[-1], :, :],
-                        mu_arr
+                        G_inv_mu_inv[[-1]],
                     ).ravel()
                 )
                     
@@ -234,13 +232,14 @@ def _solve_for_coeffs(
             _mathscr_v_contribution = 0
         
         if there_is_beam_source:
-            RHS_middle = np.array([])
             if is_atmos_multilayered:
                 l_range = np.arange(1, NLayers)
                 RHS_middle = (
                     (B_collect_m[l_range, :] - B_collect_m[l_range - 1, :])
                     * np.exp(-scaled_tau_arr_with_0 / mu0)[l_range, None]
                 ).ravel()
+            else:
+                RHS_middle = np.array([])
                 
             if there_is_BDRF_mode:
                 RHS = (
@@ -268,7 +267,6 @@ def _solve_for_coeffs(
                     + _mathscr_v_contribution
                 )
         else:
-            RHS_middle = np.zeros(NQuad * (NLayers - 1))
             RHS = np.concatenate([b_neg_m, RHS_middle, b_pos_m]) + _mathscr_v_contribution
             
         # --------------------------------------------------------------------------------------------------------------------------
@@ -293,6 +291,7 @@ def _solve_for_coeffs(
         ################################## Use `sc.linalg.solve_banded` ##################################
         if use_banded_solver:      
              
+            # Directly assemble diagonal ordered form of LHS matrix
             # ---------------- Top BC ----------------
             G_0 = G_collect_m[0]
             G_0_nn = G_0[N:, :N]     # (N,N)
@@ -343,7 +342,7 @@ def _solve_for_coeffs(
                 (Nsupsubdiags, Nsupsubdiags),
                 LHS_dof,
                 RHS,
-                True,
+                False,
                 True,
                 False,
             )
@@ -351,6 +350,7 @@ def _solve_for_coeffs(
         ##################################################################################################
         ##################################### Use `np.linalg.solve` ######################################
         else:
+        
             # ---------------- Top BC ----------------
             LHS[:N, :N] = G_0_nn
             LHS[:N, N : NQuad] = G_0_np * E_01

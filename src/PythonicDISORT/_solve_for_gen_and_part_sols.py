@@ -6,8 +6,8 @@ from math import pi
 def _solve_for_gen_and_part_sols(
     NFourier,                    # Number of intensity Fourier modes
     scaled_omega_arr,            # Delta-scaled single-scattering albedos
-    mu_arr_pos, mu_arr,          # Quadrature nodes for 1) upper 2) both hemispheres
-    M_inv, W,                    # 1) 1 / mu; 2) quadrature weights for each hemisphere
+    mu_arr_pos,                  # Upper hemisphere quadrature nodes (cosine polar angles)
+    M_inv, W,                    # 1) 1 / `mu_arr_pos`; 2) quadrature weights for each hemisphere
     N, NQuad, NLeg,              # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients 
     NLayers,                     # Number of layers
     weighted_scaled_Leg_coeffs,  # Weighted and delta-scaled Legendre coefficients
@@ -30,7 +30,6 @@ def _solve_for_gen_and_part_sols(
     | `NFourier`                     | scalar                             |
     | `scaled_omega_arr`             | `NLayers`                          |
     | `mu_arr_pos`                   | `NQuad/2`                          |
-    | `mu_arr`                       | `NQuad`                            |
     | `M_inv`                        | `NQuad/2`                          |
     | `W`                            | `NQuad/2`                          |
     | `N`                            | scalar                             |
@@ -96,20 +95,20 @@ def _solve_for_gen_and_part_sols(
         # --------------------------------------------------------------------------------------------------------------------------
         m_equals_0 = (m == 0)
         ells = ells_all[m:]
-        fac = sc.special.poch(ells + m + 1, -2 * m)
+        poch = sc.special.poch(ells + m + 1, -2 * m)
         signs = signs_all[:NLeg - m]
         
         if there_is_beam_source:
             degree_tile = np.broadcast_to(ells[:, None], (NLeg - m, N + 1))
             lpmv_all = sc.special.lpmv(m, degree_tile, mu_arr_pos_mu0)
             asso_leg_term_pos = lpmv_all[:, :-1]
-            scalar_fac_asso_leg_term_mu0 = I0_div_4pi * (2 - m_equals_0) * fac * lpmv_all[:, -1]
+            scalar_fac_asso_leg_term_mu0 = I0_div_4pi * (2 - m_equals_0) * poch * lpmv_all[:, -1]
         else:
             degree_tile = np.broadcast_to(ells[:, None], (NLeg - m, N))
             asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
             
         asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
-        fac_asso_leg_term_posT = fac[None, :] * asso_leg_term_pos.T
+        fac_asso_leg_term_posT = poch[None, :] * asso_leg_term_pos.T
         # --------------------------------------------------------------------------------------------------------------------------
 
         # Loop over NLayers atmospheric layers
@@ -186,24 +185,20 @@ def _solve_for_gen_and_part_sols(
         )
         
         # Eigenvalues arranged negative then positive, from largest to smallest magnitude
-        K_arr_p = np.sqrt(K_squared_arr)
-        K_arr = np.concatenate((-K_arr_p, K_arr_p), axis=1)
-        eigenvecs_GpG_arr = np.concatenate((eigenvecs_GpG_arr, eigenvecs_GpG_arr), axis=2)
-        eigenvecs_GmG_arr = (
-            np.einsum("lij, ljk -> lik", apb, eigenvecs_GpG_arr, optimize=True)
-            / K_arr[:, None, :]
-        )
-
-        # Eigenvector matrices
-        G_arr = np.concatenate(
-            (
-                (eigenvecs_GpG_arr - eigenvecs_GmG_arr) / 2,
-                (eigenvecs_GpG_arr + eigenvecs_GmG_arr) / 2,
-            ),
-            axis=1,
-        )
+        K_arr_pos = np.sqrt(K_squared_arr)
+        K_arr = np.concatenate((-K_arr_pos, K_arr_pos), axis=1)
         
-        G_collect[no_shortcut_indices, :, :] = G_arr
+        # Build eigenvector matrix from four blocks
+        eigenvecs_GpG_arr /= 2
+        eigenvecs_GmG_arr = np.einsum("lij, ljk -> lik", apb, eigenvecs_GpG_arr / K_arr_pos[:, None, :], optimize=True)
+        GpG_p_GmG_div_2 = eigenvecs_GpG_arr + eigenvecs_GmG_arr
+        GpG_m_GmG_div_2 = eigenvecs_GpG_arr - eigenvecs_GmG_arr
+        
+        G_collect[no_shortcut_indices, :N, :N] = GpG_p_GmG_div_2
+        G_collect[no_shortcut_indices, N:, N:] = GpG_p_GmG_div_2
+        G_collect[no_shortcut_indices, :N, N:] = GpG_m_GmG_div_2
+        G_collect[no_shortcut_indices, N:, :N] = GpG_m_GmG_div_2
+        
         K_collect[no_shortcut_indices, :] = K_arr
         if len(no_shortcut_indices_0) > 0: # If there is no isotropic source this list will be empty
             G_inv_collect_0[no_shortcut_indices_0, :, :] = np.linalg.inv(

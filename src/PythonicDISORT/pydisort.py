@@ -379,7 +379,7 @@ def pydisort(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
-            mu_arr_pos, mu_arr,
+            mu_arr_pos,
             M_inv, W,
             N, NQuad, NLeg,
             NFourier, NLayers, NBDRF,
@@ -487,142 +487,94 @@ def pydisort(
             )
             
             if is_atmos_multilayered:
-                layers_arr = np.arange(NLayers)[:, None]
-                pos_contribution_mask = (l[None, :] < layers_arr).ravel()
-                neg_contribution_mask = (l[None, :] > layers_arr).ravel()
-                any_pos_contribution = np.any(pos_contribution_mask)
-                any_neg_contribution = np.any(neg_contribution_mask)
-            
-                if not (any_pos_contribution or any_neg_contribution):
+                # --- cheap early-outs (no NLayers*Ntau masks) ---
+                any_pos = (l.min() < NLayers - 1)
+                any_neg = (l.max() > 0)
+                if not (any_pos or any_neg):
                     return solution
 
-                layers_arr_repeat = np.repeat(layers_arr, Ntau)
-                scaled_tau_tile = np.tile(scaled_tau, NLayers)
+                invmu  = (1.0 / mu_arr_pos)[:, None, None]   # (N,1,1)
+                invmu0 = 1.0 / mu0
 
-                if any_pos_contribution:
-                    contribution_from_each_other_layer_pos = np.zeros((N, NLayers * Ntau, Nphi))
-                    scaled_tau_tile_pos = scaled_tau_tile[pos_contribution_mask]
-                    
-                    layers_arr_repeat_pos = layers_arr_repeat[pos_contribution_mask]
-                    mathscr_B_repeat_pos = mathscr_B[:N, layers_arr_repeat_pos, :]
-                    scaled_tau_arr_with_0_l_repeat_pos = scaled_tau_arr_with_0[:-1][layers_arr_repeat_pos]
-                    scaled_tau_arr_with_0_lp1_repeat_pos = scaled_tau_arr_with_0[1:][layers_arr_repeat_pos]
-                    
-                    if is_antiderivative_wrt_tau:
-                        scale_tau_repeat_pos = scale_tau[layers_arr_repeat_pos]
-                        contribution_from_each_other_layer_pos[:, pos_contribution_mask, :] = (
-                            mathscr_B_repeat_pos
-                            * (
-                                (
-                                    np.exp(
-                                        (scaled_tau_tile_pos - scaled_tau_arr_with_0_l_repeat_pos)
-                                        / mu_arr_pos[:, None]
-                                        - scaled_tau_arr_with_0_l_repeat_pos / mu0
-                                    )
-                                    - np.exp(
-                                        (scaled_tau_tile_pos - scaled_tau_arr_with_0_lp1_repeat_pos)
-                                        / mu_arr_pos[:, None]
-                                        - scaled_tau_arr_with_0_lp1_repeat_pos / mu0
-                                    )
-                                )
-                                / (scale_tau_repeat_pos / mu_arr_pos[:, None])
-                            )[:, :, None]
-                        )
-                        contribution_from_other_layers_pos = np.sum(
-                            contribution_from_each_other_layer_pos.reshape((N, NLayers, Ntau, Nphi)),
-                            axis=1,
-                        )
-                    else:
-                        contribution_from_each_other_layer_pos[:, pos_contribution_mask, :] = (
-                            mathscr_B_repeat_pos
-                            * (
-                                np.exp(
-                                    (scaled_tau_tile_pos - scaled_tau_arr_with_0_l_repeat_pos)
-                                    / mu_arr_pos[:, None]
-                                    - scaled_tau_arr_with_0_l_repeat_pos / mu0
-                                )
-                                - np.exp(
-                                    (scaled_tau_tile_pos - scaled_tau_arr_with_0_lp1_repeat_pos)
-                                    / mu_arr_pos[:, None]
-                                    - scaled_tau_arr_with_0_lp1_repeat_pos / mu0
-                                )
-                            )[:, :, None]
-                        )
-                        contribution_from_other_layers_pos = np.sum(
-                            contribution_from_each_other_layer_pos.reshape((N, NLayers, Ntau, Nphi)),
-                            axis=1,
-                        )
-                        
-                if any_neg_contribution:
-                    contribution_from_each_other_layer_neg = np.zeros((N, NLayers * Ntau, Nphi))
-                    scaled_tau_tile_neg = scaled_tau_tile[neg_contribution_mask]
-                    
-                    layers_arr_repeat_neg = layers_arr_repeat[neg_contribution_mask]
-                    mathscr_B_repeat_neg = mathscr_B[N:, layers_arr_repeat_neg, :]
-                    scaled_tau_arr_with_0_l_repeat_neg = scaled_tau_arr_with_0[:-1][layers_arr_repeat_neg]
-                    scaled_tau_arr_with_0_lp1_repeat_neg = scaled_tau_arr_with_0[1:][layers_arr_repeat_neg]
+                scaled_tau_w0_front = scaled_tau_arr_with_0[:-1]          # (NLayers,)
+                scaled_tau_w0_back = scaled_tau_arr_with_0[1: ]          # (NLayers,)
+                dtau_1d = scaled_tau_w0_back - scaled_tau_w0_front                                              # (NLayers,) > 0
+
+                tau0_mu0 = scaled_tau_w0_front * invmu0                                              # (NLayers,)
+
+                # base[r,t] = tau[t] - tau0[r]  (NLayers, Ntau)
+                base = scaled_tau[None, :] - scaled_tau_w0_front[:, None]
+
+                dtau = dtau_1d[None, :, None]                                            # (1,NLayers,1)
+
+                if is_antiderivative_wrt_tau:
+                    mu_over_scale = (mu_arr_pos[:, None] / scale_tau[:, :, None])  # (N,NLayers,1)
+
+                # Work buffer (N,NLayers,Ntau)
+                E = np.empty((N, NLayers, Ntau))
+
+                # ---------------- POS ----------------
+                if any_pos:
+                    layers = np.arange(NLayers)[:, None]                  # (NLayers,1)
+                    pos_where = (layers > l[None, :])[None, :, :]                        # (1,NLayers,Ntau)
+
+                    # x0 = (tau - tau0)/mu - tau0/mu0   (<=0 wherever pos_where True)
+                    np.multiply(base[None, :, :], invmu, out=E)
+                    E -= tau0_mu0[None, :, None]
+
+                    np.exp(E, out=E, where=pos_where)                                    # exp only on safe entries
+                    E *= pos_where                                                       # zero non-contrib entries
+
+                    # delta_pos = x0 - x1 = dtau*(1/mu + 1/mu0) >= 0
+                    # fac_pos = 1 - exp(-delta) = -expm1(-delta)  (argument <= 0)
+                    delta_pos = dtau * (invmu + invmu0)                                  # (N,NLayers,1)
+                    fac_pos = -np.expm1(-delta_pos)
 
                     if is_antiderivative_wrt_tau:
-                        scale_tau_repeat_neg = scale_tau[layers_arr_repeat_neg]
-                        contribution_from_each_other_layer_neg[:, neg_contribution_mask, :] = (
-                            mathscr_B_repeat_neg
-                            * (
-                                (
-                                    np.exp(
-                                        (scaled_tau_arr_with_0_lp1_repeat_neg - scaled_tau_tile_neg)
-                                        / mu_arr_pos[:, None]
-                                        - scaled_tau_arr_with_0_lp1_repeat_neg / mu0
-                                    )
-                                    - np.exp(
-                                        (scaled_tau_arr_with_0_l_repeat_neg - scaled_tau_tile_neg)
-                                        / mu_arr_pos[:, None]
-                                        - scaled_tau_arr_with_0_l_repeat_neg / mu0
-                                    )
-                                )
-                                / (-scale_tau_repeat_neg / mu_arr_pos[:, None])
-                            )[:, :, None]
-                        )
-                        contribution_from_other_layers_neg = np.sum(
-                            contribution_from_each_other_layer_neg.reshape((N, NLayers, Ntau, Nphi)),
-                            axis=1,
-                        )
-                    else:
-                        contribution_from_each_other_layer_neg[:, neg_contribution_mask, :] = (
-                            mathscr_B_repeat_neg
-                            * (
-                                np.exp(
-                                    (scaled_tau_arr_with_0_lp1_repeat_neg - scaled_tau_tile_neg)
-                                    / mu_arr_pos[:, None]
-                                    - scaled_tau_arr_with_0_lp1_repeat_neg / mu0
-                                )
-                                - np.exp(
-                                    (scaled_tau_arr_with_0_l_repeat_neg - scaled_tau_tile_neg)
-                                    / mu_arr_pos[:, None]
-                                    - scaled_tau_arr_with_0_l_repeat_neg / mu0
-                                )
-                            )[:, :, None]
-                        )
-                        contribution_from_other_layers_neg = np.sum(
-                            contribution_from_each_other_layer_neg.reshape((N, NLayers, Ntau, Nphi)),
-                            axis=1,
-                        )
+                        fac_pos *= mu_over_scale
 
-                if autograd_compatible:
-                    if not any_pos_contribution:
-                        TMS_correction_pos = np.zeros((N, Ntau, Nphi))
-                    if not any_neg_contribution:
-                        TMS_correction_neg = np.zeros((N, Ntau, Nphi))
-                    return solution + np.concatenate(
-                        (contribution_from_other_layers_pos, contribution_from_other_layers_neg),
-                        axis=0,
-                    )
-                else:
-                    if any_pos_contribution:
-                        solution[:N, :, :] += contribution_from_other_layers_pos
-                    if any_neg_contribution:
-                        solution[N:, :, :] += contribution_from_other_layers_neg
-                    return solution
-                    
+                    E *= fac_pos
+
+                    Bpos = mathscr_B[:N, :, :]                 # (N,NLayers,Nphi)
+                    solution[:N, :, :] += (E.swapaxes(1, 2) @ Bpos)                      # (N,Ntau,Nphi)
+
+                # ---------------- NEG ----------------
+                if any_neg:
+                    layers = np.arange(NLayers)[:, None]
+                    neg_where = (layers < l[None, :])[None, :, :]                        # (1,NLayers,Ntau)
+
+                    # Start with x0 = (tau0 - tau)/mu - tau0/mu0 = -(tau - tau0)/mu - tau0/mu0
+                    np.multiply(base[None, :, :], -invmu, out=E)
+                    E -= tau0_mu0[None, :, None]
+
+                    # delta_neg = x1 - x0 = dtau*(1/mu - 1/mu0) (can be +/-)
+                    delta_neg = dtau * (invmu - invmu0)                                  # (N,NLayers,1)
+                    delta_ge0 = (delta_neg >= 0)
+
+                    # Where delta>=0, base should be x1 = x0 + delta (still non-positive on neg_where domain)
+                    np.add(E, delta_neg, out=E, where=delta_ge0)                          # broadcast over Ntau
+
+                    np.exp(E, out=E, where=neg_where)                                     # exp only on safe entries
+                    E *= neg_where
+
+                    # fac_neg:
+                    #   if delta>=0:  exp(x1)-exp(x0) = exp(x1)*(1-exp(-delta)) = exp(x1)*(-expm1(-delta))
+                    #   if delta<0 :  exp(x1)-exp(x0) = exp(x0)*(exp(delta)-1) = exp(x0)*expm1(delta)
+                    fac_neg = np.empty_like(delta_neg)
+                    np.expm1(-delta_neg, out=fac_neg, where=delta_ge0)                    # arg <= 0
+                    np.multiply(fac_neg, -1.0, out=fac_neg, where=delta_ge0)              # fac = -expm1(-delta) for delta>=0
+                    np.expm1(delta_neg, out=fac_neg, where=~delta_ge0)                    # arg < 0
+
+                    if is_antiderivative_wrt_tau:
+                        fac_neg *= -mu_over_scale
+
+                    E *= fac_neg
+
+                    Bneg = mathscr_B[N:, :, :]
+                    solution[N:, :, :] += (E.swapaxes(1, 2) @ Bneg)
+
+                return solution
+
             # --------------------------------------------------------------------------------------------------------------------------
             
             else:
@@ -702,7 +654,7 @@ def pydisort(
             scaled_omega_arr,
             tau_arr,
             scaled_tau_arr_with_0,
-            mu_arr_pos, mu_arr,
+            mu_arr_pos,
             M_inv, W,
             N, NQuad, NLeg,
             NFourier, NLayers, NBDRF,

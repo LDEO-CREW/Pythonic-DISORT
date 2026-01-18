@@ -9,8 +9,8 @@ def _assemble_intensity_and_fluxes(
     scaled_omega_arr,                   # Delta-scaled single-scattering albedos
     tau_arr,                            # Lower boundary of layers
     scaled_tau_arr_with_0,              # Delta-scaled lower boundary of layers with 0 inserted in front
-    mu_arr_pos, mu_arr,                 # Quadrature nodes for 1) upper 2) both hemispheres
-    M_inv, W,                           # 1) 1 / mu; 2) quadrature weights for each hemisphere
+    mu_arr_pos,                         # Upper hemisphere quadrature nodes (cosine polar angles)
+    M_inv, W,                           # 1) 1 / `mu_arr_pos`; 2) quadrature weights for each hemisphere
     N, NQuad, NLeg,                     # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients 
     NFourier, NLayers, NBDRF,           # Number of 1) intensity Fourier modes; 2) layers; 3) BDRF Fourier modes
     is_atmos_multilayered,              # Is the atmosphere multilayered?
@@ -47,7 +47,6 @@ def _assemble_intensity_and_fluxes(
     | `tau_arr`                      | `NLayers`                                    |
     | `scaled_tau_arr_with_0`        | `NLayers + 1`                                |
     | `mu_arr_pos`                   | `NQuad/2`                                    |
-    | `mu_arr`                       | `NQuad`                                      |
     | `M_inv`                        | `NQuad/2`                                    |
     | `W`                            | `NQuad/2`                                    |
     | `N`                            | scalar                                       |
@@ -83,7 +82,7 @@ def _assemble_intensity_and_fluxes(
     | ----------------- | -------------------------------------- |
     | `G_collect`       | `NFourier x NLayers x NQuad x NQuad`   |
     | `G_collect_0`     | `NLayers x NQuad x NQuad`              |
-    | `G_inv_collect_0` | `NLayers x NQuad x NQuad` or `None`    |
+    | `G_inv_mu_inv`    | `NLayers x NQuad x NQuad` or `None`    |
     | `K_collect`       | `NFourier x NLayers x NQuad`           |
     | `K_collect_0`     | `NLayers x NQuad`                      |
     | `B_collect`       | `NFourier x NLayers x NQuad` or `None` |
@@ -108,7 +107,7 @@ def _assemble_intensity_and_fluxes(
     outputs = _solve_for_gen_and_part_sols(
         NFourier,
         scaled_omega_arr,
-        mu_arr_pos, mu_arr,
+        mu_arr_pos,
         M_inv, W,
         N, NQuad, NLeg,
         NLayers,
@@ -120,27 +119,28 @@ def _assemble_intensity_and_fluxes(
     if there_is_beam_source and there_is_iso_source:
         G_collect, K_collect, B_collect, G_inv_collect_0 = outputs
         B_collect_0 = B_collect[0, :, :]
+        G_inv_mu_inv = G_inv_collect_0 @ np.concatenate([M_inv, -M_inv])
     elif there_is_beam_source and not there_is_iso_source:
         G_collect, K_collect, B_collect = outputs
         B_collect_0 = B_collect[0, :, :]
-        G_inv_collect_0 = None
+        G_inv_mu_inv = None
     elif not there_is_beam_source and there_is_iso_source:
         G_collect, K_collect, G_inv_collect_0 = outputs
         B_collect = None
+        G_inv_mu_inv = G_inv_collect_0 @ np.concatenate([M_inv, -M_inv])
     else:
         G_collect, K_collect = outputs
         B_collect = None
-        G_inv_collect_0 = None
-        
+        G_inv_mu_inv = None
             
     GC_collect = _solve_for_coeffs(
         NFourier,
         G_collect,
         K_collect,
         B_collect,
-        G_inv_collect_0,
+        G_inv_mu_inv,
         scaled_tau_arr_with_0,
-        mu_arr, mu_arr_pos, mu_arr_pos * W,
+        mu_arr_pos, mu_arr_pos * W,
         N, NQuad,
         NLayers, NBDRF,
         is_atmos_multilayered,
@@ -233,12 +233,12 @@ def _assemble_intensity_and_fluxes(
             if there_is_iso_source:
                 l_uniq, l_inv = np.unique(l, return_inverse=True)
                 _mathscr_v_contribution = _mathscr_v(
-                    scaled_tau, l_inv, Nscoeffs,
+                    scaled_tau, l_inv, 
+                    Nscoeffs, NLayers, len(tau),
                     scaled_s_poly_coeffs[l_uniq],
                     G_collect_0[l_uniq],
                     K_collect_0[l_uniq],
-                    G_inv_collect_0[l_uniq],
-                    mu_arr,
+                    G_inv_mu_inv[l_uniq],
                     is_antiderivative_wrt_tau,
                     autograd_compatible,
                 )
@@ -402,12 +402,12 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, l_inv, Nscoeffs,
+                scaled_tau, l_inv,
+                Nscoeffs, NLayers, len(tau),
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq],
                 K_collect_0[l_uniq],
-                G_inv_collect_0[l_uniq],
-                mu_arr,
+                G_inv_mu_inv[l_uniq],
                 is_antiderivative_wrt_tau,
                 autograd_compatible,
             )
@@ -461,12 +461,12 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, l_inv, Nscoeffs,
+                scaled_tau, l_inv,
+                Nscoeffs, NLayers, len(tau),
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, :N, :],
                 K_collect_0[l_uniq],
-                G_inv_collect_0[l_uniq],
-                mu_arr,
+                G_inv_mu_inv[l_uniq],
                 is_antiderivative_wrt_tau,
                 autograd_compatible,
             )
@@ -543,12 +543,12 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, l_inv, Nscoeffs,
+                scaled_tau, l_inv,
+                Nscoeffs, NLayers, len(tau),
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, N:, :],
                 K_collect_0[l_uniq],
-                G_inv_collect_0[l_uniq],
-                mu_arr,
+                G_inv_mu_inv[l_uniq],
                 is_antiderivative_wrt_tau,
                 autograd_compatible,
             )
