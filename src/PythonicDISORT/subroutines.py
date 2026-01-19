@@ -4,6 +4,32 @@ from math import pi
 import warnings
 
 
+def prepend(arr, arr_len, value):
+    """Prepend value to array. 
+    Faster than ``np.insert(arr, 0, value)``.
+
+    Parameters
+    ----------
+    arr : array
+        The 1D array to which to prepend.
+    arr_len : int
+        Length of original array (``arr``).
+    value : float
+        Value to prepend.
+
+    Returns
+    -------
+    array
+        Array of length ``arr_len + 1`` with ``value`` prepended.
+
+    """
+    new_arr = np.empty(arr_len + 1)
+    new_arr[1:] = arr
+    new_arr[0] = value
+    return new_arr
+
+
+
 def transform_interval(arr, c, d, a, b):
     """Affine transformation of an array from interval [a, b] to [c, d].
 
@@ -141,7 +167,7 @@ def Clenshaw_Curtis_quad(Nphi, c=0, d=(2 * pi)):
     Nphi_pos = Nphi // 2
     phi_arr_pos = np.cos(pi * np.arange(Nphi_pos) / Nphi)
     phi_arr = np.concatenate([-phi_arr_pos, [0], np.flip(phi_arr_pos)])
-    diff = np.insert(2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2), 0, 2)
+    diff = prepend(2 / (1 - 4 * np.arange(1, Nphi_pos + 1) ** 2), Nphi_pos, 2)
     weights_phi_pos = sc.fft.idct(diff, type=1)
     weights_phi_pos[0] /= 2
     full_weights_phi = np.hstack((weights_phi_pos, np.flip(weights_phi_pos[:-1])))
@@ -418,7 +444,7 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
             "Missing temperature specification at some boundaries / interfaces."
         )
 
-    tau_arr_with_0 = np.insert(tau_arr, 0, 0)
+    tau_arr_with_0 = prepend(tau_arr, len(tau_arr), 0)
     blackbody_emission_at_each_boundary = sc.integrate.quad_vec(
         lambda WVNM: Planck(TEMPER, WVNM), WVNMLO, WVNMHI, **kwargs
     )[0]
@@ -615,7 +641,7 @@ def interpolate(u):
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
     
-    if u.__code__.co_argcount == 5: # Function is u instead of u0
+    if u.__code__.co_argcount == 6: # Function is `u` instead of `u0`
         def u_interpol(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
             if not np.all(np.abs(mu) <= 1):
                 raise ValueError("mu values must be between -1 and 1.")
@@ -716,18 +742,16 @@ def to_diag_ordered_form(A, Nsuperdiags, Nsubdiags):
 
 
     
-def _mathscr_v(tau,                              # Input optical depths
-                l,                               # Layer index of each input optical depth
-                Nscoeffs,                        # Number of isotropic source polynomial coefficients
-                NL,                              # Number of atmospheric layers in subset;  `NL` <= `NLayers`
-                Ntau,                            # Number of optical depth evaluations
-                s_poly_coeffs,                   # Polynomial coefficients of isotropic source
-                G,                               # Eigenvector matrices
-                K,                               # Eigenvalues
-                G_inv_mu_inv,                    # Inverse of eigenvector matrix @ (1 / `mu_arr`)
-                is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
-                autograd_compatible=False,       # Should the output functions be compatible with autograd?
-                ):
+def _mathscr_v(tau,                             # Input optical depths
+               l,                               # Layer index of each input optical depth
+               Nscoeffs,                        # Number of isotropic source polynomial coefficients
+               s_poly_coeffs,                   # Polynomial coefficients of isotropic source
+               G,                               # Eigenvector matrices
+               K,                               # Eigenvalues
+               G_inv_mu_inv,                    # Inverse of eigenvector matrix @ (1 / `mu_arr`)
+               is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
+               autograd_compatible=False,       # Should the output functions be compatible with autograd?
+               ):
     """Particular solution for isotropic internal sources.
     Refer to section 3.6.1 of the Comprehensive Documentation.
     It has many seemingly redundant arguments to maximize 
@@ -740,8 +764,6 @@ def _mathscr_v(tau,                              # Input optical depths
     | ``tau``                       | ``Ntau``                                  |
     | ``l``                         | ``Ntau``                                  |
     | ``Nscoeffs``                  | scalar                                    |
-    | ``NL``                        | scalar                                    |
-    | ``Ntau``                      | scalar                                    |
     | ``s_poly_coeffs``             | ``NL x Nscoeffs``                         |
     | ``G``                         | ``NL x NQuad x NQuad``                    |
     | ``K``                         | ``NL x NQuad``                            |
@@ -755,15 +777,6 @@ def _mathscr_v(tau,                              # Input optical depths
     else:
         import numpy as np
 
-    
-    if NL > Ntau * 2:
-        layers_used, l = np.unique(l, return_inverse=True)
-    
-        G = G[layers_used, :, :]                 
-        K = K[layers_used, :]                       
-        G_inv_mu_inv = G_inv_mu_inv[layers_used, :] 
-        s_poly_coeffs = s_poly_coeffs[layers_used, :] 
-
     K_inv = 1 / K  # (NL, NQuad)
 
     # --------------------- Nscoeffs == 1 ---------------------
@@ -774,7 +787,7 @@ def _mathscr_v(tau,                              # Input optical depths
         if is_antiderivative_wrt_tau:
             p0 = tau                 
         else:
-            p0 = np.ones(Ntau)       
+            p0 = np.ones_like(tau)       
             
         d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)
 
@@ -795,7 +808,7 @@ def _mathscr_v(tau,                              # Input optical depths
             p1 = tau
         else:
             p0 = tau
-            p1 = np.ones(Ntau)
+            p1 = np.ones_like(tau) 
 
         d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)  # (NQuad, NL)
         d1 = np.einsum("lij, lj -> il", G, c1w, optimize=True)  # (NQuad, NL)

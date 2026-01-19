@@ -1,6 +1,5 @@
 import numpy as np
 import scipy as sc
-from math import pi
 
 
 def _solve_for_gen_and_part_sols(
@@ -11,7 +10,7 @@ def _solve_for_gen_and_part_sols(
     N, NQuad, NLeg,              # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients 
     NLayers,                     # Number of layers
     weighted_scaled_Leg_coeffs,  # Weighted and delta-scaled Legendre coefficients
-    mu0, I0,                     # Properties of the direct beam
+    mu0, I0_div_4pi,             # Primary properties of the direct beam
     there_is_beam_source,        # Is there a beam source?
     there_is_iso_source,         # Is there an isotropic source?
 ):
@@ -38,7 +37,7 @@ def _solve_for_gen_and_part_sols(
     | `NLayers`                      | scalar                             |
     | `weighted_scaled_Leg_coeffs`   | `NLayers x NLeg`                   |
     | `mu0`                          | scalar                             |
-    | `I0`                           | scalar                             |
+    | `I0_div_4pi`                   | scalar                             |
     | `there_is_beam_source`         | boolean                            |
     | `there_is_iso_source`          | boolean                            |
     
@@ -78,7 +77,6 @@ def _solve_for_gen_and_part_sols(
     ind = 0
     
     if there_is_beam_source:
-        I0_div_4pi = I0 / (4 * pi)
         mu_arr_pos_mu0 = np.append(mu_arr_pos, -mu0)
         
         X_arr = np.empty((NFourier * NLayers, NQuad))

@@ -16,7 +16,8 @@ def _assemble_intensity_and_fluxes(
     is_atmos_multilayered,              # Is the atmosphere multilayered?
     weighted_scaled_Leg_coeffs,         # Weighted and delta-scaled Legendre coefficients
     BDRF_Fourier_modes,                 # BDRF Fourier modes
-    mu0, I0, rescale_factor, phi0,      # Properties of the direct beam
+    mu0, I0, I0_div_4pi,                # Primary direct beam parameters
+    rescale_factor, phi0,               # Secondary direct beam parameters
     there_is_beam_source,               # Is there a beam source?
     b_pos, b_neg,                       # Dirichlet BCs
     b_pos_is_scalar, b_neg_is_scalar,   # Is each Dirichlet BCs scalar and so isotropic?
@@ -60,6 +61,7 @@ def _assemble_intensity_and_fluxes(
     | `BDRF_Fourier_modes`           | `NBDRF`                                      |
     | `mu0`                          | scalar                                       |
     | `I0`                           | scalar                                       |
+    | `I0_div_4pi`                   | scalar                                       |
     | `rescale_factor`               | scalar                                       |
     | `phi0`                         | scalar                                       |
     | `there_is_beam_source`         | scalar                                       |
@@ -112,7 +114,7 @@ def _assemble_intensity_and_fluxes(
         N, NQuad, NLeg,
         NLayers,
         weighted_scaled_Leg_coeffs,
-        mu0, I0,
+        mu0, I0_div_4pi,
         there_is_beam_source,
         there_is_iso_source,
     )
@@ -145,7 +147,7 @@ def _assemble_intensity_and_fluxes(
         NLayers, NBDRF,
         is_atmos_multilayered,
         BDRF_Fourier_modes,
-        mu0, I0,
+        mu0, I0_div_4pi,
         there_is_beam_source,
         b_pos, b_neg,
         b_pos_is_scalar, b_neg_is_scalar,
@@ -165,7 +167,7 @@ def _assemble_intensity_and_fluxes(
  
         # Construct the intensity function (refer to section 3.7 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
-        def u(tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
+        def u(tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False, *, _return_l=False):
             """
             Intensity function with arguments `(tau, phi)` of types `(array or float, array or float)`.
             Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
@@ -203,13 +205,13 @@ def _assemble_intensity_and_fluxes(
             direct_beam_contribution = 0
             if is_antiderivative_wrt_tau:
                 if there_is_beam_source:
-                    direct_beam_contribution = (B_collect / (-scale_tau / mu0)[None, :, None])[
-                        :, l, :
-                    ] * np.exp(-scaled_tau / mu0)[None, :, None]
+                    direct_beam_contribution = (
+                        B_collect.transpose(0, 2, 1) / (-scale_tau / mu0)[None, None, :]
+                    )[:, :, l] * np.exp(-scaled_tau / mu0)[None, None, :]
 
                 um = (
                     np.einsum(
-                        "mtij, mtj -> mti",
+                        "mtij, mtj -> mit",
                         GC_collect[:, l, :, :],
                         np.exp(exponent) / (scale_tau[None, :, None] * K_collect)[:, l, :],
                         optimize=True,
@@ -219,12 +221,13 @@ def _assemble_intensity_and_fluxes(
             else:
                 if there_is_beam_source:
                     direct_beam_contribution = (
-                        B_collect[:, l, :] * np.exp(-scaled_tau / mu0)[None, :, None]
+                        B_collect.transpose(0, 2, 1)[:, :, l]
+                        * np.exp(-scaled_tau / mu0)[None, None, :]
                     )
 
                 um = (
                     np.einsum(
-                        "mtij, mtj -> mti", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
+                        "mtij, mtj -> mit", GC_collect[:, l, :, :], np.exp(exponent), optimize=True
                     )
                     + direct_beam_contribution
                 )
@@ -234,7 +237,7 @@ def _assemble_intensity_and_fluxes(
                 l_uniq, l_inv = np.unique(l, return_inverse=True)
                 _mathscr_v_contribution = _mathscr_v(
                     scaled_tau, l_inv, 
-                    Nscoeffs, NLayers, len(tau),
+                    Nscoeffs,
                     scaled_s_poly_coeffs[l_uniq],
                     G_collect_0[l_uniq],
                     K_collect_0[l_uniq],
@@ -244,21 +247,20 @@ def _assemble_intensity_and_fluxes(
                 )
                 
                 if NFourier == 1:
-                    um = um + _mathscr_v_contribution.T
+                    um = um + _mathscr_v_contribution
                 elif autograd_compatible:
-                    um = um + np.concatenate((_mathscr_v_contribution.T, np.zeros((NFourier - 1, len(tau), NQuad))))
+                    um = np.concatenate((um[[0], :, :] + _mathscr_v_contribution, um[1:, :, :]), axis=0)
                 else:
-                    um[0, :, :] += _mathscr_v_contribution.T
+                    um[0, :, :] += _mathscr_v_contribution
                 
-            u = np.einsum(
-                "mti, mp -> itp",
-                um,
-                np.cos(np.arange(NFourier)[:, None] * (phi0 - phi)[None, :]),
-                optimize=True,
+            u = np.sum(
+                um[:, :, :, None]
+                * np.cos(np.arange(NFourier)[:, None] * (phi0 - phi)[None, :])[:, None, None, :],
+                axis=0,
             )
             
             outputs = (rescale_factor * np.squeeze(u),)
-            outputs_len = 1
+            output_is_tuple = False
 
             if return_Fourier_error:
                 exponent = np.concatenate(
@@ -311,13 +313,20 @@ def _assemble_intensity_and_fluxes(
                 )
                 
                 outputs += (Fourier_error,)
-                outputs_len += 1
+                output_is_tuple = True
                 
             if return_tau_arr:
                 outputs += (tau_arr,)
-                outputs_len += 1
+                output_is_tuple = True
+            
+            if _return_l: # This indicates to the function that NT corrections are activated
+                output_is_tuple = True
+                outputs += (l,)
+                if there_is_iso_source:
+                    # The TMS correction will use these
+                    outputs += (l_uniq, l_inv)
                 
-            return outputs[0] if outputs_len == 1 else outputs
+            return outputs if output_is_tuple else outputs[0]
         # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct u0
@@ -403,7 +412,7 @@ def _assemble_intensity_and_fluxes(
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
                 scaled_tau, l_inv,
-                Nscoeffs, NLayers, len(tau),
+                Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq],
                 K_collect_0[l_uniq],
@@ -462,7 +471,7 @@ def _assemble_intensity_and_fluxes(
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
                 scaled_tau, l_inv,
-                Nscoeffs, NLayers, len(tau),
+                Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, :N, :],
                 K_collect_0[l_uniq],
@@ -544,7 +553,7 @@ def _assemble_intensity_and_fluxes(
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
                 scaled_tau, l_inv,
-                Nscoeffs, NLayers, len(tau),
+                Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, N:, :],
                 K_collect_0[l_uniq],
