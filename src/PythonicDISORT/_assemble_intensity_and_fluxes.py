@@ -183,7 +183,7 @@ def _assemble_intensity_and_fluxes(
             
             # Atmospheric layer indices
             l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
-            scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
+            scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
             scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
             # Delta-M scaling
@@ -347,7 +347,7 @@ def _assemble_intensity_and_fluxes(
         
         # Atmospheric layer indices
         l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
-        scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
+        scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
         # Delta-M scaling
@@ -456,7 +456,7 @@ def _assemble_intensity_and_fluxes(
         
         # Atmospheric layer indices
         l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
-        scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
+        scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
         # Delta-M scaling
@@ -538,7 +538,7 @@ def _assemble_intensity_and_fluxes(
 
         # Atmospheric layer indices
         l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
-        scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
+        scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
         # Delta-M scaling

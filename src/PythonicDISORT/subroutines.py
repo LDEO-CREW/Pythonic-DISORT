@@ -641,7 +641,8 @@ def interpolate(u):
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
     
-    if u.__code__.co_argcount == 6: # Function is `u` instead of `u0`
+    argcount = u.__code__.co_argcount
+    if argcount == 5: # Function is `u` instead of `u0`
         def u_interpol(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
             if not np.all(np.abs(mu) <= 1):
                 raise ValueError("mu values must be between -1 and 1.")
@@ -670,7 +671,7 @@ def interpolate(u):
             else:
                 return np.squeeze(results)[()]
     
-    elif u.__code__.co_argcount == 4: # Function is u0 instead of u
+    elif argcount == 4: # Function is u0 instead of u
         def u_interpol(mu, tau, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
             if not np.all(np.abs(mu) <= 1):
                 raise ValueError("mu values must be between -1 and 1.")
@@ -699,7 +700,7 @@ def interpolate(u):
             else:
                 return np.squeeze(results)[()]
     else:
-        raise ValueError("This subroutine can only interpolate u or u0")
+        raise ValueError("This subroutine can only interpolate u or u0.")
     
     return u_interpol
          

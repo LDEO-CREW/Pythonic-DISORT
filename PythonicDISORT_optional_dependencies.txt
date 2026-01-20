@@ -3,3 +3,4 @@
 
 PythonicDISORT
 pytest
+autograd
