@@ -60,10 +60,10 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 * Python 3.8+
 * `numpy >= 1.8.0`
 * `scipy >= 1.8.0`
+* (OPTIONAL) `autograd >= 1.5`
 * (OPTIONAL) `pytest >= 6.2.5` (Required to use the command `pytest`, see *PyTest and examples of how to use PythonicDISORT*)
 
 ## (OPTIONAL) Additional requirements to run the Jupyter Notebook
-* `autograd >= 1.5`
 * `jupyter > 1.0.0`
 * `notebook > 6.5.2`
 * `matplotlib >= 3.6.0`
@@ -106,3 +106,4 @@ Science and Technology Center (STC) (Award #2019625) under which this package wa
 12) T. Nakajima and M. Tanaka. 1988. *Algorithms for radiative intensity calculations in moderately thick atmospheres using a truncation approximation.* https://www.sciencedirect.com/science/article/pii/0022407388900313.
 
 13) Connour, Kyle and Wolff, Michael. 2020. *pyRT_DISORT: A pre-processing front-end to help make DISORT simulations easier in Python.* https://github.com/kconnour/pyRT_DISORT.
+
