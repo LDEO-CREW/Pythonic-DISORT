@@ -212,7 +212,7 @@ def _solve_for_gen_and_part_sols(
             A_arr[:, :N, N:] = -A_arr[:, N:, :N]
             A_arr[:, :N, :N] = -A_arr[:, N:, N:]
             A_arr.reshape(-1, NQuad * NQuad)[:, ::NQuad + 1] += 1 / mu0
-            B_collect[no_shortcut_indices, :] = np.linalg.solve(A_arr, X_arr[no_shortcut_indices, :, None])
+            B_collect[no_shortcut_indices, :] = np.linalg.solve(A_arr, X_arr[no_shortcut_indices, :, None]).squeeze(-1)
             
             # --------------------------------------------------------------------------------------------------------------------------
 
