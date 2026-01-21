@@ -5,7 +5,8 @@ cff-version: 1.2.0
 title: PythonicDISORT
 message: >-
   If you use this software, please cite it using the
-  metadata from this file.
+  metadata from this file. Please also cite the JOSS paper:
+  https://doi.org/10.21105/joss.06442
 type: software
 authors:
   - given-names: Dion J. X.

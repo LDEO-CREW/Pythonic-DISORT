@@ -198,7 +198,8 @@ def _solve_for_gen_and_part_sols(
         G_collect[no_shortcut_indices, N:, :N] = GpG_m_GmG_div_2
         
         K_collect[no_shortcut_indices, :] = K_arr
-        if len(no_shortcut_indices_0) > 0: # If there is no isotropic source this list will be empty
+        len_no_shortcut_indices_0 = len(no_shortcut_indices_0)
+        if len_no_shortcut_indices_0 > 0: # If there is no isotropic source this list will be empty
             G_inv_collect_0[no_shortcut_indices_0, :, :] = np.linalg.inv(
                 G_collect[no_shortcut_indices_0, :, :]
             )
@@ -209,10 +210,25 @@ def _solve_for_gen_and_part_sols(
         
             # Solve for particular solution w.r.t. direct beam source (refer to section 3.6.1 of the Comprehensive Documentation)
             # --------------------------------------------------------------------------------------------------------------------------
-            A_arr[:, :N, N:] = -A_arr[:, N:, :N]
-            A_arr[:, :N, :N] = -A_arr[:, N:, N:]
-            A_arr.reshape(-1, NQuad * NQuad)[:, ::NQuad + 1] += 1 / mu0
-            B_collect[no_shortcut_indices, :] = np.linalg.solve(A_arr, X_arr[no_shortcut_indices, :, None]).squeeze(-1)
+            if len_no_shortcut_indices_0 > 0: # In this case we have `G_inv_collect_0`, so use it
+                B_collect[no_shortcut_indices_0, :] = np.einsum(
+                    "bij, bjk, bk -> bi",
+                    # Note that the minus sign has been absorbed into `X_arr`
+                    G_collect[no_shortcut_indices_0, :, :]
+                    / (1 / mu0 + K_collect[no_shortcut_indices_0, None, :]),
+                    G_inv_collect_0[no_shortcut_indices_0, :, :],
+                    X_arr[no_shortcut_indices_0, :],
+                    optimize=True,
+                )
+                no_shortcut_indices = no_shortcut_indices[len_no_shortcut_indices_0:]
+            
+            if len(no_shortcut_indices) > 0:
+                A_arr = A_arr[len_no_shortcut_indices_0:]
+                A_arr[:, :N, N:] = -A_arr[:, N:, :N]
+                A_arr[:, :N, :N] = -A_arr[:, N:, N:]
+                A_arr.reshape(-1, NQuad * NQuad)[:, ::NQuad + 1] += 1 / mu0
+                # Note that the minus sign has been absorbed into `X_arr`
+                B_collect[no_shortcut_indices, :] = np.linalg.solve(A_arr, X_arr[no_shortcut_indices, :, None]).squeeze(-1)
             
             # --------------------------------------------------------------------------------------------------------------------------
 

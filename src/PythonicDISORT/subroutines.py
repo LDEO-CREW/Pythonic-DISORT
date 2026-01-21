@@ -744,6 +744,7 @@ def to_diag_ordered_form(A, Nsuperdiags, Nsubdiags):
 
     
 def _mathscr_v(tau,                             # Input optical depths
+               scale_tau,                       # Delta-scale factor for tau
                l,                               # Layer index of each input optical depth
                Nscoeffs,                        # Number of isotropic source polynomial coefficients
                s_poly_coeffs,                   # Polynomial coefficients of isotropic source
@@ -763,6 +764,7 @@ def _mathscr_v(tau,                             # Input optical depths
     |          Variable             |                   Shape                   |
     | ----------------------------- | ----------------------------------------- |
     | ``tau``                       | ``Ntau``                                  |
+    | ``scale_tau``                 | `NLayers`                                 |
     | ``l``                         | ``Ntau``                                  |
     | ``Nscoeffs``                  | scalar                                    |
     | ``s_poly_coeffs``             | ``NL x Nscoeffs``                         |
@@ -784,13 +786,13 @@ def _mathscr_v(tau,                             # Input optical depths
     if Nscoeffs == 1:
         s0 = s_poly_coeffs[:, 0:1]
         c0w = s0 * K_inv * G_inv_mu_inv  # (NL, 1) * (NL, NQuad) -> (NL, NQuad)
+        
+        d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)
 
         if is_antiderivative_wrt_tau:
-            p0 = tau                 
+            p0 = tau / scale_tau                 
         else:
             p0 = np.ones_like(tau)       
-            
-        d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)
 
         return d0[:, l] * p0[None, :]
 
@@ -803,19 +805,19 @@ def _mathscr_v(tau,                             # Input optical depths
 
         c0w = s1 * K_inv * G_inv_mu_inv
         c1w = (s0 * K_inv + s1 * K_inv2) * G_inv_mu_inv
+        
+        d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)  # (NQuad, NL)
+        d1 = np.einsum("lij, lj -> il", G, c1w, optimize=True)  # (NQuad, NL)
 
         if is_antiderivative_wrt_tau:
             p0 = tau * tau / 2
             p1 = tau
+            return (d0[:, l] * p0[None, :] + d1[:, l] * p1[None, :]) / scale_tau
         else:
             p0 = tau
             p1 = np.ones_like(tau) 
-
-        d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)  # (NQuad, NL)
-        d1 = np.einsum("lij, lj -> il", G, c1w, optimize=True)  # (NQuad, NL)
-
-        return d0[:, l] * p0[None, :] + d1[:, l] * p1[None, :]
-
+            return d0[:, l] * p0[None, :] + d1[:, l] * p1[None, :]
+        
     # --------------------- Nscoeffs > 2 ----------------------
     else:
         if Nscoeffs > 10:
@@ -853,7 +855,7 @@ def _mathscr_v(tau,                             # Input optical depths
         powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
         if is_antiderivative_wrt_tau:
             p = powers + 1
-            tau_poly = (tau[:, None] ** p) / p
+            tau_poly = (tau[:, None] ** p) / (p * scale_tau)
         else:
             tau_poly = tau[:, None] ** powers
 

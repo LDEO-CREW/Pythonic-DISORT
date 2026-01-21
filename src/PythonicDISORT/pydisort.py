@@ -98,7 +98,7 @@ def pydisort(
         Returns the diffuse flux magnitudes (same type and size as ``tau``).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
-        For example, ``Fp(tau_arr, is_antiderivative_wrt_tau = True) - Fp(np.insert(tau_arr[:-1] + 1e-15, 0, 0), is_antiderivative_wrt_tau = True)``
+        For example, ``Fp(tau_arr, True) - Fp(np.insert(tau_arr[:-1] + 1e-15, 0, 0), True)``
         will produce an array of the tau-integral over each layer.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
     Fm(tau) : function

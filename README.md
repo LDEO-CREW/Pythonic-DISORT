@@ -49,6 +49,7 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 * Test Problem 8: Absorbing / Isotropic-Scattering Medium (multiple layers)
 * Test Problem 9: General Emitting / Absorbing / Scattering Medium (multiple layers)
 * Test Problem 11: Single-Layer vs. Multiple Layers (no corresponding Jupyter Notebook)
+* Test Problem I: Antiderivative / integration functionality (no corresponding Jupyter Notebook)
 
 # Installation
 
@@ -60,7 +61,7 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 * Python 3.8+
 * `numpy >= 1.8.0`
 * `scipy >= 1.8.0`
-* (OPTIONAL) `autograd >= 1.5`
+* (OPTIONAL) `autograd >= 1.5` (`autograd` can be used to compute gradients of the output functions)
 * (OPTIONAL) `pytest >= 6.2.5` (Required to use the command `pytest`, see *PyTest and examples of how to use PythonicDISORT*)
 
 ## (OPTIONAL) Additional requirements to run the Jupyter Notebook
@@ -68,7 +69,8 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 * `notebook > 6.5.2`
 * `matplotlib >= 3.6.0`
 
-In addition, a F2PY-wrapped Stamnes' DISORT, or equivalent, is required to properly run the last section (section 6).
+In addition, a F2PY-wrapped Stamnes' DISORT or equivalent (https://github.com/kconnour/pyRT_DISORT may work) 
+is required to properly run the last section (section 6).
 
 ## Compatibility
 

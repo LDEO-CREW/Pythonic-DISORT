@@ -168,7 +168,8 @@ def _solve_for_coeffs(
         if m_equals_0 and there_is_iso_source:
             # Top boundary
             RHS[:N] -= _mathscr_v(
-                        np.array([0]), 
+                        np.array([0]),
+                        None,
                         np.array([0]),
                         Nscoeffs,
                         scaled_s_poly_coeffs[[0], :],
@@ -183,6 +184,7 @@ def _solve_for_coeffs(
                 RHS[N:-N] += (
                     _mathscr_v(
                         scaled_tau_arr_with_0[1:-1],
+                        None,
                         indices,
                         Nscoeffs,
                         scaled_s_poly_coeffs[indicesp1],
@@ -192,6 +194,7 @@ def _solve_for_coeffs(
                     )
                     - _mathscr_v(
                         scaled_tau_arr_with_0[1:-1],
+                        None,
                         indices,
                         Nscoeffs,
                         scaled_s_poly_coeffs[indices],
@@ -203,7 +206,8 @@ def _solve_for_coeffs(
                 
             # Bottom boundary
             RHS[-N:] -= _mathscr_v(
-                scaled_tau_arr_with_0[[-1]], 
+                scaled_tau_arr_with_0[[-1]],
+                None,
                 np.array([0]),
                 Nscoeffs,
                 scaled_s_poly_coeffs[[-1], :],
@@ -217,6 +221,7 @@ def _solve_for_coeffs(
                     R
                     @ _mathscr_v(
                         scaled_tau_arr_with_0[[-1]],
+                        None,
                         np.array([0]),
                         Nscoeffs,
                         scaled_s_poly_coeffs[[-1], :],

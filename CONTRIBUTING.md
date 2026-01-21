@@ -1,130 +1,141 @@
 <!-- omit in toc -->
 # Contributing to PythonicDISORT
 
-First off, thanks for taking the time to contribute! ❤️
+Thanks for contributing — improvements to correctness, performance, docs, and examples are all welcome.
 
-All types of contributions are encouraged and valued. See the [Table of Contents](#table-of-contents) for different ways to help and details about how this project handles them. Please make sure to read the relevant section before making your contribution. It will make it a lot easier for us maintainers and smooth out the experience for all involved. The community looks forward to your contributions. 🎉
-
-> And if you like the project, but just don't have time to contribute, that's fine. There are other easy ways to support the project and show your appreciation, which we would also be very happy about:
-> - Star the project
-> - Tweet about it
-> - Refer this project in your project's readme
-> - Mention the project at local meetups and tell your friends/colleagues
+**Quick links**
+- Docs: https://pythonic-disort.readthedocs.io/en/latest/
+- Issues: https://github.com/LDEO-CREW/Pythonic-DISORT/issues
+- Security concerns: email dh3065@columbia.edu (please do not open a public issue)
 
 <!-- omit in toc -->
-## Table of Contents
+## Table of contents
+- [Getting set up](#getting-set-up)
+- [Running tests](#running-tests)
+- [Reporting bugs](#reporting-bugs)
+- [Requesting changes](#requesting-changes)
+- [Contributing code](#contributing-code)
+- [Improving documentation and notebooks](#improving-documentation-and-notebooks)
+- [License](#license)
 
-- [I Have a Question](#i-have-a-question)
-- [I Want To Contribute](#i-want-to-contribute)
-  - [Reporting Bugs](#reporting-bugs)
-  - [Suggesting Enhancements](#suggesting-enhancements)
-  - [Your First Code Contribution](#your-first-code-contribution)
-  - [Improving The Documentation](#improving-the-documentation)
-- [Styleguides](#styleguides)
-  - [Commit Messages](#commit-messages)
-- [Join The Project Team](#join-the-project-team)
+## Getting set up
 
+PythonicDISORT targets **Python 3.8+**.
 
+1) Fork the repo and clone your fork:
 
-## I Have a Question
+```bash
+git clone https://github.com/<your-username>/Pythonic-DISORT.git
+cd Pythonic-DISORT
+```
 
-> If you want to ask a question, we assume that you have read the available [Documentation](https://pythonic-disort.readthedocs.io/en/latest/).
+2) Create and activate a virtual environment:
 
-Before you ask a question, it is best to search for existing [Issues](https://github.com/LDEO-CREW/Pythonic-DISORT/issues) that might help you. In case you have found a suitable issue and still need clarification, you can write your question in this issue. It is also advisable to search the internet for answers first.
+```bash
+python -m venv .venv
+# macOS/Linux
+source .venv/bin/activate
+# Windows PowerShell
+# .venv\Scripts\Activate.ps1
+```
 
-If you then still feel the need to ask a question and need clarification, we recommend the following:
+3) Install the project in editable mode.
 
-- Open an [Issue](https://github.com/LDEO-CREW/Pythonic-DISORT/issues/new).
-- Provide as much context as you can about what you're running into.
-- Provide project and platform versions (nodejs, npm, etc), depending on what seems relevant.
+- Minimal runtime deps (installs `numpy` + `scipy`)  
+  ```bash
+  pip install -e .
+  ```
 
-We will then take care of the issue as soon as possible.
+- Dev/test deps (adds `pytest`)  
+  ```bash
+  pip install -e ".[pytest]"
+  ```
 
-<!--
-You might want to create a separate issue tag for questions and include it in this description. People should then tag their issues accordingly.
+- Notebook/example deps (adds `autograd`, `jupyter`, `notebook`, `matplotlib`)  
+  ```bash
+  pip install -e ".[notebook_dependencies]"
+  ```
 
-Depending on how large the project is, you may want to outsource the questioning, e.g. to Stack Overflow or Gitter. You may add additional contact and information possibilities:
-- IRC
-- Slack
-- Gitter
-- Stack Overflow tag
-- Blog
-- FAQ
-- Roadmap
-- E-Mail List
-- Forum
--->
+## Running tests
 
-## I Want To Contribute
+The repo contains verification tests under `pydisotest/`.
 
-> ### Legal Notice <!-- omit in toc -->
-> When contributing to this project, you must agree that you have authored 100% of the content, that you have the necessary rights to the content and that the content you contribute may be provided under the project license.
+Run them like this:
 
-### Reporting Bugs
+```bash
+pip install -e ".[pytest]"
+cd pydisotest
+pytest
+```
 
-<!-- omit in toc -->
-#### Before Submitting a Bug Report
+Some of the deeper verification work (notably the later parts of the big documentation notebook) compares against a **wrapped Fortran DISORT** or equivalent. If you don’t have that locally, you can still run most tests and contribute meaningfully — just call it out in your PR.
 
-A good bug report shouldn't leave others needing to chase you up for more information. Therefore, we ask you to investigate carefully, collect information and describe the issue in detail in your report. Please complete the following steps in advance to help us fix any potential bug as fast as possible.
+## Reporting bugs
 
-- Make sure that you are using the latest version.
-- Determine if your bug is really a bug and not an error on your side e.g. using incompatible environment components/versions (Make sure that you have read the [documentation](https://pythonic-disort.readthedocs.io/en/latest/). If you are looking for support, you might want to check [this section](#i-have-a-question)).
-- To see if other users have experienced (and potentially already solved) the same issue you are having, check if there is not already a bug report existing for your bug or error in the [bug tracker](https://github.com/LDEO-CREW/Pythonic-DISORTissues?q=label%3Abug).
-- Also make sure to search the internet (including Stack Overflow) to see if users outside of the GitHub community have discussed the issue.
-- Collect information about the bug:
-  - Stack trace (Traceback)
-  - OS, Platform and Version (Windows, Linux, macOS, x86, ARM)
-  - Version of the interpreter, compiler, SDK, runtime environment, package manager, depending on what seems relevant.
-  - Possibly your input and the output
-  - Can you reliably reproduce the issue? And can you also reproduce it with older versions?
+Before opening a new issue:
+- Search existing issues (including closed ones).
+- Make sure you’re on a recent release.
+- Reduce the problem to a minimal reproducible example.
 
-<!-- omit in toc -->
-#### How Do I Submit a Good Bug Report?
+When you open an issue, include:
+- What you expected vs what happened.
+- A minimal script or notebook cell that reproduces it.
+- Your environment: OS, Python version, numpy/scipy versions.
+- If relevant: number of layers, number of streams, phase function choice, boundary conditions, and any unusual parameter ranges.
 
-> You must never report security related issues, vulnerabilities or bugs including sensitive information to the issue tracker, or elsewhere in public. Instead sensitive bugs must be sent by email to <dh3065@columbia.edu>.
-<!-- You may add a PGP key to allow the messages to be sent encrypted as well. -->
+### Security
 
-We use GitHub issues to track bugs and errors. If you run into an issue with the project:
+If the bug involves security, privacy, or accidental disclosure (e.g., credentials in logs), **email dh3065@columbia.edu** instead of filing an issue.
 
-- Open an [Issue](https://github.com/LDEO-CREW/Pythonic-DISORT/issues/new). (Since we can't be sure at this point whether it is a bug or not, we ask you not to talk about a bug yet and not to label the issue.)
-- Explain the behavior you would expect and the actual behavior.
-- Please provide as much context as possible and describe the *reproduction steps* that someone else can follow to recreate the issue on their own. This usually includes your code. For good bug reports you should isolate the problem and create a reduced test case.
-- Provide the information you collected in the previous section.
+## Requesting changes
 
-Once it's filed:
+Feature requests are welcome, but this project is primarily a **numerical/scientific** codebase — proposals should be specific.
 
-- The project team will label the issue accordingly.
-- A team member will try to reproduce the issue with your provided steps. If there are no reproduction steps or no obvious way to reproduce the issue, the team will ask you for those steps and mark the issue as `needs-repro`. Bugs with the `needs-repro` tag will not be addressed until they are reproduced.
-- If the team is able to reproduce the issue, it will be marked `needs-fix`, as well as possibly other tags (such as `critical`), and the issue will be left to be [implemented by someone](#your-first-code-contribution).
+A good request includes:
+- The use case and why existing functionality isn’t enough.
+- A concrete API sketch (function signature, inputs/outputs).
+- Any relevant references (papers, equations, DISORT behavior you’re matching).
+- A suggestion for how to test/verify it.
 
-<!-- You might want to create an issue template for bugs and errors that can be used as a guide and that defines the structure of the information to be included. If you do so, reference it here in the description. -->
+For larger changes, please open an issue first so effort doesn’t get wasted.
 
+## Contributing code
 
-### Suggesting Enhancements
+### Ground rules
+- Keep PRs small and focused.
+- Don’t add heavyweight new dependencies lightly. If a dependency is optional, keep it optional.
+- If you change numerical behavior, explain *why* and include a verification test.
 
-This section guides you through submitting an enhancement suggestion for PythonicDISORT, **including completely new features and minor improvements to existing functionality**. Following these guidelines will help maintainers and the community to understand your suggestion and find related suggestions.
+### Workflow
+1) Create a branch from `main`:
+   ```bash
+   git checkout -b your-branch-name
+   ```
+2) Make your change with tests.
+3) Run:
+   - `pytest` from `pydisotest/` (see above)
+4) Open a PR:
+   - Describe what changed and why.
+   - Link the related issue (if any).
+   - Mention what you tested locally (and what you couldn’t).
 
-<!-- omit in toc -->
-#### Before Submitting an Enhancement
+### Style
+There’s no strict formatter enforced in this repo. Aim for:
+- PEP 8-ish readability
+- Clear variable names (this is math-heavy code; clarity beats cleverness)
+- Docstrings for user-facing functions
 
-- Make sure that you are using the latest version.
-- Read the [documentation](https://pythonic-disort.readthedocs.io/en/latest/) carefully and find out if the functionality is already covered, maybe by an individual configuration.
-- Perform a [search](https://github.com/LDEO-CREW/Pythonic-DISORT/issues) to see if the enhancement has already been suggested. If it has, add a comment to the existing issue instead of opening a new one.
-- Find out whether your idea fits with the scope and aims of the project. It's up to you to make a strong case to convince the project's developers of the merits of this feature. Keep in mind that we want features that will be useful to the majority of our users and not just a small subset. If you're just targeting a minority of users, consider writing an add-on/plugin library.
+## Improving documentation and notebooks
 
-<!-- omit in toc -->
-#### How Do I Submit a Good Enhancement Suggestion?
+The docs are hosted on Read the Docs, and the repository includes a comprehensive Jupyter notebook (`docs/Pythonic-DISORT.ipynb`) that serves as extended documentation, derivations, and verification.
 
-Enhancement suggestions are tracked as [GitHub issues](https://github.com/LDEO-CREW/Pythonic-DISORT/issues).
+If you edit notebooks or examples, please:
+- Keep outputs deterministic (avoid random seeds unless fixed).
+- Prefer smaller, faster-running cells when possible.
+- If you add a new example, explain the physical meaning of inputs/outputs.
 
-- Use a **clear and descriptive title** for the issue to identify the suggestion.
-- Provide a **step-by-step description of the suggested enhancement** in as many details as possible.
-- **Describe the current behavior** and **explain which behavior you expected to see instead** and why. At this point you can also tell which alternatives do not work for you.
-- You may want to **include screenshots and animated GIFs** which help you demonstrate the steps or point out the part which the suggestion is related to. You can use [this tool](https://www.cockos.com/licecap/) to record GIFs on macOS and Windows, and [this tool](https://github.com/colinkeenan/silentcast) or [this tool](https://github.com/GNOME/byzanz) on Linux. <!-- this should only be included if the project has a GUI -->
-- **Explain why this enhancement would be useful** to most PythonicDISORT users. You may also want to point out the other projects that solved it better and which could serve as inspiration.
+For local builds of the Sphinx docs (if you’re editing them), install whatever the docs build requires (often `sphinx`/`nbsphinx` plus the notebook extras), then build from the repo root. If you’re unsure, open a PR and we’ll help you get it building.
 
-<!-- You might want to create an issue template for enhancement suggestions that can be used as a guide and that defines the structure of the information to be included. If you do so, reference it here in the description. -->
+## License
 
-<!-- omit in toc -->
-## Attribution
-This guide is based on the **contributing-gen**. [Make your own](https://github.com/bttger/contributing-gen)!
+By contributing, you agree that your contributions will be licensed under the project’s MIT license.

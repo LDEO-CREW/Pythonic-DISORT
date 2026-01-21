@@ -236,7 +236,7 @@ def _assemble_intensity_and_fluxes(
             if there_is_iso_source:
                 l_uniq, l_inv = np.unique(l, return_inverse=True)
                 _mathscr_v_contribution = _mathscr_v(
-                    scaled_tau, l_inv, 
+                    scaled_tau, scale_tau, l_inv, 
                     Nscoeffs,
                     scaled_s_poly_coeffs[l_uniq],
                     G_collect_0[l_uniq],
@@ -411,7 +411,7 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, l_inv,
+                scaled_tau, scale_tau, l_inv,
                 Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq],
@@ -470,7 +470,7 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, l_inv,
+                scaled_tau, scale_tau, l_inv,
                 Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, :N, :],
@@ -552,7 +552,7 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, l_inv,
+                scaled_tau, scale_tau, l_inv,
                 Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, N:, :],
