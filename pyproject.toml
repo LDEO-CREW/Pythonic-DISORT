@@ -8,7 +8,7 @@ dependencies = [
   "scipy>=1.8.0",
 ]
 name = "PythonicDISORT"
-version = "1.3"
+version = "1.4"
 authors = [
   { name="Dion HO Jia Xu", email="dh3065@columbia.edu" },
 ]

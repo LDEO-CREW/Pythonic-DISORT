@@ -489,8 +489,8 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
 
 def cache_BDRF_Fourier_modes(N, BDRF_Fourier_modes, mu0=0):
     """If the same BDRF and number of streams will be used repeatedly,
-    consider using this function to cache ``BDRF_Fourier_modes`` and instead input
-    ``cached_BDRF_Fourier_modes`` into ``pydisort``. It is also possible
+    consider using this function to cache ``BDRF_Fourier_modes`` and pass
+    ``cached_BDRF_Fourier_modes`` to ``pydisort``. It is also possible
     to cache ``BDRF_Fourier_modes`` with respect to a fixed ``mu0``. 
 
     Parameters

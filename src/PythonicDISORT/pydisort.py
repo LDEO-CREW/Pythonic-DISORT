@@ -451,40 +451,33 @@ def pydisort(
             
             neg_scaled_tau_div_mu0 = -scaled_tau / mu0
             if is_antiderivative_wrt_tau:
-            
-                scale_tau_l = scale_tau[None, l_uniq]
+
+                scale_tau_l = scale_tau[l_uniq]
                 neg_scale_tau_l_div_mu0 = -scale_tau_l / mu0
-                scale_tau_l_div_mu_arr_pos = scale_tau_l / mu_arr_pos[:, None]
-                
+                scale_tau_l_div_mu_arr_pos = scale_tau_l[None, :] / mu_arr_pos[:, None]
+
                 TMS_correction_pos = (
-                    np.exp(neg_scaled_tau_div_mu0)[None, :] / neg_scale_tau_l_div_mu0[l_inv]
-                    - np.exp(
-                        (scaled_tau - scaled_tau_arr_l)[None, :] / mu_arr_pos[:, None]
-                        - scaled_tau_arr_l[None, :] / mu0
-                    ) / scale_tau_l_div_mu_arr_pos[l_inv]
-                )
+                    np.exp(neg_scaled_tau_div_mu0) / neg_scale_tau_l_div_mu0[l_inv]
+                )[None, :] - np.exp(
+                    (scaled_tau - scaled_tau_arr_l)[None, :] / mu_arr_pos[:, None]
+                    - scaled_tau_arr_l[None, :] / mu0
+                ) / scale_tau_l_div_mu_arr_pos[:, l_inv]
                 TMS_correction_neg = (
-                    np.exp(neg_scaled_tau_div_mu0)[None, :] / neg_scale_tau_l_div_mu0[l_inv]
-                    + np.exp(
-                        (scaled_tau_arr_lm1 - scaled_tau)[None, :] / mu_arr_pos[:, None]
-                        - scaled_tau_arr_lm1[None, :] / mu0
-                    ) / scale_tau_l_div_mu_arr_pos[l_inv]
-                )
+                    np.exp(neg_scaled_tau_div_mu0) / neg_scale_tau_l_div_mu0[l_inv]
+                )[None, :] + np.exp(
+                    (scaled_tau_arr_lm1 - scaled_tau)[None, :] / mu_arr_pos[:, None]
+                    - scaled_tau_arr_lm1[None, :] / mu0
+                ) / scale_tau_l_div_mu_arr_pos[:, l_inv]
             else:
-                TMS_correction_pos = (
-                    np.exp(neg_scaled_tau_div_mu0)[None, :]
-                    - np.exp(
-                        (scaled_tau - scaled_tau_arr_l)[None, :] / mu_arr_pos[:, None]
-                        - scaled_tau_arr_l[None, :] / mu0
-                    )
+                TMS_correction_pos = np.exp(neg_scaled_tau_div_mu0)[None, :] - np.exp(
+                    (scaled_tau - scaled_tau_arr_l)[None, :] / mu_arr_pos[:, None]
+                    - scaled_tau_arr_l[None, :] / mu0
                 )
-                TMS_correction_neg = (
-                    np.exp(neg_scaled_tau_div_mu0)[None, :]
-                    - np.exp(
-                        (scaled_tau_arr_lm1 - scaled_tau)[None, :] / mu_arr_pos[:, None]
-                        - scaled_tau_arr_lm1[None, :] / mu0
-                    )
+                TMS_correction_neg = np.exp(neg_scaled_tau_div_mu0)[None, :] - np.exp(
+                    (scaled_tau_arr_lm1 - scaled_tau)[None, :] / mu_arr_pos[:, None]
+                    - scaled_tau_arr_lm1[None, :] / mu0
                 )
+
             
             ## Contribution from other layers
             # --------------------------------------------------------------------------------------------------------------------------
@@ -525,13 +518,13 @@ def pydisort(
                 # POS: pre-accumulate "contribution from below" sums Rpos[N, l, Nphi]
                 # ====================================================================
                 if any_pos:
-                    # fac_pos = 1 - exp(-scaled_thickness_arr*(1/mu + 1/mu0)) = -expm1(-thickness_pos)
                     thickness_pos = scaled_thickness_arr[None, :] * (M_inv + mu0_inv)[:, None]  # (N, NLayers); always > 0
-                    fac_pos = -np.expm1(-thickness_pos)                                         # (N, NLayers)
+                    # em1_pos = 1 - exp(-scaled_thickness_arr*(1/mu + 1/mu0)) = -expm1(-thickness_pos)
+                    em1_pos = -np.expm1(-thickness_pos)                                         # (N, NLayers)
                     if is_antiderivative_wrt_tau:
-                        fac_pos = fac_pos * integration_factor
+                        em1_pos = integration_factor * em1_pos
 
-                    layer_term_pos = fac_pos * exp_taufront_mu0_inv[None, :]                    # (N, NLayers)
+                    layer_term_pos = em1_pos * exp_taufront_mu0_inv[None, :]                    # (N, NLayers)
 
                     # Reverse-scan via cumsum:
                     # Rpos[l] = (1/decay_prod[l+1]) * sum_{r=l+1..} (layer_term_pos[r] * decay_prod[r])
@@ -566,12 +559,12 @@ def pydisort(
                     exp_x0 = decay * exp_taufront_mu0_inv[None, :]                               # (N, NLayers)
 
                     # Let a = |thickness_neg| >= 0. Then expm1(-a) uses only non-positive inputs.
-                    em1 = np.expm1(-np.abs(thickness_neg))                                       # (N, NLayers)
+                    em1_neg = np.expm1(-np.abs(thickness_neg))                                       # (N, NLayers)
 
-                    # thickness_neg>=0: exp_x1 * (1 - exp(-a)) = exp_x1 * (-expm1(-a)) = exp_x1 * (-em1)
-                    # thickness_neg<0 : exp_x0 * (exp(-a) - 1) = exp_x0 * expm1(-a)    = exp_x0 * ( em1)
-                    layer_term_negthick = em1 * exp_x0                                           # (N, NLayers)
-                    layer_term_posthick = -em1 * exp_x1                                          # (N, NLayers)
+                    # thickness_neg>=0: exp_x1 * (1 - exp(-a)) = exp_x1 * (-expm1(-a)) = exp_x1 * (-em1_neg)
+                    # thickness_neg<0 : exp_x0 * (exp(-a) - 1) = exp_x0 * expm1(-a)    = exp_x0 * ( em1_neg)
+                    layer_term_negthick = em1_neg * exp_x0                                       # (N, NLayers)
+                    layer_term_posthick = -em1_neg * exp_x1                                      # (N, NLayers)
                     layer_term_neg = layer_term_posthick * mask + layer_term_negthick * (~mask)  # (N, NLayers)
 
                     if is_antiderivative_wrt_tau:
