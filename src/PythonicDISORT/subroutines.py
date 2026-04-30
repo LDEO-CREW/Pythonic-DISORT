@@ -641,60 +641,76 @@ def interpolate(u):
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
     
+    # Value-keyed cache for the most recent (tau, phi, is_anti) -> u_cache. #NEW
+    # Hits when the user loops over `mu` with the same (tau, phi); otherwise re-evaluates `u`. #NEW
+    # Cache stores copies of `tau`/`phi` so in-place mutation of the user's arrays #NEW
+    # cannot return stale values (compared via `np.array_equal`). #NEW
+    # Only used on the simple-return path (skipped when Fourier_error / tau_arr are requested). #NEW
+    _cache = [None, None, None, None]  # [tau_copy, phi_copy, is_anti, u_cache] #NEW
+
     argcount = u.__code__.co_argcount
     if argcount == 5: # Function is `u` instead of `u0`
         def u_interpol(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
             if not np.all(np.abs(mu) <= 1):
                 raise ValueError("mu values must be between -1 and 1.")
-            
+
             mu = np.atleast_1d(mu)
 
             if return_Fourier_error or return_tau_arr:
                 u_outputs = u(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
                 u_cache = u_outputs[0]
+            elif (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2] #NEW
+                  and np.array_equal(tau, _cache[0]) and np.array_equal(phi, _cache[1])): #NEW
+                u_cache = _cache[3] #NEW
             else:
                 u_cache = u(tau, phi, is_antiderivative_wrt_tau)
-            
+                _cache[:] = [np.array(tau, copy=True), np.array(phi, copy=True), #NEW
+                             is_antiderivative_wrt_tau, u_cache] #NEW
+
             results = np.empty((len(mu),) + np.shape(u_cache)[1:])
             mask_pos = mu > 0
             mask_else = ~mask_pos
-            
+
             if np.any(mask_pos):
                 u_pos_interpol.set_yi(u_cache[:N])
                 results[mask_pos] = u_pos_interpol(mu[mask_pos])
             if np.any(mask_else):
                 u_neg_interpol.set_yi(u_cache[N:])
                 results[mask_else] = u_neg_interpol(mu[mask_else])
-            
+
             if return_Fourier_error or return_tau_arr:
                 return (np.squeeze(results)[()],) + u_outputs[1:]
             else:
                 return np.squeeze(results)[()]
-    
+
     elif argcount == 4: # Function is u0 instead of u
         def u_interpol(mu, tau, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
             if not np.all(np.abs(mu) <= 1):
                 raise ValueError("mu values must be between -1 and 1.")
-            
+
             mu = np.atleast_1d(mu)
 
             if return_Fourier_error or return_tau_arr:
                 u_outputs = u(tau, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
                 u_cache = u_outputs[0]
+            elif (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2] #NEW
+                  and np.array_equal(tau, _cache[0])): #NEW
+                u_cache = _cache[3] #NEW
             else:
                 u_cache = u(tau, is_antiderivative_wrt_tau)
-            
+                _cache[:] = [np.array(tau, copy=True), None, is_antiderivative_wrt_tau, u_cache] #NEW
+
             results = np.empty((len(mu),) + np.shape(u_cache)[1:])
             mask_pos = mu > 0
             mask_else = ~mask_pos
-            
+
             if np.any(mask_pos):
                 u_pos_interpol.set_yi(u_cache[:N])
                 results[mask_pos] = u_pos_interpol(mu[mask_pos])
             if np.any(mask_else):
                 u_neg_interpol.set_yi(u_cache[N:])
                 results[mask_else] = u_neg_interpol(mu[mask_else])
-            
+
             if return_Fourier_error or return_tau_arr:
                 return (np.squeeze(results)[()],) + u_outputs[1:]
             else:
@@ -764,7 +780,7 @@ def _mathscr_v(tau,                             # Input optical depths
     |          Variable             |                   Shape                   |
     | ----------------------------- | ----------------------------------------- |
     | ``tau``                       | ``Ntau``                                  |
-    | ``scale_tau``                 | `NLayers`                                 |
+    | ``scale_tau``                 | ``NL``                                |
     | ``l``                         | ``Ntau``                                  |
     | ``Nscoeffs``                  | scalar                                    |
     | ``s_poly_coeffs``             | ``NL x Nscoeffs``                         |
@@ -790,11 +806,10 @@ def _mathscr_v(tau,                             # Input optical depths
         d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)
 
         if is_antiderivative_wrt_tau:
-            p0 = tau / scale_tau                 
+            p0 = tau
+            return (d0 / scale_tau[None, :])[:, l] * p0[None, :]
         else:
-            p0 = np.ones_like(tau)       
-
-        return d0[:, l] * p0[None, :]
+            return d0[:, l]
 
     # --------------------- Nscoeffs == 2 ---------------------
     elif Nscoeffs == 2:
@@ -812,11 +827,11 @@ def _mathscr_v(tau,                             # Input optical depths
         if is_antiderivative_wrt_tau:
             p0 = tau * tau / 2
             p1 = tau
-            return (d0[:, l] * p0[None, :] + d1[:, l] * p1[None, :]) / scale_tau
+            return (d0 / scale_tau[None, :])[:, l] * p0[None, :] + (d1 / scale_tau[None, :])[:, l] * p1[None, :]
         else:
             p0 = tau
-            p1 = np.ones_like(tau) 
-            return d0[:, l] * p0[None, :] + d1[:, l] * p1[None, :]
+            #p1 = np.ones_like(tau) 
+            return d0[:, l] * p0[None, :] + d1[:, l]
         
     # --------------------- Nscoeffs > 2 ----------------------
     else:
@@ -855,11 +870,11 @@ def _mathscr_v(tau,                             # Input optical depths
         powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
         if is_antiderivative_wrt_tau:
             p = powers + 1
-            tau_poly = (tau[:, None] ** p) / (p * scale_tau)
+            tau_poly = (tau[:, None] ** p) / p
+            return np.einsum("tqp, tp -> qt", (mathscr_b / scale_tau[:, None, None])[l, :, :], tau_poly, optimize=True)
         else:
             tau_poly = tau[:, None] ** powers
-
-        return np.einsum("tqp, tp -> qt", mathscr_b[l, :, :], tau_poly, optimize=True)
+            return np.einsum("tqp, tp -> qt", mathscr_b[l, :, :], tau_poly, optimize=True)
 
 
 

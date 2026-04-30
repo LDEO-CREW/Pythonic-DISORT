@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 import scipy as sc
 from math import pi
-from numpy.polynomial.legendre import Legendre
+from numpy.polynomial.legendre import Legendre, legval #NEW
 from scipy import integrate
     
 
@@ -409,13 +409,13 @@ def pydisort(
         def TMS_correction(tau, phi, is_antiderivative_wrt_tau):
             Ntau = len(tau)
             Nphi = len(phi)
-            # Atmospheric layer indices
-            l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
+            # Atmospheric layer indices: smallest l with tau <= tau_arr[l]. #NEW
+            l = np.searchsorted(tau_arr, tau, side="left") #NEW
             scaled_tau_arr_l = scaled_tau_arr_with_0[l + 1]
             scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
             # Delta-M scaling
-            if np.any(scale_tau != np.ones(NLayers)):
+            if np.any(scale_tau != 1): #NEW
                 tau_dist_from_top = tau_arr[l] - tau
                 scaled_tau_dist_from_top = tau_dist_from_top * scale_tau[l]
                 scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
@@ -427,25 +427,15 @@ def pydisort(
             nu = subroutines.atleast_2d_append(
                 subroutines.calculate_nu(mu_arr, phi, -mu0, phi0)
             )
-            p_true = np.concatenate(
-                [
-                    f(nu)[:, None, :]
-                    # Iterates over the 0th axis
-                    for f in map(Legendre, weighted_Leg_coeffs_all)
-                ],
-                axis=1,
-            )
-            p_trun = np.concatenate(
-                [
-                    f(nu)[:, None, :]
-                    # Iterates over the 0th axis
-                    for f in map(Legendre, weighted_scaled_Leg_coeffs)
-                ],
-                axis=1,
-            )
+            # Vectorized Legendre evaluation: legval broadcasts the trailing-axis
+            # coefficient set, returning (NLayers, NQuad, Nphi). Move the layer axis
+            # to the middle to match the original (NQuad, NLayers, Nphi) layout.
+            # Always uses base numpy's legval (not autograd's): this matches the
+            # original `Legendre(...)(nu)` path, which was also pure numpy.
+            p_true = np.moveaxis(legval(nu, weighted_Leg_coeffs_all.T, tensor=True), 0, 1) #NEW
+            p_trun = np.moveaxis(legval(nu, weighted_scaled_Leg_coeffs.T, tensor=True), 0, 1) #NEW
             mathscr_B = (
-                (scaled_omega_arr * I0)[None, :, None]
-                / (4 * np.pi)
+                (scaled_omega_arr * I0_div_4pi)[None, :, None] #NEW
                 * (mu0 / (mu0 + mu_arr))[:, None, None]
                 * (p_true / (1 - f_arr[None, :, None]) - p_trun)
             )
@@ -512,6 +502,8 @@ def pydisort(
 
             # ===== POS: sum over r > l =====
             if any_pos:
+                l_min = int(l.min())  # only Acc_pos at layers >= l_min is ever indexed #NEW
+
                 # fac_pos = 1 - exp(-scaled_thickness_arr*(1/mu + 1/mu0)) = -expm1(-scaled_thickness_arr*(...))
                 delta_pos = delta + (scaled_thickness_arr / mu0)[None, :]    # (N, NLayers) >= 0
                 fac_pos = -np.expm1(-delta_pos)                              # (N, NLayers) in [0,1)
@@ -525,25 +517,38 @@ def pydisort(
 
                 # Reverse scan to build Acc_l (referenced at tau_back[l]) INCLUDING Bpos:
                 # Acc_{r-1} = coef_pos[:,r]*Bpos[:,r,:] + decay[:,r]*Acc_r
-                acc0 = np.zeros((N, Nphi))
-                acc = acc0
-                cols_rev = [acc0]  # Acc_{NLayers-1} = 0
+                # Stored array covers layers [l_min..NLayers-1]; layer r maps to index r-l_min. #NEW
+                Npos = NLayers - l_min #NEW
 
-                for r in range(NLayers - 1, 0, -1):  # r = NLayers-1 ... 1
-                    term = coef_pos[:, r][:, None] * Bpos[:, r, :]            # (N, Nphi)
-                    acc = term + decay[:, r][:, None] * acc
-                    cols_rev.append(acc)
-
-                Acc_pos = np.stack(cols_rev[::-1], axis=1)                    # (N, NLayers, Nphi)
+                if autograd_compatible: #NEW
+                    acc0 = np.zeros((N, Nphi))
+                    acc = acc0
+                    cols_rev = [acc0]  # Acc_{NLayers-1} = 0
+                    for r in range(NLayers - 1, l_min, -1): #NEW
+                        term = coef_pos[:, r][:, None] * Bpos[:, r, :]        # (N, Nphi)
+                        acc = term + decay[:, r][:, None] * acc
+                        cols_rev.append(acc)
+                    Acc_pos = np.stack(cols_rev[::-1], axis=1)                # (N, Npos, Nphi) #NEW
+                else: #NEW
+                    Acc_pos = np.empty((N, Npos, Nphi)) #NEW
+                    Acc_pos[:, Npos - 1, :] = 0.0                             # Acc_{NLayers-1} #NEW
+                    for r in range(NLayers - 1, l_min, -1): #NEW
+                        i_dst = r - 1 - l_min #NEW
+                        i_src = r - l_min #NEW
+                        np.multiply(coef_pos[:, r:r+1], Bpos[:, r, :], #NEW
+                                    out=Acc_pos[:, i_dst, :]) #NEW
+                        Acc_pos[:, i_dst, :] += decay[:, r:r+1] * Acc_pos[:, i_src, :] #NEW
 
                 # Apply to tau: multiply by exp((scaled_tau - tau_back[l]) / mu) (argument <= 0 in exact arithmetic)
                 expfac_pos = np.exp(M_inv[:, None] * (scaled_tau - scaled_tau_arr_with_0[1:][l])[None, :])  # (N, Ntau)
-                contrib_pos = Acc_pos[:, l, :] * expfac_pos[:, :, None]       # (N, Ntau, Nphi)
+                contrib_pos = Acc_pos[:, l - l_min, :] * expfac_pos[:, :, None]   # (N, Ntau, Nphi) #NEW
 
                 sol_pos = sol_pos + contrib_pos
 
             # ===== NEG: sum over r < l =====
             if any_neg:
+                l_max = int(l.max())  # only Acc_neg at layers <= l_max is ever indexed #NEW
+
                 # We need term_base[n,r] = exp(-tau_back[r]/mu0) - exp(-scaled_thickness_arr[r]/mu)*exp(-tau_front[r]/mu0)
                 # computed stably via expm1 using only non-positive inputs.
                 delta_neg = delta - (scaled_thickness_arr / mu0)[None, :]     # (N, NLayers), can be +/-.
@@ -564,16 +569,25 @@ def pydisort(
 
                 # Forward scan to build Acc_l (referenced at tau_front[l]) INCLUDING Bneg:
                 # Acc_{r+1} = coef_neg[:,r]*Bneg[:,r,:] + decay[:,r]*Acc_r
-                acc0 = np.zeros((N, Nphi))
-                acc = acc0
-                cols = [acc0]  # Acc_0 = 0
+                # Stored array covers layers [0..l_max]; layer index unchanged. #NEW
+                Nneg = l_max + 1 #NEW
 
-                for r in range(0, NLayers - 1):  # r = 0 ... NLayers-2
-                    term = coef_neg[:, r][:, None] * Bneg[:, r, :]              # (N, Nphi)
-                    acc = term + decay[:, r][:, None] * acc
-                    cols.append(acc)
-
-                Acc_neg = np.stack(cols, axis=1)                                # (N, NLayers, Nphi)
+                if autograd_compatible: #NEW
+                    acc0 = np.zeros((N, Nphi))
+                    acc = acc0
+                    cols = [acc0]  # Acc_0 = 0
+                    for r in range(0, l_max): #NEW
+                        term = coef_neg[:, r][:, None] * Bneg[:, r, :]          # (N, Nphi)
+                        acc = term + decay[:, r][:, None] * acc
+                        cols.append(acc)
+                    Acc_neg = np.stack(cols, axis=1)                            # (N, Nneg, Nphi) #NEW
+                else: #NEW
+                    Acc_neg = np.empty((N, Nneg, Nphi)) #NEW
+                    Acc_neg[:, 0, :] = 0.0                                      # Acc_0 #NEW
+                    for r in range(0, l_max): #NEW
+                        np.multiply(coef_neg[:, r:r+1], Bneg[:, r, :], #NEW
+                                    out=Acc_neg[:, r + 1, :]) #NEW
+                        Acc_neg[:, r + 1, :] += decay[:, r:r+1] * Acc_neg[:, r, :] #NEW
 
                 # Apply to tau: multiply by exp((tau_front[l] - scaled_tau) / mu) (argument <= 0 in exact arithmetic)
                 expfac_neg = np.exp(M_inv[:, None] * (scaled_tau_arr_with_0[l] - scaled_tau)[None, :])  # (N, Ntau)

@@ -182,12 +182,12 @@ def _assemble_intensity_and_fluxes(
                 raise ValueError("tau input outside the tau range specified for the atmosphere (check `tau_arr`).")
             
             # Atmospheric layer indices
-            l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
+            l = np.searchsorted(tau_arr, tau, side="left")
             scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
             scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
             # Delta-M scaling
-            if np.any(scale_tau != np.ones(NLayers)):
+            if np.any(scale_tau != 1): #NEW
                 tau_dist_from_top = tau_arr[l] - tau
                 scaled_tau_dist_from_top = tau_dist_from_top * scale_tau[l]
                 scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
@@ -236,7 +236,8 @@ def _assemble_intensity_and_fluxes(
             if there_is_iso_source:
                 l_uniq, l_inv = np.unique(l, return_inverse=True)
                 _mathscr_v_contribution = _mathscr_v(
-                    scaled_tau, scale_tau, l_inv, 
+                    scaled_tau, scale_tau[l_uniq], # `scale_tau` is only required to determine the antiderivative
+                    l_inv, 
                     Nscoeffs,
                     scaled_s_poly_coeffs[l_uniq],
                     G_collect_0[l_uniq],
@@ -339,7 +340,7 @@ def _assemble_intensity_and_fluxes(
             raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
         
         # Atmospheric layer indices
-        l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
+        l = np.searchsorted(tau_arr, tau, side="left")
         scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
@@ -404,7 +405,8 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, scale_tau, l_inv,
+                scaled_tau, scale_tau[l_uniq], # `scale_tau` is only required to determine the antiderivative
+                l_inv,
                 Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq],
@@ -448,7 +450,7 @@ def _assemble_intensity_and_fluxes(
             raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
         
         # Atmospheric layer indices
-        l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
+        l = np.searchsorted(tau_arr, tau, side="left")
         scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
@@ -463,7 +465,8 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, scale_tau, l_inv,
+                scaled_tau, scale_tau[l_uniq], # `scale_tau` is only required to determine the antiderivative
+                l_inv,
                 Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, :N, :],
@@ -530,7 +533,7 @@ def _assemble_intensity_and_fluxes(
             raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
 
         # Atmospheric layer indices
-        l = np.argmax(tau[:, None] <= tau_arr[None, :], axis=1)
+        l = np.searchsorted(tau_arr, tau, side="left")
         scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
@@ -545,7 +548,8 @@ def _assemble_intensity_and_fluxes(
         if there_is_iso_source:
             l_uniq, l_inv = np.unique(l, return_inverse=True)
             _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, scale_tau, l_inv,
+                scaled_tau, scale_tau[l_uniq], # `scale_tau` is only required to determine the antiderivative
+                l_inv,
                 Nscoeffs,
                 scaled_s_poly_coeffs[l_uniq],
                 G_collect_0[l_uniq, N:, :],
@@ -570,9 +574,9 @@ def _assemble_intensity_and_fluxes(
         direct_beam_scaled = 0
         if is_antiderivative_wrt_tau:
             if there_is_beam_source:
-                direct_beam_contribution = (B_neg / (-scale_tau / mu0)[None, l])[:, l] * np.exp(-scaled_tau / mu0)[None, :]
+                direct_beam_contribution = (B_neg / (-scale_tau / mu0)[None, :])[:, l] * np.exp(-scaled_tau / mu0)[None, :] #NEW
                 direct_beam = I0 * mu0 * np.exp(-tau / mu0) * -mu0
-                direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0) / (-scale_tau / mu0)[None, l]
+                direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0) #NEW
             
             u0_neg = (
                 np.einsum("tij, tj -> it", GC_neg[l, :, :], np.exp(exponent) / (scale_tau[:, None] * K_collect_0)[l, :])

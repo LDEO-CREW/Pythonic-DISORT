@@ -74,8 +74,7 @@ def _solve_for_gen_and_part_sols(
     A_arr = np.empty((NFourier * NLayers, NQuad, NQuad))
     no_shortcut_indices = []
     no_shortcut_indices_0 = []
-    ind = 0
-    
+
     if there_is_beam_source:
         mu_arr_pos_mu0 = np.append(mu_arr_pos, -mu0)
         
@@ -109,66 +108,45 @@ def _solve_for_gen_and_part_sols(
         fac_asso_leg_term_posT = poch[None, :] * asso_leg_term_pos.T
         # --------------------------------------------------------------------------------------------------------------------------
 
-        # Loop over NLayers atmospheric layers
-        # --------------------------------------------------------------------------------------------------------------------------          
-        for l in range(NLayers):
-            weighted_scaled_Leg_coeffs_l = weighted_scaled_Leg_coeffs[l, m:]
-            scaled_omega_l = scaled_omega_arr[l]
-            omega_times_Leg_coeffs = (scaled_omega_l / 2) * weighted_scaled_Leg_coeffs_l
-            
-            if np.any(np.abs(omega_times_Leg_coeffs) > 1e-8): # There are shortcuts if multiple scattering is insignificant
-                
-                # Generate D
-                # --------------------------------------------------------------------------------------------------------------------------
-                D_temp = omega_times_Leg_coeffs[None, :] * fac_asso_leg_term_posT
-                D_pos = D_temp @ asso_leg_term_pos
-                D_neg = D_temp @ asso_leg_term_neg
-                
-                # --------------------------------------------------------------------------------------------------------------------------
-                
+        # Vectorized over NLayers atmospheric layers #NEW
+        # -------------------------------------------------------------------------------------------------------------------------- #NEW
+        omega_times_Leg = (scaled_omega_arr[:, None] / 2) * weighted_scaled_Leg_coeffs[:, m:]   # (NLayers, NLeg-m) #NEW
+        no_shortcut = np.any(np.abs(omega_times_Leg) > 1e-8, axis=1)                           # (NLayers,) #NEW
+        ns = np.flatnonzero(no_shortcut)                                                        #NEW
+        sh = np.flatnonzero(~no_shortcut)                                                       #NEW
+        ind_base = m * NLayers                                                                  #NEW
 
-                # Assemble the coefficient matrix and additional terms
-                # --------------------------------------------------------------------------------------------------------------------------
-                DW = D_pos * W[None, :]
-                DW.ravel()[::N + 1] -= 1
-                alpha = M_inv[:, None] * DW
-                beta = M_inv[:, None] * D_neg * W[None, :]
-                
-                # --------------------------------------------------------------------------------------------------------------------------
-                
-                # Setup to solve for particular solution w.r.t. direct beam source (see section 3.6.1 of the Comprehensive Documentation)
-                # --------------------------------------------------------------------------------------------------------------------------
-                if there_is_beam_source:
-                    # Generate X
-                    X_temp = (
-                        scalar_fac_asso_leg_term_mu0
-                        * scaled_omega_l 
-                        * weighted_scaled_Leg_coeffs_l
-                    )
-                    X_pos = X_temp @ asso_leg_term_pos
-                    X_neg = X_temp @ asso_leg_term_neg
-                    # Signs flipped due to the extra minus sign
-                    X_arr[ind, :N] = M_inv * X_pos
-                    X_arr[ind, N:] = -M_inv * X_neg
-                    
-                # --------------------------------------------------------------------------------------------------------------------------
-                
-                A_arr[ind, N:, :N] = beta
-                A_arr[ind, N:, N:] = alpha
-                no_shortcut_indices.append(ind)
-                if m_equals_0 and there_is_iso_source: # Keep the list empty if there is no isotropic source
-                    no_shortcut_indices_0.append(l)
-                
-            else:
-                # This is a shortcut to the diagonalization results
-                G_collect[ind, :, :] = G_trivial
-                K_collect[ind, :N] = -M_inv
-                K_collect[ind, N:] = M_inv
-                if m_equals_0 and there_is_iso_source:
-                    G_inv_collect_0[l, :, :] = G_trivial
-                    
-            ind += 1
-                
+        # Shortcut layers: trivial diagonalization (no multiple scattering) #NEW
+        if sh.size: #NEW
+            G_collect[ind_base + sh] = G_trivial #NEW
+            K_collect[ind_base + sh, :N] = -M_inv #NEW
+            K_collect[ind_base + sh, N:] = M_inv #NEW
+            if m_equals_0 and there_is_iso_source: #NEW
+                G_inv_collect_0[sh] = G_trivial #NEW
+
+        # Non-shortcut layers: full computation, batched over NLayers #NEW
+        if ns.size: #NEW
+            D_temp = omega_times_Leg[ns][:, None, :] * fac_asso_leg_term_posT[None, :, :]        # (Nns, N, NLeg-m) #NEW
+            D_pos = D_temp @ asso_leg_term_pos                                                    # (Nns, N, N) #NEW
+            D_neg = D_temp @ asso_leg_term_neg                                                    # (Nns, N, N) #NEW
+            DW = D_pos * W[None, None, :]                                                         #NEW
+            DW.reshape(-1, N * N)[:, ::N + 1] -= 1                                                # batched diag-sub #NEW
+            inds = ind_base + ns                                                                  #NEW
+            A_arr[inds, N:, N:] = M_inv[None, :, None] * DW                                       # alpha #NEW
+            A_arr[inds, N:, :N] = M_inv[None, :, None] * D_neg * W[None, None, :]                 # beta #NEW
+            no_shortcut_indices.extend(inds.tolist())                                             #NEW
+            if m_equals_0 and there_is_iso_source: #NEW
+                no_shortcut_indices_0.extend(ns.tolist())                                         #NEW
+            if there_is_beam_source: #NEW
+                X_temp = (                                                                        #NEW
+                    scalar_fac_asso_leg_term_mu0                                                  #NEW
+                    * scaled_omega_arr[ns, None]                                                  #NEW
+                    * weighted_scaled_Leg_coeffs[ns, m:]                                          #NEW
+                )                                                                                 #NEW
+                # Signs flipped due to the extra minus sign #NEW
+                X_arr[inds, :N] =  M_inv * (X_temp @ asso_leg_term_pos)                           #NEW
+                X_arr[inds, N:] = -M_inv * (X_temp @ asso_leg_term_neg)                           #NEW
+
     if len(no_shortcut_indices) > 0:
         A_arr = A_arr[no_shortcut_indices, :, :]
         alpha_arr = A_arr[:, N:, N:]
