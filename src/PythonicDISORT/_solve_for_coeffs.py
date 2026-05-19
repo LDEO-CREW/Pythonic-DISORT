@@ -79,7 +79,7 @@ def _solve_for_coeffs(
     use_banded_solver = (NLayers >= use_banded_solver_NLayers)
     dim = NLayers * NQuad
     C_collect = np.empty((NFourier, dim))
-    thickness = np.diff(scaled_tau_arr_with_0)                                                       # (NLayers,) #NEW
+    thickness = np.diff(scaled_tau_arr_with_0)                                                       # (NLayers,)
 
     RHS = np.empty(dim)
     i_bot = dim - N # Equals `j_bot_right`
@@ -92,36 +92,45 @@ def _solve_for_coeffs(
         col_stride = s1 - s0  # Stride when moving +1 col and -1 row
 
         def _view_slanted(i0, j0, nrows):
-            """
-            Return a view into `LHS_dof` using slanted mapping.
-            The function uses `numpy.lib.stride_tricks.as_strided` which is performant but dangerous,
-            which is why this function is not exposed in `PythonicDISORT.subroutines`.
+            """Single slanted view into `LHS_dof` anchored at conceptual LHS coords (i0, j0).
+            Returns a 2D view of shape (nrows, N). Used for top/bottom boundary-condition rows.
+
+            Uses `numpy.lib.stride_tricks.as_strided` (zero-copy but unsafe), which is why
+            this helper is not exposed in `PythonicDISORT.subroutines`.
             See https://numpy.org/devdocs/reference/generated/numpy.lib.stride_tricks.as_strided.html.
 
             Assume the following exist in the outer scope:
-                `LHS_dof`, `Nsupsubdiags`, `s0`, `col_stride`
+                `LHS_dof`, `Nsupsubdiags`, `N`, `s0`, `col_stride`.
             """
             r0 = Nsupsubdiags + i0 - j0
             base = LHS_dof[r0 : r0 + nrows, j0 : j0 + N]
             return as_strided(base, shape=(nrows, N), strides=(s0, col_stride))
 
-        def _slab_view(r0, c0_offset, nrows): #NEW
-            """Batched (NLayers-1, nrows, N) slanted view across interlayer rows. #NEW
-            Layer l writes to rows r0:r0+nrows, columns offset by l*NQuad in the slanted mapping.""" #NEW
-            base = LHS_dof[r0 : r0 + nrows, c0_offset : c0_offset + N + (NLayers - 2) * NQuad] #NEW
-            return as_strided(base, shape=(NLayers - 1, nrows, N), #NEW
-                              strides=(NQuad * s1, s0, col_stride)) #NEW
+        def _view_slanted_batched(i0, j0, nrows):
+            """Batched (NLayers-1, nrows, N) slanted view across interlayer continuity rows.
+            Anchored at conceptual LHS coords (i0, j0) for layer 0; layer l advances both
+            i and j by `NQuad` along the diagonal.
+
+            Same `(i0, j0)` convention as `_view_slanted` (slant arithmetic done internally).
+            Assume the following exist in the outer scope:
+                `LHS_dof`, `Nsupsubdiags`, `N`, `NQuad`, `NLayers`, `s0`, `s1`, `col_stride`.
+            """
+            r0 = Nsupsubdiags + i0 - j0 # matches `_view_slanted`'s internal slant
+            base = LHS_dof[r0 : r0 + nrows, j0 : j0 + N + (NLayers - 2) * NQuad]
+            return as_strided(base, shape=(NLayers - 1, nrows, N),
+                              strides=(NQuad * s1, s0, col_stride))
 
     else:
         LHS = np.zeros((dim, dim), order="F")
-        sR, sC = LHS.strides                                                                          #NEW
-        def _dense_slab(r0, c0, nrows, ncols):                                                        #NEW
-            """Batched (NLayers-1, nrows, ncols) view across interlayer blocks of `LHS`. #NEW
-            Layer l writes to rows r0+l*NQuad..r0+l*NQuad+nrows, cols c0+l*NQuad..c0+l*NQuad+ncols.""" #NEW
-            base = LHS[r0 : r0 + nrows + (NLayers - 2) * NQuad,                                       #NEW
-                       c0 : c0 + ncols + (NLayers - 2) * NQuad]                                       #NEW
-            return as_strided(base, shape=(NLayers - 1, nrows, ncols),                                #NEW
-                              strides=(NQuad * (sR + sC), sR, sC))                                    #NEW
+        sR, sC = LHS.strides                                                                          
+        def _dense_slab(r0, c0, nrows, ncols):
+            """Batched (NLayers-1, nrows, ncols) view across interlayer blocks of `LHS`.
+            Anchored at LHS coords (r0, c0) for layer 0; layer l advances both row and column
+            anchors by `NQuad` along the diagonal. Each slab has shape (nrows, ncols)."""
+            base = LHS[r0 : r0 + nrows + (NLayers - 2) * NQuad,                                       
+                       c0 : c0 + ncols + (NLayers - 2) * NQuad]                                       
+            return as_strided(base, shape=(NLayers - 1, nrows, ncols),                                
+                              strides=(NQuad * (sR + sC), sR, sC))                                    
     
     # The following loops can easily be parallelized, but the speed-up is unlikely to be worth the overhead
     for m in range(NFourier):
@@ -287,9 +296,9 @@ def _solve_for_coeffs(
         E_Lm1L = np.exp(
             K_collect_m[-1, :N] * (scaled_tau_arr_with_0[-1] - scaled_tau_arr_with_0[-2])
         )[None, :]
-        # Per-layer thickness exponentials, computed once per Fourier mode and reused below. #NEW
-        # E_pos_full[l] = exp(-thickness[l] * K_pos[l]) #NEW
-        E_pos_full = np.exp(-thickness[:, None] * K_collect_m[:, N:])                                # (NLayers, N) #NEW
+        # Per-layer thickness exponentials, computed once per Fourier mode and reused below.
+        # If looping over `l in range(NLayers)`, the line below would be `E_pos_full[l] = exp(-thickness[l] * K_pos[l])`
+        E_pos_full = np.exp(-thickness[:, None] * K_collect_m[:, N:])                                # (NLayers, N)
         
         ################################## Use `sc.linalg.solve_banded` ##################################
         if use_banded_solver:       
@@ -311,18 +320,18 @@ def _solve_for_coeffs(
                 _view_slanted(i_bot, j_bot_left, N)[:] = G_L_pn * E_Lm1L
                 _view_slanted(i_bot, i_bot, N)[:] = G_L_pp
 
-            # ---------------- Interlayer / continuity BCs (batched across layers) ---------------- #NEW
-            E_lm1l = E_pos_full[:-1, None, :]                                                        # (NLayers-1, 1, N) #NEW
-            E_llp1 = E_pos_full[1:,  None, :]                                                        # (NLayers-1, 1, N) #NEW
-            G_lo = G_collect_m[:-1]                                                                  # (NLayers-1, NQuad, NQuad) #NEW
-            G_hi = G_collect_m[1:]                                                                   # (NLayers-1, NQuad, NQuad) #NEW
+            # ---------------- Interlayer / continuity BCs (batched across layers) ----------------
+            E_lm1l = E_pos_full[:-1, None, :]                                                        # (NLayers-1, 1, N)
+            E_llp1 = E_pos_full[1:,  None, :]                                                        # (NLayers-1, 1, N)
+            G_lo = G_collect_m[:-1]                                                                  # (NLayers-1, NQuad, NQuad)
+            G_hi = G_collect_m[1:]                                                                   # (NLayers-1, NQuad, NQuad)
 
-            _slab_view(Nsupsubdiags + N,       0,       N)[:]    = G_lo[:, :N, :N] * E_lm1l         #NEW
-            _slab_view(Nsupsubdiags + 2 * N,   0,       N)[:]    = G_lo[:, N:, :N] * E_lm1l         #NEW
-            _slab_view(Nsupsubdiags,           N,       NQuad)[:] = G_lo[:, :,  N:]                  #NEW
-            _slab_view(Nsupsubdiags - N,       NQuad,   NQuad)[:] = -G_hi[:, :,  :N]                 #NEW
-            _slab_view(Nsupsubdiags - 2 * N,   3 * N,   N)[:]    = -G_hi[:, :N, N:] * E_llp1        #NEW
-            _slab_view(Nsupsubdiags - N,       3 * N,   N)[:]    = -G_hi[:, N:, N:] * E_llp1        #NEW
+            _view_slanted_batched(N,       0,       N)[:]    = G_lo[:, :N, :N] * E_lm1l            
+            _view_slanted_batched(2 * N,   0,       N)[:]    = G_lo[:, N:, :N] * E_lm1l            
+            _view_slanted_batched(N,       N,       NQuad)[:] = G_lo[:, :,  N:]                    
+            _view_slanted_batched(N,       NQuad,   NQuad)[:] = -G_hi[:, :,  :N]                   
+            _view_slanted_batched(N,       3 * N,   N)[:]    = -G_hi[:, :N, N:] * E_llp1           
+            _view_slanted_batched(2 * N,   3 * N,   N)[:]    = -G_hi[:, N:, N:] * E_llp1           
         
             # Solve the system
             C_m = sc.linalg.solve_banded(
@@ -350,18 +359,18 @@ def _solve_for_coeffs(
                 LHS[-N:, -NQuad : -N] = G_L_pn * E_Lm1L
                 LHS[-N:, -N:] = G_L_pp
 
-            # ---------------- Interlayer / continuity BCs (batched across layers) ---------------- #NEW
-            E_lm1l = E_pos_full[:-1, None, :]                                                        # (NLayers-1, 1, N) #NEW
-            E_llp1 = E_pos_full[1:,  None, :]                                                        # (NLayers-1, 1, N) #NEW
-            G_lo = G_collect_m[:-1]                                                                  #NEW
-            G_hi = G_collect_m[1:]                                                                   #NEW
+            # ---------------- Interlayer / continuity BCs (batched across layers) ----------------
+            E_lm1l = E_pos_full[:-1, None, :]                                                        # (NLayers-1, 1, N)
+            E_llp1 = E_pos_full[1:,  None, :]                                                        # (NLayers-1, 1, N)
+            G_lo = G_collect_m[:-1]                                                                  
+            G_hi = G_collect_m[1:]                                                                   
 
-            _dense_slab(N,       0,       N,     N)[:]    = G_lo[:, :N, :N] * E_lm1l                 #NEW
-            _dense_slab(2 * N,   0,       N,     N)[:]    = G_lo[:, N:, :N] * E_lm1l                 #NEW
-            _dense_slab(N,       N,       NQuad, N)[:]    = G_lo[:, :,  N:]                          #NEW
-            _dense_slab(N,       NQuad,   NQuad, N)[:]    = -G_hi[:, :,  :N]                         #NEW
-            _dense_slab(N,       3 * N,   N,     N)[:]    = -G_hi[:, :N, N:] * E_llp1                #NEW
-            _dense_slab(2 * N,   3 * N,   N,     N)[:]    = -G_hi[:, N:, N:] * E_llp1                #NEW
+            _dense_slab(N,       0,       N,     N)[:]    = G_lo[:, :N, :N] * E_lm1l                 
+            _dense_slab(2 * N,   0,       N,     N)[:]    = G_lo[:, N:, :N] * E_lm1l                 
+            _dense_slab(N,       N,       NQuad, N)[:]    = G_lo[:, :,  N:]                          
+            _dense_slab(N,       NQuad,   NQuad, N)[:]    = -G_hi[:, :,  :N]                         
+            _dense_slab(N,       3 * N,   N,     N)[:]    = -G_hi[:, :N, N:] * E_llp1                
+            _dense_slab(2 * N,   3 * N,   N,     N)[:]    = -G_hi[:, N:, N:] * E_llp1                
                 
             # Solve the system
             C_m = np.linalg.solve(LHS, RHS)

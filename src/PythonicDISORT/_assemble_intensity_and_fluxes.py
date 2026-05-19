@@ -187,7 +187,7 @@ def _assemble_intensity_and_fluxes(
             scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
             # Delta-M scaling
-            if np.any(scale_tau != 1): #NEW
+            if np.any(scale_tau != 1):
                 tau_dist_from_top = tau_arr[l] - tau
                 scaled_tau_dist_from_top = tau_dist_from_top * scale_tau[l]
                 scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
@@ -345,7 +345,7 @@ def _assemble_intensity_and_fluxes(
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
         # Delta-M scaling
-        if np.any(scale_tau != np.ones(NLayers)):
+        if np.any(scale_tau != 1):
             tau_dist_from_top = tau_arr[l] - tau
             scaled_tau_dist_from_top = tau_dist_from_top * scale_tau[l]
             scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
@@ -455,7 +455,7 @@ def _assemble_intensity_and_fluxes(
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
         # Delta-M scaling
-        if np.any(scale_tau != np.ones(NLayers)):
+        if np.any(scale_tau != 1):
             tau_dist_from_top = tau_arr[l] - tau
             scaled_tau_dist_from_top = tau_dist_from_top * scale_tau[l]
             scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
@@ -538,7 +538,7 @@ def _assemble_intensity_and_fluxes(
         scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
 
         # Delta-M scaling
-        if np.any(scale_tau != np.ones(NLayers)):
+        if np.any(scale_tau != 1):
             tau_dist_from_top = tau_arr[l] - tau
             scaled_tau_dist_from_top = tau_dist_from_top * scale_tau[l]
             scaled_tau = scaled_tau_arr_l - scaled_tau_dist_from_top
@@ -574,9 +574,9 @@ def _assemble_intensity_and_fluxes(
         direct_beam_scaled = 0
         if is_antiderivative_wrt_tau:
             if there_is_beam_source:
-                direct_beam_contribution = (B_neg / (-scale_tau / mu0)[None, :])[:, l] * np.exp(-scaled_tau / mu0)[None, :] #NEW
+                direct_beam_contribution = (B_neg / (-scale_tau / mu0)[None, :])[:, l] * np.exp(-scaled_tau / mu0)[None, :]
                 direct_beam = I0 * mu0 * np.exp(-tau / mu0) * -mu0
-                direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0) #NEW
+                direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0)
             
             u0_neg = (
                 np.einsum("tij, tj -> it", GC_neg[l, :, :], np.exp(exponent) / (scale_tau[:, None] * K_collect_0)[l, :])

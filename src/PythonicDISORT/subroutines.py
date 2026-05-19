@@ -641,12 +641,12 @@ def interpolate(u):
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
     
-    # Value-keyed cache for the most recent (tau, phi, is_anti) -> u_cache. #NEW
-    # Hits when the user loops over `mu` with the same (tau, phi); otherwise re-evaluates `u`. #NEW
-    # Cache stores copies of `tau`/`phi` so in-place mutation of the user's arrays #NEW
-    # cannot return stale values (compared via `np.array_equal`). #NEW
-    # Only used on the simple-return path (skipped when Fourier_error / tau_arr are requested). #NEW
-    _cache = [None, None, None, None]  # [tau_copy, phi_copy, is_anti, u_cache] #NEW
+    # Value-keyed cache for the most recent (tau, phi, is_antideriv) -> u_cache.
+    # Hits when the user loops over `mu` with the same (tau, phi); otherwise re-evaluates `u`.
+    # Cache stores copies of `tau`/`phi` so in-place mutation of the user's arrays
+    # cannot return stale values (compared via `np.array_equal`).
+    # Only used on the simple-return path (skipped when Fourier_error / tau_arr are requested).
+    _cache = [None, None, None, None]  # [tau_copy, phi_copy, is_antideriv, u_cache]
 
     argcount = u.__code__.co_argcount
     if argcount == 5: # Function is `u` instead of `u0`
@@ -659,13 +659,13 @@ def interpolate(u):
             if return_Fourier_error or return_tau_arr:
                 u_outputs = u(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
                 u_cache = u_outputs[0]
-            elif (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2] #NEW
-                  and np.array_equal(tau, _cache[0]) and np.array_equal(phi, _cache[1])): #NEW
-                u_cache = _cache[3] #NEW
+            elif (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2]
+                  and np.array_equal(tau, _cache[0]) and np.array_equal(phi, _cache[1])):
+                u_cache = _cache[3]
             else:
                 u_cache = u(tau, phi, is_antiderivative_wrt_tau)
-                _cache[:] = [np.array(tau, copy=True), np.array(phi, copy=True), #NEW
-                             is_antiderivative_wrt_tau, u_cache] #NEW
+                _cache[:] = [np.array(tau, copy=True), np.array(phi, copy=True),
+                             is_antiderivative_wrt_tau, u_cache]
 
             results = np.empty((len(mu),) + np.shape(u_cache)[1:])
             mask_pos = mu > 0
@@ -693,12 +693,12 @@ def interpolate(u):
             if return_Fourier_error or return_tau_arr:
                 u_outputs = u(tau, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
                 u_cache = u_outputs[0]
-            elif (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2] #NEW
-                  and np.array_equal(tau, _cache[0])): #NEW
-                u_cache = _cache[3] #NEW
+            elif (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2]
+                  and np.array_equal(tau, _cache[0])):
+                u_cache = _cache[3]
             else:
                 u_cache = u(tau, is_antiderivative_wrt_tau)
-                _cache[:] = [np.array(tau, copy=True), None, is_antiderivative_wrt_tau, u_cache] #NEW
+                _cache[:] = [np.array(tau, copy=True), None, is_antiderivative_wrt_tau, u_cache]
 
             results = np.empty((len(mu),) + np.shape(u_cache)[1:])
             mask_pos = mu > 0
