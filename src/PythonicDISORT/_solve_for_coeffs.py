@@ -122,7 +122,12 @@ def _solve_for_coeffs(
 
     else:
         LHS = np.zeros((dim, dim), order="F")
-        sR, sC = LHS.strides                                                                          
+        sR, sC = LHS.strides
+        # Stacks for a single batched `np.linalg.solve` over all Fourier modes after the
+        # assembly loop; this removes the per-mode LAPACK dispatch overhead. The banded
+        # path keeps its per-mode loop as `scipy.linalg.solve_banded` cannot batch.
+        LHS_batch = np.empty((NFourier, dim, dim))
+        RHS_batch = np.empty((NFourier, dim))
         def _dense_slab(r0, c0, nrows, ncols):
             """Batched (NLayers-1, nrows, ncols) view across interlayer blocks of `LHS`.
             Anchored at LHS coords (r0, c0) for layer 0; layer l advances both row and column
@@ -281,7 +286,7 @@ def _solve_for_coeffs(
         # --------------------------------------------------------------------------------------------------------------------------
         
         
-        # Assemble LHS and solve (much of this code is replicated in section 4 of the Comprehensive Documentation)
+        # Assemble LHS and solve (the old version of this code is replicated in section 4 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         G_0 = G_collect_m[0]
         G_0_nn = G_0[N:, :N]
@@ -334,7 +339,7 @@ def _solve_for_coeffs(
             _view_slanted_batched(2 * N,   3 * N,   N)[:]    = -G_hi[:, N:, N:] * E_llp1           
         
             # Solve the system
-            C_m = sc.linalg.solve_banded(
+            C_collect[m, :] = sc.linalg.solve_banded(
                 (Nsupsubdiags, Nsupsubdiags),
                 LHS_dof,
                 RHS,
@@ -372,12 +377,15 @@ def _solve_for_coeffs(
             _dense_slab(N,       3 * N,   N,     N)[:]    = -G_hi[:, :N, N:] * E_llp1                
             _dense_slab(2 * N,   3 * N,   N,     N)[:]    = -G_hi[:, N:, N:] * E_llp1                
                 
-            # Solve the system
-            C_m = np.linalg.solve(LHS, RHS)
-                
-            ################################################################################################## 
+            # Defer to the single batched solve over all Fourier modes below
+            LHS_batch[m] = LHS
+            RHS_batch[m] = RHS
+
+            ##################################################################################################
             # --------------------------------------------------------------------------------------------------------------------------
-        
-        C_collect[m, :] = C_m
-        
+
+    if not use_banded_solver:
+        # One batched call for all Fourier modes
+        C_collect = np.linalg.solve(LHS_batch, RHS_batch[:, :, None])[:, :, 0]
+
     return G_collect * C_collect.reshape((NFourier, NLayers, 1, NQuad))

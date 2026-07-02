@@ -321,19 +321,20 @@ def generate_diff_act_flux_funcs(u0):
 
 def Planck(T, WVNM):
     """The Planck function for intensity leaving a blackbody surface,
-    with units W / m^2 to match Stamnes' DISORT.
+    with units W / (m^2 sr). Stamnes' DISORT labels this quantity W / m^2
+    but it is the same per-steradian intensity.
 
     Parameters
     ----------
     T : float or array
         Temperatures in kelvin.
     WVNM : float
-        Wavenumber with units m^-1.
+        Wavenumber with units cm^-1 (matching Stamnes' DISORT convention).
 
     Returns
     -------
     float or array
-        Emitted power per unit area from a blackbody surface with units W / m^2.
+        Blackbody intensity with units W / (m^2 sr).
 
     """
     T = np.atleast_1d(T)
@@ -352,28 +353,28 @@ def Planck(T, WVNM):
     
 
 def blackbody_contrib_to_BCs(T, WVNMLO, WVNMHI, **kwargs):
-    """Compute blackbody contribution to each BC (``b_pos`` or ``b_neg``), 
-    i.e. the blackbody emission of that boundary, with units W / m^2.
+    """Compute blackbody contribution to each BC (``b_pos`` or ``b_neg``),
+    i.e. the blackbody emission of that boundary, with units W / (m^2 sr).
     This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT.
     Users will have to manually adjust emissivities but ``PythonicDISORT.subroutines.generate_emissivity_from_BDRF``
     can help with that.
-    
+
     Parameters
     ----------
     T : float or array
         Temperatures in kelvin.
     WVNMLO : float
-        Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+        Lower bound of wavenumber interval with units cm^-1. This variable is identically named in Stamnes' DISORT.
     WVNMHI : float
-        Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+        Upper bound of wavenumber interval with units cm^-1. This variable is identically named in Stamnes' DISORT.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
-        
+
     Returns
     -------
     float or array
-        The blackbody emission of each boundary with units W / m^2.
-    """ 
+        The blackbody emission of each boundary with units W / (m^2 sr).
+    """
     return np.squeeze(sc.integrate.quad_vec(lambda WVNM: Planck(T, WVNM), WVNMLO, WVNMHI, **kwargs)[0])
 
 
@@ -414,8 +415,8 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
     """Generate DISORT-equivalent ``s_poly_coeffs`` for input into ``pydisort``.
     This convenience function is provided to help match the inputs for Stamnes' DISORT to those for PythonicDISORT.
     Note that the coefficients will be multiplied by emissivity factors equal to ``1 - omega_arr`` inside
-    `pydisort`, i.e. Kirchoff's law of thermal radiation is enforced, just like in Stamnes' DISORT. 
-    
+    `pydisort`, i.e. Kirchhoff's law of thermal radiation is enforced, just like in Stamnes' DISORT.
+
     Parameters
     ----------
     tau_arr : array or float
@@ -424,9 +425,9 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
         Temperature in kelvin at each boundary / interface from top to bottom.
         This variable is identically named in Stamnes' DISORT.
     WVNMLO : float
-        Lower bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+        Lower bound of wavenumber interval with units cm^-1. This variable is identically named in Stamnes' DISORT.
     WVNMHI : float
-        Upper bound of wavenumber interval with units m^-1. This variable is identically named in Stamnes' DISORT.
+        Upper bound of wavenumber interval with units cm^-1. This variable is identically named in Stamnes' DISORT.
     **kwargs
         Keyword arguments to pass to ``scipy.integrate.quad_vec``.
         
@@ -457,7 +458,7 @@ def generate_s_poly_coeffs(tau_arr, TEMPER, WVNMLO, WVNMHI, **kwargs):
 
 
 def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
-    """Use Kirchoff's law of thermal radiation to determine the (directional) emissivity 
+    """Use Kirchhoff's law of thermal radiation to determine the (directional) emissivity
     of the surface given the zeroth Fourier mode of the Bi-Directional Reflectance Function (BDRF).
     This computation is automatic and internal to Stamnes' DISORT.
     This function supplements ``PythonicDISORT.subroutines.blackbody_contrib_to_BCs``.
@@ -475,7 +476,7 @@ def generate_emissivity_from_BDRF(N, zeroth_BDRF_Fourier_mode):
     Returns
     -------
     array or float
-        Emissivity for the blackbody contribution to the lower boundary source ``b_neg``.
+        Emissivity for the blackbody contribution to the bottom-boundary source ``b_pos``.
     """
     if np.isscalar(zeroth_BDRF_Fourier_mode):
         return 1 - zeroth_BDRF_Fourier_mode
@@ -591,8 +592,8 @@ def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
         Array with columns [D_0, D_1, ..., D_n]. 
         The rows correspond to different affine transformations.
     """
-    if np.any(a_arr) == 0:
-        raise ValueError("The scale factors must be non-zero.") 
+    if np.any(a_arr == 0):
+        raise ValueError("The scale factors must be non-zero.")
     
     Ntransformations, Ncoeffs = np.shape(poly_coeffs)
     Ncoeffs_arange = np.arange(Ncoeffs)
@@ -611,8 +612,8 @@ def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
 
 
 
-def interpolate(u):
-    """Polynomial (Barycentric) interpolation with respect to ``mu``. The output 
+def interpolate(u, NT_cor=None):
+    """Polynomial (Barycentric) interpolation with respect to ``mu``. The output
     is a function that is continuous and variable in all three arguments: ``mu``, ``tau`` and ``phi``.
     Discussed in sections 3.7 and 6.3 of the Comprehensive Documentation.
 
@@ -620,33 +621,115 @@ def interpolate(u):
     ----------
     u or u0 : function
         Non-interpolated intensity function as given by ``pydisort``.
+    NT_cor : optional, None, bool or str
+        Nakajima-Tanaka (NT) corrections flag which overrides the ``NT_cor`` argument
+        that was passed to ``pydisort``. Only supported when interpolating the full
+        intensity function ``u`` as output by ``pydisort`` (not ``u0``). The options are:
+
+        - ``None`` (default): no override; interpolate ``u`` exactly as given.
+        - ``False`` or ``"off"``: interpolate the uncorrected, potentially delta-M scaled intensity,
+          even if ``pydisort`` was run with ``NT_cor=True``.
+        - ``True`` or ``"quad"``: apply the NT corrections at the quadrature points and
+          interpolate the corrected intensity; equivalent to interpolating ``u`` from
+          ``pydisort`` with ``NT_cor=True``.
+        - ``"eval"``: interpolate the uncorrected intensity and add the NT corrections
+          evaluated directly at each ``mu`` evaluation point (like Stamnes' DISORT).
+          This is generally more accurate than ``"quad"`` and is also cheaper when there
+          are fewer evaluation points than quadrature points, but it requires
+          ``|mu| >= 1e-8``.
+
+        If ``pydisort`` determined that NT corrections are not applicable (they require a
+        beam source, delta-M scaling, scattering and a truncated phase function), the
+        ``True / "quad"`` and ``"eval"`` options reduce to ``"off"``. The string options
+        ``"quad"`` and ``"eval"`` issue a warning when this happens, whereas the boolean
+        ``True`` reduces silently, mirroring how ``pydisort`` itself behaves when
+        ``NT_cor=True``.
 
     Returns
     -------
     u_interpol : function
-        Intensity function with arguments ``(mu, tau, phi)`` (for ``u``) 
+        Intensity function with arguments ``(mu, tau, phi)`` (for ``u``)
         or ``(mu, tau)`` (for ``u0``) each an array or scalar.
         Returns an ndarray with axes corresponding to variation with each argument in the same order.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
-        Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the 
+        Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the
         Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
         Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
 
     """
-    
+    # Resolve the NT corrections flag (see GitHub issue #47)
+    # --------------------------------------------------------------------------------------------------
+    add_corrections_at = None  # `None`, "quad" or "eval"
+    if NT_cor is not None:
+        if NT_cor is False or NT_cor == "off":
+            NT_mode = "off"
+        elif NT_cor is True or NT_cor == "quad":
+            NT_mode = "quad"
+        elif NT_cor == "eval":
+            NT_mode = "eval"
+        else:
+            raise ValueError(
+                '`NT_cor` must be one of None, False / "off", True / "quad", or "eval".'
+            )
+
+        NT_data = getattr(u, "_NT_data", None)
+        if NT_data is None:
+            raise ValueError(
+                "The `NT_cor` options of this subroutine require the full intensity function `u`"
+                + " as output by `pydisort` (in particular, they are unsupported for `u0`)."
+            )
+
+        # The string options explicitly request corrections, so warn if they are inapplicable;
+        # the boolean options instead mirror `pydisort`'s own silent behavior (see the docstring)
+        if (
+            isinstance(NT_cor, str)
+            and NT_cor in ("quad", "eval")
+            and not NT_data["corrections_available"]
+        ):
+            warnings.warn(
+                'NT corrections were requested through `interpolate` (`NT_cor="'
+                + NT_cor
+                + '"`) but are not applicable to this `pydisort` solution: they require'
+                + " a beam source (`I0 > 0`), delta-M scaling (`f_arr > 0`), scattering"
+                + " (`omega_arr > 0`) and a truncated phase function (`NLeg < NLeg_all`)."
+                + " Proceeding without corrections."
+            )
+
+        if NT_mode == "off":
+            u = NT_data["u_star"]
+        elif NT_mode == "quad":
+            # If `pydisort` was run with `NT_cor=True` then `u` is already corrected at the quadrature points
+            if not NT_data["NT_cor_applied"] and NT_data["corrections_available"]:
+                add_corrections_at = "quad"
+        elif NT_mode == "eval":
+            u = NT_data["u_star"]
+            if NT_data["corrections_available"]:
+                add_corrections_at = "eval"
+
+        if add_corrections_at is not None:
+            NT_corrections_at_mu = NT_data["corrections_at_mu"]
+    # --------------------------------------------------------------------------------------------------
+
     N = len(u(0, 0)) // 2
     mu_arr_pos = Gauss_Legendre_quad(N)[0]
-    
+
+    if add_corrections_at == "quad":
+        mu_arr = np.concatenate([mu_arr_pos, -mu_arr_pos])
+
     u_pos_interpol = sc.interpolate.BarycentricInterpolator(mu_arr_pos)
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
-    
+
     # Value-keyed cache for the most recent (tau, phi, is_antideriv) -> u_cache.
     # Hits when the user loops over `mu` with the same (tau, phi); otherwise re-evaluates `u`.
     # Cache stores copies of `tau`/`phi` so in-place mutation of the user's arrays
     # cannot return stale values (compared via `np.array_equal`).
     # Only used on the simple-return path (skipped when Fourier_error / tau_arr are requested).
     _cache = [None, None, None, None]  # [tau_copy, phi_copy, is_antideriv, u_cache]
+
+    # Identity tokens for the data most recently loaded into each interpolator;
+    # they skip the redundant `set_yi` when the interpolator already holds `u_cache` (cache hits)
+    _yi_token = [None, None]
 
     argcount = u.__code__.co_argcount
     if argcount == 5: # Function is `u` instead of `u0`
@@ -659,11 +742,19 @@ def interpolate(u):
             if return_Fourier_error or return_tau_arr:
                 u_outputs = u(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
                 u_cache = u_outputs[0]
+                if add_corrections_at == "quad":
+                    u_cache = u_cache + NT_corrections_at_mu(
+                        mu_arr, tau, phi, is_antiderivative_wrt_tau
+                    ).reshape(np.shape(u_cache))
             elif (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2]
                   and np.array_equal(tau, _cache[0]) and np.array_equal(phi, _cache[1])):
                 u_cache = _cache[3]
             else:
                 u_cache = u(tau, phi, is_antiderivative_wrt_tau)
+                if add_corrections_at == "quad":
+                    u_cache = u_cache + NT_corrections_at_mu(
+                        mu_arr, tau, phi, is_antiderivative_wrt_tau
+                    ).reshape(np.shape(u_cache))
                 _cache[:] = [np.array(tau, copy=True), np.array(phi, copy=True),
                              is_antiderivative_wrt_tau, u_cache]
 
@@ -672,11 +763,20 @@ def interpolate(u):
             mask_else = ~mask_pos
 
             if np.any(mask_pos):
-                u_pos_interpol.set_yi(u_cache[:N])
+                if _yi_token[0] is not u_cache:
+                    u_pos_interpol.set_yi(u_cache[:N])
+                    _yi_token[0] = u_cache
                 results[mask_pos] = u_pos_interpol(mu[mask_pos])
             if np.any(mask_else):
-                u_neg_interpol.set_yi(u_cache[N:])
+                if _yi_token[1] is not u_cache:
+                    u_neg_interpol.set_yi(u_cache[N:])
+                    _yi_token[1] = u_cache
                 results[mask_else] = u_neg_interpol(mu[mask_else])
+
+            if add_corrections_at == "eval":
+                results += NT_corrections_at_mu(
+                    mu, tau, phi, is_antiderivative_wrt_tau
+                ).reshape(np.shape(results))
 
             if return_Fourier_error or return_tau_arr:
                 return (np.squeeze(results)[()],) + u_outputs[1:]
@@ -705,10 +805,14 @@ def interpolate(u):
             mask_else = ~mask_pos
 
             if np.any(mask_pos):
-                u_pos_interpol.set_yi(u_cache[:N])
+                if _yi_token[0] is not u_cache:
+                    u_pos_interpol.set_yi(u_cache[:N])
+                    _yi_token[0] = u_cache
                 results[mask_pos] = u_pos_interpol(mu[mask_pos])
             if np.any(mask_else):
-                u_neg_interpol.set_yi(u_cache[N:])
+                if _yi_token[1] is not u_cache:
+                    u_neg_interpol.set_yi(u_cache[N:])
+                    _yi_token[1] = u_cache
                 results[mask_else] = u_neg_interpol(mu[mask_else])
 
             if return_Fourier_error or return_tau_arr:

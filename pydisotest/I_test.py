@@ -32,7 +32,7 @@ def test_Ia():
     b_neg=1
     b_pos=1
     BDRF_Fourier_modes=[1]
-    s_poly_coeffs=np.tile(np.arange(4) + 1, (NLayers, 1))
+    s_poly_coeffs=np.tile(np.arange(3) + 1, (NLayers, 1))
 
     # Optional (unused)
     NLeg=None
@@ -261,4 +261,54 @@ def test_Id(): # inhomogeneous 3-layer atmosphere with cubic source
     assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, True) - flux_up(lower, True)).sum())
     assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, True)[0] - flux_down(lower, True)[0]).sum())
     assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, True)[1] - flux_down(lower, True)[1]).sum())
+    # ------------------------------------------------------------------------------------------------------------------
+
+
+def test_Ie(): # no beam source: only boundary and isotropic sources
+    print()
+    print("################################################ Test Ie ##################################################")
+    print("################## Test integration without a beam source (boundary + isotropic sources) ##################")
+    print()
+
+    ######################################### PYDISORT ARGUMENTS #######################################
+    tau_arr = np.array([2, 5, 8])
+    NLayers = len(tau_arr)
+    omega_arr = np.array([0.85, 0.75, 0.6])
+    NQuad = 8
+    Leg_coeffs_all = np.zeros((NLayers, NQuad))
+    Leg_coeffs_all[:, 0] = 1
+    mu0 = 0
+    I0 = 0 # No beam source; this combination once took a wrong branch in `u0`'s antiderivative
+    phi0 = 0
+
+    # Optional (used)
+    b_neg = 1 / pi
+    b_pos = 1 / pi
+    s_poly_coeffs=np.tile(np.arange(3) + 1, (NLayers, 1))
+
+    ####################################################################################################
+
+    # Test points
+    Nphi = int((NQuad * pi) // 2) * 2 + 1
+    phi_arr, full_weights_phi = PythonicDISORT.subroutines.Clenshaw_Curtis_quad(Nphi)
+
+    # Call pydisort function
+    flux_up, flux_down, u0, u = PythonicDISORT.pydisort(
+        tau_arr, omega_arr,
+        NQuad,
+        Leg_coeffs_all,
+        mu0, I0, phi0,
+        b_pos=b_pos,
+        b_neg=b_neg,
+        s_poly_coeffs=s_poly_coeffs[:, :2],  # Linear
+    )[1:]
+
+    end = tau_arr[-1]
+    # Multi-layer integration via the documented antiderivative idiom.
+    upper = tau_arr
+    lower = np.insert(tau_arr[:-1] + 1e-15, 0, 0)
+    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, True) - u(lower, phi_arr, True)).sum(axis=1))
+    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, True) - u0(lower, True)).sum(axis=-1))
+    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, True) - flux_up(lower, True)).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, True)[0] - flux_down(lower, True)[0]).sum())
     # ------------------------------------------------------------------------------------------------------------------

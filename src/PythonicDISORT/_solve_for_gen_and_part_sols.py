@@ -1,5 +1,47 @@
 import numpy as np
-import scipy as sc
+import warnings
+
+
+def _seminormalized_asso_leg_table(x, NFourier, NLeg):
+    """Table of seminormalized associated Legendre functions
+    Pbar_l^m(x) = sqrt((l - m)! / (l + m)!) * P_l^m(x)
+    (Condon-Shortley phase included, matching `scipy.special.lpmv` up to the normalization)
+    for all orders m < NFourier and degrees l < NLeg, built in a single pass by the standard,
+    numerically stable three-term recurrences. This replaces the former per-mode
+    `scipy.special.lpmv` calls, and the seminormalization exactly absorbs the Pochhammer
+    factor that the Fourier-mode assembly would otherwise apply, since
+    poch(l + m + 1, -2m) * P_l^m(x) * P_l^m(x') = Pbar_l^m(x) * Pbar_l^m(x').
+
+    Returns
+    -------
+    3darray of shape (NFourier, NLeg, len(x))
+    """
+    Nx = len(x)
+    table = np.zeros((NFourier, NLeg, Nx))
+    ms_all = np.arange(NFourier)
+
+    # Diagonal seeds Pbar_m^m = -sqrt((2m - 1) / (2m)) * sqrt(1 - x^2) * Pbar_{m-1}^{m-1}
+    # for all orders at once via a cumulative product over m
+    diag_factors = np.cumprod(
+        np.concatenate([[1.0], -np.sqrt((2 * ms_all[1:] - 1) / (2 * ms_all[1:]))])
+    )                                                                       # (NFourier,)
+    Pmm_all = diag_factors[:, None] * np.sqrt(1 - x**2)[None, :] ** ms_all[:, None]  # (NFourier, Nx)
+    table[ms_all, ms_all, :] = Pmm_all
+
+    # First recurrence step Pbar_{m+1}^m = sqrt(2m + 1) * x * Pbar_m^m, all orders at once
+    ms_first = ms_all[ms_all + 1 < NLeg]
+    table[ms_first, ms_first + 1, :] = (
+        np.sqrt(2 * ms_first + 1)[:, None] * x[None, :] * Pmm_all[ms_first]
+    )
+
+    # March up in degree, vectorized over all orders m <= l - 2 simultaneously.
+    # Seminormalized form of (l - m) P_l^m = (2l - 1) x P_{l-1}^m - (l + m - 1) P_{l-2}^m.
+    for ell in range(2, NLeg):
+        ms = ms_all[: min(ell - 1, NFourier)]                               # orders with m <= l - 2
+        c1 = ((2 * ell - 1) / np.sqrt((ell - ms) * (ell + ms)))[:, None]
+        c2 = np.sqrt((ell - 1 - ms) * (ell - 1 + ms) / ((ell - ms) * (ell + ms)))[:, None]
+        table[ms, ell, :] = c1 * x[None, :] * table[ms, ell - 1, :] - c2 * table[ms, ell - 2, :]
+    return table
 
 
 def _solve_for_gen_and_part_sols(
@@ -44,7 +86,6 @@ def _solve_for_gen_and_part_sols(
     Notable internal variables of _solve_for_gen_and_part_sols
     |       Variable      |             Type / Shape               |
     | ------------------- | -------------------------------------- |
-    | `ells_all`          | `NLeg`                                 |
     | `G_collect`         | `NFourier*NLayers x NQuad x NQuad`     | Reshaped to NFourier x NLayers x NQuad x NQuad
     | `K_collect`         | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
     | `alpha_arr`         | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
@@ -60,7 +101,6 @@ def _solve_for_gen_and_part_sols(
     
     # Initialization
     # --------------------------------------------------------------------------------------------------------------------------
-    ells_all = np.arange(NLeg)
     signs_all = np.ones(NLeg)
     signs_all[1::2] = -1
     
@@ -78,36 +118,35 @@ def _solve_for_gen_and_part_sols(
     no_shortcut_indices_0 = []
 
     if there_is_beam_source:
-        mu_arr_pos_mu0 = np.append(mu_arr_pos, -mu0)
-        
+        # The seminormalized table absorbs the Pochhammer factors (see `_seminormalized_asso_leg_table`)
+        asso_leg_table = _seminormalized_asso_leg_table(np.append(mu_arr_pos, -mu0), NFourier, NLeg)
+
         X_arr = np.empty((NFourier * NLayers, NQuad))
         B_collect = np.zeros((NFourier * NLayers, NQuad))
+    else:
+        asso_leg_table = _seminormalized_asso_leg_table(mu_arr_pos, NFourier, NLeg)
     if there_is_iso_source:
         G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Loop over NFourier Fourier modes
     # These can easily be parallelized, but the speed-up is unlikely to be worth the overhead
-    # --------------------------------------------------------------------------------------------------------------------------  
-    for m in range(NFourier): 
+    # --------------------------------------------------------------------------------------------------------------------------
+    for m in range(NFourier):
         # Setup
         # --------------------------------------------------------------------------------------------------------------------------
         m_equals_0 = (m == 0)
-        ells = ells_all[m:]
-        poch = sc.special.poch(ells + m + 1, -2 * m)
         signs = signs_all[:NLeg - m]
-        
+
         if there_is_beam_source:
-            degree_tile = np.broadcast_to(ells[:, None], (NLeg - m, N + 1))
-            lpmv_all = sc.special.lpmv(m, degree_tile, mu_arr_pos_mu0)
-            asso_leg_term_pos = lpmv_all[:, :-1]
-            scalar_fac_asso_leg_term_mu0 = I0_div_4pi * (2 - m_equals_0) * poch * lpmv_all[:, -1]
+            asso_leg_m = asso_leg_table[m, m:, :]
+            asso_leg_term_pos = asso_leg_m[:, :-1]
+            scalar_fac_asso_leg_term_mu0 = I0_div_4pi * (2 - m_equals_0) * asso_leg_m[:, -1]
         else:
-            degree_tile = np.broadcast_to(ells[:, None], (NLeg - m, N))
-            asso_leg_term_pos = sc.special.lpmv(m, degree_tile, mu_arr_pos)
-            
+            asso_leg_term_pos = asso_leg_table[m, m:, :]
+
         asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
-        fac_asso_leg_term_posT = poch[None, :] * asso_leg_term_pos.T
+        fac_asso_leg_term_posT = asso_leg_term_pos.T
         # --------------------------------------------------------------------------------------------------------------------------
 
         # Vectorized over NLayers atmospheric layers
@@ -161,7 +200,27 @@ def _solve_for_gen_and_part_sols(
         K_squared_arr, eigenvecs_GpG_arr = np.linalg.eig(
             np.einsum("lij, ljk -> lik", amb, apb, optimize=True)
         )
-        
+
+        # In theory K^2 is real and positive, but `eig` may return complex eigenpairs
+        # (e.g. spurious imaginary parts from nearly-defective pairs) or non-positive K^2
+        # in numerically borderline problems. We warn instead of raising -- `pydisort`
+        # may be called an enormous number of times in long runs, and the real parts have
+        # been observed to still produce reasonable outputs -- and proceed with the real
+        # parts. (Python prints each distinct warning only once per process by default.)
+        if np.iscomplexobj(K_squared_arr):
+            warnings.warn(
+                "Some eigenvalues of the coefficient matrices are incorrectly complex and their"
+                + " imaginary parts will be discarded. The results MAY still be reasonable"
+                + " but should be checked, e.g. at higher `NQuad` (more streams)."
+            )
+            K_squared_arr = np.real(K_squared_arr)
+            eigenvecs_GpG_arr = np.real(eigenvecs_GpG_arr)
+        if np.any(K_squared_arr <= 0):
+            warnings.warn(
+                "Some squared eigenvalues of the coefficient matrices are non-positive."
+                + " Their square roots, and consequently some outputs, will be NaN."
+            )
+
         # Eigenvalues arranged negative then positive, from largest to smallest magnitude
         K_arr_pos = np.sqrt(K_squared_arr)
         K_arr = np.concatenate((-K_arr_pos, K_arr_pos), axis=1)
@@ -187,7 +246,22 @@ def _solve_for_gen_and_part_sols(
         # --------------------------------------------------------------------------------------------------------------------------
         
         if there_is_beam_source:
-        
+
+            # Warn on near-resonance between the direct beam and any eigenvalue: the
+            # particular-solution denominators 1/mu0 + K blow up as -1/mu0 approaches an
+            # eigenvalue, and the (finite) physical solution is then recovered only through
+            # increasingly catastrophic cancellation against the homogeneous terms.
+            # The relative threshold |1 + mu0 K| < 1e-8 flags roughly >= 8 lost digits.
+            # Only the scattering (non-shortcut) eigenvalues matter: shortcut layers have
+            # zero beam particular solution, so their K = -1/mu (quadrature) collisions
+            # with -1/mu0 are harmless. See section 3.6.1 of the Comprehensive Documentation.
+            if np.any(np.abs(1 + mu0 * K_arr) < 1e-8):
+                warnings.warn(
+                    "The direct beam nearly resonates with an eigenvalue (`-1/mu0` is within"
+                    + " 1e-8 relative distance of an eigenvalue). The intensities and fluxes"
+                    + " may be inaccurate; consider perturbing `mu0` or `NQuad`."
+                )
+
             # Solve for particular solution w.r.t. direct beam source (refer to section 3.6.1 of the Comprehensive Documentation)
             # --------------------------------------------------------------------------------------------------------------------------
             if len_no_shortcut_indices_0 > 0: # In this case we have `G_inv_collect_0`, so use it
