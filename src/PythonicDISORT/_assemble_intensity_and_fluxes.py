@@ -29,7 +29,8 @@ def _assemble_intensity_and_fluxes(
     only_flux,                          # Only compute fluxes?
     use_banded_solver_NLayers,          # Number of layers above or equal which to use `scipy.linalg.solve_banded`
     autograd_compatible,                # Should the output functions be compatible with autograd?
-):  
+    cache_asso_leg,                     # Assoc. Legendre table cache mode: None, "no_mu0" or "mu0"
+):
     """Assembles the solution functions: intensity `u`, upward flux `flux_up`, downward flux `flux_down` 
     from the previously solved eigenpairs and coefficients from the boundary conditions. 
     Returns these solution functions.
@@ -78,7 +79,8 @@ def _assemble_intensity_and_fluxes(
     | `only_flux`                    | boolean                                      |
     | `use_banded_solver_NLayers`    | scalar                                       |
     | `autograd_compatible`          | boolean                                      |
-    
+    | `cache_asso_leg`               | None, "no_mu0" or "mu0"                      |
+
     Notable internal variables of _assemble_intensity_and_fluxes
     |     Variable      |             Type / Shape               |
     | ----------------- | -------------------------------------- |
@@ -117,6 +119,7 @@ def _assemble_intensity_and_fluxes(
         mu0, I0_div_4pi,
         there_is_beam_source,
         there_is_iso_source,
+        cache_asso_leg,
     )
     if there_is_beam_source and there_is_iso_source:
         G_collect, K_collect, B_collect, G_inv_collect_0 = outputs

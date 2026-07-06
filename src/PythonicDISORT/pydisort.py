@@ -26,6 +26,7 @@ def pydisort(
     s_poly_coeffs=np.array([[]]),
     use_banded_solver_NLayers=10,
     autograd_compatible=False,
+    cache_asso_leg=None,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
@@ -91,7 +92,24 @@ def pydisort(
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
     autograd_compatible : optional, bool
         If ``True``, the autograd package: https://github.com/HIPS/autograd can be used to compute
-        the ``tau``-derivatives of the output functions but ``pydisort`` will be less efficient. 
+        the ``tau``-derivatives of the output functions but ``pydisort`` will be less efficient.
+    cache_asso_leg : optional, {None, "no_mu0", "mu0"}
+        In-process caching of the seminormalized associated Legendre table, keyed on
+        (``NQuad``, ``NLeg``) and, for the direct beam, on ``mu0``.
+        This is a pure speed/memory option: the computed fluxes and intensities are identical for
+        all three settings.
+
+        - ``None`` (default): no caching; the table is rebuilt on every call.
+        - ``"no_mu0"``: cache the ``mu0``-independent part (the quadrature-node table) and reuse it
+          across all calls with the same discretization; the single direct-beam ``-mu0`` column is
+          still rebuilt each call. Recommended for large batch runs that share ``NQuad`` but vary
+          ``mu0`` (or have no beam, where the whole table is cached).
+        - ``"mu0"``: additionally cache the full table keyed on ``mu0``. Use this only when ``mu0``
+          is constant (or takes few distinct values) across many calls, e.g. a large batch of columns
+          at a fixed solar angle, in which case the associated Legendre table is built just once.
+
+        The cache lives for the lifetime of the process and is bounded (least-recently-used); a run
+        with a single discretization keeps a single entry.
 
     Returns
     -------
@@ -152,7 +170,8 @@ def pydisort(
     | `BDRF_Fourier_modes`        | `NBDRF`                                         |
     | `s_poly_coeffs`             | `NLayers x Nscoeffs`                            |
     | `use_banded_solver_NLayers` | scalar                                          |
-    
+    | `cache_asso_leg`            | None, "no_mu0" or "mu0"                         |
+
     Notable internal variables of pydisort
     |          Variable            |     Type / Shape     |
     | ---------------------------- | -------------------- |
@@ -298,6 +317,9 @@ def pydisort(
     # The minimum threshold is 3 else the matrix will not be banded
     if not use_banded_solver_NLayers >= 3:
         raise ValueError("The minimum threshold `use_banded_solver_NLayers` is 3, else the matrix will not be banded.")
+    # Associated Legendre table caching mode
+    if cache_asso_leg not in (None, "no_mu0", "mu0"):
+        raise ValueError('`cache_asso_leg` must be one of None, "no_mu0" or "mu0".')
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Post input checks setup
@@ -413,6 +435,7 @@ def pydisort(
         only_flux,
         use_banded_solver_NLayers,
         autograd_compatible,
+        cache_asso_leg,
     )
     if only_flux:
         return (mu_arr,) + outputs
@@ -439,28 +462,45 @@ def pydisort(
 
             # IMS statics (refer to section 3.7.2 of the Comprehensive Documentation and
             # eq. A.15 of STWL2000). The averages are weighted by layer optical THICKNESS
-            # (DISORT's `DTAUC`), matching DISORT's `SECSCA` subroutine. NOTE: DISORT
-            # additionally averages from the top of the atmosphere only DOWN TO each output
-            # depth, whereas the averages here span the whole atmosphere; the whole-atmosphere
-            # averages admit the exact closed-form tau-antiderivative used by
-            # `is_antiderivative_wrt_tau` and the difference matters only for vertically
-            # inhomogeneous atmospheres (the averages coincide when all layers are identical).
-            sum1 = np.sum(omega_arr * thickness_arr)
-            omega_avg = sum1 / tau_arr[-1]
-            sum2 = np.sum(f_arr * omega_arr * thickness_arr)
-            f_avg = sum2 / sum1
+            # (DISORT's `DTAUC`), matching DISORT's `SECSCA` subroutine. DISORT averages
+            # from the top of the atmosphere only DOWN TO each output depth, so its averages
+            # are tau-dependent; those depth-dependent averages do not admit the closed-form
+            # tau-antiderivatives used by `is_antiderivative_wrt_tau`. PythonicDISORT instead
+            # evaluates the averages down to each LAYER BOUNDARY (index k = 0, ..., NLayers,
+            # where the k = 0 top-boundary limit equals the k = 1 set as only the first layer
+            # is then sampled) and `_IMS_correction` blends the resulting correction linearly
+            # in tau within each layer. The blend matches DISORT's averaging exactly at every
+            # layer boundary, throughout the first layer, and everywhere when all layers are
+            # identical (in particular for single-layer atmospheres, which also skip the
+            # blend entirely: see `_IMS_correction`).
+            weights = omega_arr * thickness_arr
+            cumsum1 = np.cumsum(weights)                                     # (NLayers,)
+            cumsum2 = np.cumsum(f_arr * weights)                             # (NLayers,)
+            # Guarded divisions: a zero cumulative sum means no (peaked) scattering above
+            # the boundary, whence `IMS_scalar` and `IMS_Leg_coeffs` correctly vanish
+            omega_avg = cumsum1 / tau_arr
+            f_avg = np.where(cumsum1 > 0, cumsum2 / np.where(cumsum1 == 0, 1, cumsum1), 0)
+            omega_f_avg = omega_avg * f_avg                                  # (NLayers,)
             Leg_coeffs_residue = Leg_coeffs_all.copy()
             Leg_coeffs_residue[:, :NLeg] = f_arr[:, None]
-            Leg_coeffs_residue_avg = (
-                np.sum(Leg_coeffs_residue * (omega_arr * thickness_arr)[:, None], axis=0) / sum2
+            Leg_coeffs_residue_avg = np.where(
+                (cumsum2 > 0)[:, None],
+                np.cumsum(Leg_coeffs_residue * weights[:, None], axis=0)
+                / np.where(cumsum2 == 0, 1, cumsum2)[:, None],
+                0,
+            )                                                                # (NLayers, NLeg_all)
+            omega_f_avg = np.concatenate([omega_f_avg[:1], omega_f_avg])
+            Leg_coeffs_residue_avg = np.concatenate(
+                [Leg_coeffs_residue_avg[:1], Leg_coeffs_residue_avg], axis=0
             )
-            statics["scaled_mu0"] = mu0 / (1 - omega_avg * f_avg)
+            statics["scaled_mu0"] = mu0 / (1 - omega_f_avg)                  # (NLayers + 1,)
             statics["IMS_scalar"] = (
-                I0 / (4 * pi) * (omega_avg * f_avg) ** 2 / (1 - omega_avg * f_avg)
-            )
+                I0 / (4 * pi) * omega_f_avg**2 / (1 - omega_f_avg)
+            )                                                                # (NLayers + 1,)
             statics["IMS_Leg_coeffs"] = (2 * np.arange(NLeg_all) + 1) * (
                 2 * Leg_coeffs_residue_avg - Leg_coeffs_residue_avg**2
-            )
+            )                                                                # (NLayers + 1, NLeg_all)
+            statics["tau_arr_with_0"] = np.concatenate([np.zeros(1), tau_arr])
 
             # Decay and coefficient arrays for the multi-layer scans at the quadrature nodes
             if is_atmos_multilayered:
@@ -543,9 +583,10 @@ def pydisort(
             )
             if Nmu_pos < len(mu):
                 NT_corrections[Nmu_pos:, :, :] += _IMS_correction(
-                    abs_mu_neg, nu[Nmu_pos:], tau,
+                    abs_mu_neg, nu[Nmu_pos:], tau, l,
                     is_antiderivative_wrt_tau,
                     statics["scaled_mu0"], statics["IMS_scalar"], statics["IMS_Leg_coeffs"],
+                    statics["tau_arr_with_0"],
                     autograd_compatible,
                 )
 
@@ -605,9 +646,10 @@ def pydisort(
 
             # IMS correction for the intensity (see section 3.7.2); it applies only to downward directions
             IMS_corrections = _IMS_correction(
-                mu_arr_pos, nu[N:], tau,
+                mu_arr_pos, nu[N:], tau, l,
                 is_antiderivative_wrt_tau,
                 NT_statics["scaled_mu0"], NT_statics["IMS_scalar"], NT_statics["IMS_Leg_coeffs"],
+                NT_statics["tau_arr_with_0"],
                 autograd_compatible,
             )
             if autograd_compatible:
@@ -937,10 +979,12 @@ def _IMS_correction(
     abs_mu_neg,                     # Absolute values of negative-hemisphere `mu`
     nu_neg,                         # Scattering angle cosines for the negative hemisphere
     tau,                            # Optical depths of the evaluation points (NOT delta-scaled)
+    l,                              # Atmospheric layer indices of the evaluation points
     is_antiderivative_wrt_tau,      # Switch to an antiderivative of the function?
-    scaled_mu0,                     # mu0 / (1 - omega_avg * f_avg)
-    IMS_scalar,                     # I0 / (4 pi) * (omega_avg * f_avg)^2 / (1 - omega_avg * f_avg)
-    IMS_Leg_coeffs,                 # (2l + 1) * (2 * Leg_coeffs_residue_avg - Leg_coeffs_residue_avg^2)
+    scaled_mu0,                     # mu0 / (1 - omega_f_avg) at each layer boundary
+    IMS_scalar,                     # I0 / (4 pi) * omega_f_avg^2 / (1 - omega_f_avg) at each layer boundary
+    IMS_Leg_coeffs,                 # (2l + 1) * (2 * residue_avg - residue_avg^2) at each layer boundary
+    tau_arr_with_0,                 # Unscaled layer boundaries with 0 prepended
     autograd_compatible,            # Should the output functions be compatible with autograd?
 ):
     """IMS correction to the intensity at arbitrary downward `mu` evaluation points.
@@ -949,15 +993,33 @@ def _IMS_correction(
     This function is private and should be called only through `pydisort`
     (directly, or through the closures `pydisort` creates).
 
+    The optical-property averages follow DISORT's `SECSCA` (top of the atmosphere down
+    to the output depth) evaluated at the layer boundaries k = 0, ..., NLayers, giving
+    per-boundary correction functions
+        y_k(tau) = IMS_scalar_k * PSPIKE_k(nu) * chi(tau; scaled_mu0_k).
+    Within layer l (0-indexed; tau in (tau_arr_with_0[l], tau_arr_with_0[l + 1]]) the
+    correction blends the enclosing boundary sets linearly in tau,
+        u_IMS(tau) = y_l(tau) + w(tau) * (y_{l+1}(tau) - y_l(tau)),
+        w(tau) = (tau - tau_arr_with_0[l]) / (tau_arr_with_0[l + 1] - tau_arr_with_0[l]),
+    which matches DISORT's tau-dependent averaging exactly at every layer boundary and
+    throughout the first layer, is continuous in tau, and preserves the closed-form
+    per-layer antiderivatives (unlike DISORT's averaging, under which the tau-dependence
+    of the averages makes the antiderivative non-elementary). When all layers are
+    identical -- in particular for single-layer atmospheres, where the k = 0 set is a
+    copy of the k = 1 set -- the boundary sets coincide, the blend differences vanish
+    exactly and u_IMS reduces to the unblended y.
+
     Arguments of _IMS_correction
-    |          Variable            |     Type / Shape     |
-    | ---------------------------- | -------------------- |
-    | `abs_mu_neg`                 | `Nneg`               |
-    | `nu_neg`                     | `Nneg x Nphi`        |
-    | `tau`                        | `Ntau`               |
-    | `scaled_mu0`                 | scalar               |
-    | `IMS_scalar`                 | scalar               |
-    | `IMS_Leg_coeffs`             | `NLeg_all`           |
+    |          Variable            |          Type / Shape        |
+    | ---------------------------- | ---------------------------- |
+    | `abs_mu_neg`                 | `Nneg`                       |
+    | `nu_neg`                     | `Nneg x Nphi`                |
+    | `tau`                        | `Ntau`                       |
+    | `l`                          | `Ntau`                       |
+    | `scaled_mu0`                 | `NLayers + 1`                |
+    | `IMS_scalar`                 | `NLayers + 1`                |
+    | `IMS_Leg_coeffs`             | `(NLayers + 1) x NLeg_all`   |
+    | `tau_arr_with_0`             | `NLayers + 1`                |
     """
     if autograd_compatible:
         import autograd.numpy as np
@@ -968,40 +1030,111 @@ def _IMS_correction(
     # exp(-tau/mu) = exp(-tau/scaled_mu0) * exp(z) with z = -tau * x collapses chi to
     #     chi      = tau^2 * exp(-tau/scaled_mu0) * phi2(z) / (mu * scaled_mu0)
     #     chi_anti = -exp(-tau/scaled_mu0) * (tau^2 * phi2(z) + scaled_mu0*(scaled_mu0 + tau)) / scaled_mu0
-    # where phi2(z) = (e^z - 1 - z)/z^2 with phi2(0) = 1/2. The direct formulas below suffer
-    # catastrophic cancellation for small |z| (losing ~half the digits at |z| ~ 1e-8), so for
-    # |z| < 1 phi2 is evaluated by its truncated Taylor series sum_k z^k / (k+2)! which is
-    # exact to machine precision there; both branches are accurate to ~1 ulp at the |z| ~ 1
-    # crossover. This replaces the former requirement that no quadrature / evaluation angle
-    # coincide with `scaled_mu0`.
-    x = 1 / abs_mu_neg - 1 / scaled_mu0                                 # (Nneg,)
-    z = -tau[None, :] * x[:, None]                                      # (Nneg, Ntau)
-    near_singularity = np.abs(z) < 1.0
-    x_safe = np.where(x == 0.0, 1.0, x)[:, None]
-    exp_tau_smu0 = np.exp(-tau / scaled_mu0)[None, :]
-    exp_tau_mu = np.exp(-tau[None, :] / abs_mu_neg[:, None])
-    phi2 = _PHI2_TAYLOR_COEFFS[-1]
-    for c in _PHI2_TAYLOR_COEFFS[-2::-1]:                               # Horner evaluation; written to be autograd-compatible
-        phi2 = phi2 * z + c
+    # and (exactly, for the antiderivative of chi_anti needed by the blended antiderivative below)
+    #     chichi_anti = exp(-tau/scaled_mu0) * (tau^2 * phi2(z) + 2*tau*scaled_mu0 + 3*scaled_mu0^2
+    #                                           + x*scaled_mu0^2*(tau + 2*scaled_mu0)) / (1 + x*scaled_mu0)
+    # where phi2(z) = (e^z - 1 - z)/z^2 with phi2(0) = 1/2, and 1 + x*scaled_mu0 = scaled_mu0/mu > 0.
+    # The direct formulas below suffer catastrophic cancellation for small |z| (losing ~half the
+    # digits at |z| ~ 1e-8), so for |z| < 1 phi2 is evaluated by its truncated Taylor series
+    # sum_k z^k / (k+2)! which is exact to machine precision there; both branches are accurate
+    # to ~1 ulp at the |z| ~ 1 crossover. This replaces the former requirement that no
+    # quadrature / evaluation angle coincide with `scaled_mu0`.
+    exp_tau_mu = np.exp(-tau[None, :] / abs_mu_neg[:, None])            # (Nneg, Ntau)
+
+    def chi_kernels(smu0, need_chichi_anti=True):
+        """chi (or, on the antiderivative branch, chi_anti and optionally chichi_anti) of
+        shape (Nneg, Ntau) for one gathered set of per-evaluation-point statics `smu0` (Ntau,)."""
+        x = 1 / abs_mu_neg[:, None] - 1 / smu0[None, :]                 # (Nneg, Ntau)
+        z = -tau[None, :] * x
+        near_singularity = np.abs(z) < 1.0
+        x_safe = np.where(x == 0.0, 1.0, x)
+        exp_tau_smu0 = np.exp(-tau / smu0)[None, :]
+        phi2 = _PHI2_TAYLOR_COEFFS[-1]
+        for c in _PHI2_TAYLOR_COEFFS[-2::-1]:                           # Horner evaluation; written to be autograd-compatible
+            phi2 = phi2 * z + c
+
+        if is_antiderivative_wrt_tau:
+            chi_anti = np.where(
+                near_singularity,
+                -exp_tau_smu0
+                * (tau[None, :] ** 2 * phi2 + (smu0 * (smu0 + tau))[None, :])
+                / smu0[None, :],
+                (
+                    (smu0[None, :] - x_safe * (smu0 * (smu0 + tau))[None, :]) * exp_tau_smu0
+                    - abs_mu_neg[:, None] * exp_tau_mu
+                ) / (abs_mu_neg[:, None] * smu0[None, :] * x_safe**2),
+            )
+            if not need_chichi_anti:
+                return chi_anti, None
+            chichi_anti = np.where(
+                near_singularity,
+                exp_tau_smu0
+                * (
+                    tau[None, :] ** 2 * phi2
+                    + (2 * smu0 * tau + 3 * smu0**2)[None, :]
+                    + x * (smu0**2 * (tau + 2 * smu0))[None, :]
+                )
+                / (1 + x * smu0[None, :]),
+                (
+                    abs_mu_neg[:, None] ** 2 * exp_tau_mu
+                    - (smu0**2)[None, :] * (1 - x * (tau + 2 * smu0)[None, :]) * exp_tau_smu0
+                ) / (abs_mu_neg[:, None] * smu0[None, :] * x_safe**2),
+            )
+            return chi_anti, chichi_anti
+        else:
+            chi = np.where(
+                near_singularity,
+                tau[None, :] ** 2 * exp_tau_smu0 * phi2 / (abs_mu_neg[:, None] * smu0[None, :]),
+                (
+                    (tau[None, :] - 1 / x_safe) * exp_tau_smu0 + exp_tau_mu / x_safe
+                ) / (abs_mu_neg[:, None] * smu0[None, :] * x_safe),
+            )
+            return chi
+
+    if len(IMS_scalar) == 2:
+        # Single-layer atmosphere: the two boundary sets are identical, so skip the blend
+        # (this path costs the same as the pre-blending whole-atmosphere implementation
+        # and produces identical results)
+        smu0 = scaled_mu0[np.full(len(tau), 1)]
+        scalP = (IMS_scalar[1] * legval(nu_neg, IMS_Leg_coeffs[1]))[:, None, :]
+        if is_antiderivative_wrt_tau:
+            return scalP * chi_kernels(smu0, need_chichi_anti=False)[0][:, :, None]
+        else:
+            return scalP * chi_kernels(smu0)[:, :, None]
+
+    # Blend the enclosing boundary sets k = l ("lo", averages down to the top of the
+    # layer of each evaluation point) and k = l + 1 ("hi", averages down to its bottom)
+    t0 = tau_arr_with_0[l]                                              # (Ntau,)
+    thickness_l = tau_arr_with_0[l + 1] - t0                            # (Ntau,)
+
+    # PSPIKE (the Legendre series in the scattering angle) for each needed boundary set,
+    # evaluated in a single vectorized `legval` call
+    sets = np.unique(np.concatenate([l, l + 1]))
+    P_sets = legval(nu_neg, np.ascontiguousarray(IMS_Leg_coeffs[sets].T), tensor=True)  # (Nsets, Nneg, Nphi)
+    scalP_lo = IMS_scalar[l][None, :, None] * np.moveaxis(
+        P_sets[np.searchsorted(sets, l)], 0, 1
+    )                                                                   # (Nneg, Ntau, Nphi)
+    scalP_hi = IMS_scalar[l + 1][None, :, None] * np.moveaxis(
+        P_sets[np.searchsorted(sets, l + 1)], 0, 1
+    )                                                                   # (Nneg, Ntau, Nphi)
 
     if is_antiderivative_wrt_tau:
-        chi = np.where(
-            near_singularity,
-            -exp_tau_smu0
-            * (tau[None, :] ** 2 * phi2 + scaled_mu0 * (scaled_mu0 + tau)[None, :])
-            / scaled_mu0,
-            (
-                (scaled_mu0 - x_safe * scaled_mu0 * (scaled_mu0 + tau)[None, :]) * exp_tau_smu0
-                - abs_mu_neg[:, None] * exp_tau_mu
-            ) / (abs_mu_neg[:, None] * scaled_mu0 * x_safe**2),
-        )
+        # With w(tau) linear in tau, the per-layer antiderivative of the blend is
+        #     F = Y1_lo + ((tau - t0) * (Y1_hi - Y1_lo) - (Y2_hi - Y2_lo)) / thickness_l
+        # where Y1_k = scalP_k * chi_anti_k and Y2_k = scalP_k * chichi_anti_k satisfy
+        # Y1_k' = y_k and Y2_k' = Y1_k; indeed F' = y_lo + w * (y_hi - y_lo) as the Y1_hi - Y1_lo
+        # terms cancel. Like the rest of the NT corrections, F is a LOCAL (per-layer)
+        # antiderivative to be consumed through the documented telescoping idiom.
+        chi_anti_lo, chichi_anti_lo = chi_kernels(scaled_mu0[l])
+        chi_anti_hi, chichi_anti_hi = chi_kernels(scaled_mu0[l + 1])
+        Y1_lo = scalP_lo * chi_anti_lo[:, :, None]
+        Y1_hi = scalP_hi * chi_anti_hi[:, :, None]
+        Y2_diff = scalP_hi * chichi_anti_hi[:, :, None] - scalP_lo * chichi_anti_lo[:, :, None]
+        return Y1_lo + (
+            (tau - t0)[None, :, None] * (Y1_hi - Y1_lo) - Y2_diff
+        ) / thickness_l[None, :, None]
     else:
-        chi = np.where(
-            near_singularity,
-            tau[None, :] ** 2 * exp_tau_smu0 * phi2 / (abs_mu_neg[:, None] * scaled_mu0),
-            (
-                (tau[None, :] - 1 / x_safe) * exp_tau_smu0 + exp_tau_mu / x_safe
-            ) / (abs_mu_neg[:, None] * scaled_mu0 * x_safe),
-        )
-
-    return (IMS_scalar * legval(nu_neg, IMS_Leg_coeffs))[:, None, :] * chi[:, :, None]
+        w = (tau - t0) / thickness_l                                    # (Ntau,)
+        y_lo = scalP_lo * chi_kernels(scaled_mu0[l])[:, :, None]
+        y_hi = scalP_hi * chi_kernels(scaled_mu0[l + 1])[:, :, None]
+        return y_lo + w[None, :, None] * (y_hi - y_lo)

@@ -1,5 +1,8 @@
 import numpy as np
 import warnings
+from functools import lru_cache
+
+from PythonicDISORT.subroutines import Gauss_Legendre_quad
 
 
 def _seminormalized_asso_leg_table(x, NFourier, NLeg):
@@ -44,6 +47,43 @@ def _seminormalized_asso_leg_table(x, NFourier, NLeg):
     return table
 
 
+# In-process caches for the seminormalized associated Legendre tables (see the `cache_asso_leg`
+# argument of `pydisort`). The tables at the quadrature nodes are fully determined by `N` -- the
+# nodes are the deterministic Gauss-Legendre nodes -- and by the degree extent `NLeg`, so they can
+# be reused across the (potentially very many) `pydisort` calls of a batch run with a fixed
+# discretization. Since a table entry Pbar_l^m does not depend on the order extent `NFourier`, and
+# `pydisort` enforces `NFourier <= NLeg`, the caches are built at the maximal order `NFourier = NLeg`
+# and are NOT keyed on `NFourier`: a call needing fewer modes simply slices `[:NFourier]`. A single
+# cached entry thus serves every `NFourier` of a given `(N, NLeg)` (e.g. a mix of `only_flux` calls
+# and full-intensity calls). The cached arrays are returned read-only so the shared entries, which
+# the solver only ever reads, can never be mutated by a caller. `maxsize` bounds the memory
+# footprint; realistic batch runs use a single discretization (one live entry).
+
+@lru_cache(maxsize=32)
+def _cached_pos_asso_leg_table(N, NLeg):
+    """`_seminormalized_asso_leg_table` at the positive quadrature nodes `mu_arr_pos`, which depend
+    only on `N`, built at the maximal order `NFourier = NLeg`. Keyed on `(N, NLeg)` and hence shared
+    across all `mu0` and all `NFourier <= NLeg` (callers slice `[:NFourier]`).
+    """
+    mu_arr_pos, _ = Gauss_Legendre_quad(N)
+    table = _seminormalized_asso_leg_table(mu_arr_pos, NLeg, NLeg)
+    table.setflags(write=False)
+    return table
+
+
+@lru_cache(maxsize=32)
+def _cached_full_asso_leg_table(N, mu0, NLeg):
+    """`_seminormalized_asso_leg_table` at `[mu_arr_pos, -mu0]`, i.e. including the direct-beam
+    column, built at the maximal order `NFourier = NLeg`. Keyed on `(N, mu0, NLeg)`; only worthwhile
+    when `mu0` is (near-)constant across many calls, since a distinct `mu0` misses the cache and
+    rebuilds the whole table. Callers slice `[:NFourier]`.
+    """
+    mu_arr_pos, _ = Gauss_Legendre_quad(N)
+    table = _seminormalized_asso_leg_table(np.append(mu_arr_pos, -mu0), NLeg, NLeg)
+    table.setflags(write=False)
+    return table
+
+
 def _solve_for_gen_and_part_sols(
     NFourier,                    # Number of intensity Fourier modes
     scaled_omega_arr,            # Delta-scaled single-scattering albedos
@@ -55,6 +95,7 @@ def _solve_for_gen_and_part_sols(
     mu0, I0_div_4pi,             # Primary properties of the direct beam
     there_is_beam_source,        # Is there a beam source?
     there_is_iso_source,         # Is there an isotropic source?
+    cache_asso_leg,              # Assoc. Legendre table cache mode: None, "no_mu0" or "mu0"
 ):
     """
     Diagonalizes the coefficient matrix of the system of ordinary differential equations (ODEs) 
@@ -82,7 +123,8 @@ def _solve_for_gen_and_part_sols(
     | `I0_div_4pi`                   | scalar                             |
     | `there_is_beam_source`         | boolean                            |
     | `there_is_iso_source`          | boolean                            |
-    
+    | `cache_asso_leg`               | None, "no_mu0" or "mu0"            |
+
     Notable internal variables of _solve_for_gen_and_part_sols
     |       Variable      |             Type / Shape               |
     | ------------------- | -------------------------------------- |
@@ -118,13 +160,36 @@ def _solve_for_gen_and_part_sols(
     no_shortcut_indices_0 = []
 
     if there_is_beam_source:
-        # The seminormalized table absorbs the Pochhammer factors (see `_seminormalized_asso_leg_table`)
-        asso_leg_table = _seminormalized_asso_leg_table(np.append(mu_arr_pos, -mu0), NFourier, NLeg)
+        # The seminormalized table absorbs the Pochhammer factors (see `_seminormalized_asso_leg_table`).
+        # `cache_asso_leg` optionally reuses the discretization-determined table across calls; see the
+        # `cache_asso_leg` argument of `pydisort`. All branches produce the identical table.
+        if cache_asso_leg == "mu0":
+            # Cache the full table, including the direct-beam `-mu0` column (mu0 assumed ~constant).
+            # Built at NFourier = NLeg and sliced to the requested number of modes.
+            asso_leg_table = _cached_full_asso_leg_table(N, mu0, NLeg)[:NFourier]
+        elif cache_asso_leg == "no_mu0":
+            # Cache only the mu0-independent part and rebuild the single `-mu0` column per call.
+            # The recurrence is separable over the evaluation points, so appending the freshly built
+            # column to the (sliced) cached quadrature-node table reproduces the full table exactly.
+            asso_leg_table = np.concatenate(
+                (
+                    _cached_pos_asso_leg_table(N, NLeg)[:NFourier],
+                    _seminormalized_asso_leg_table(np.array([-mu0]), NFourier, NLeg),
+                ),
+                axis=2,
+            )
+        else:
+            asso_leg_table = _seminormalized_asso_leg_table(np.append(mu_arr_pos, -mu0), NFourier, NLeg)
 
         X_arr = np.empty((NFourier * NLayers, NQuad))
         B_collect = np.zeros((NFourier * NLayers, NQuad))
     else:
-        asso_leg_table = _seminormalized_asso_leg_table(mu_arr_pos, NFourier, NLeg)
+        # With no beam there is no `-mu0` column, so "no_mu0" and "mu0" both reduce to the
+        # mu0-independent quadrature-node table (built at NFourier = NLeg, then sliced)
+        if cache_asso_leg is None:
+            asso_leg_table = _seminormalized_asso_leg_table(mu_arr_pos, NFourier, NLeg)
+        else:
+            asso_leg_table = _cached_pos_asso_leg_table(N, NLeg)[:NFourier]
     if there_is_iso_source:
         G_inv_collect_0 = np.empty((NLayers, NQuad, NQuad))
     # --------------------------------------------------------------------------------------------------------------------------

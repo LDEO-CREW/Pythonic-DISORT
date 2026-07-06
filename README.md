@@ -4,15 +4,15 @@
 # Introduction
 The PythonicDISORT package is a Discrete Ordinates Solver for the (1D) Radiative Transfer Equation 
 in a plane-parallel, horizontally homogeneous atmosphere.
-It is coded entirely in Python 3 and is a reimplementation instead of a wrapper.
-While PythonicDISORT has been optimized for speed, it will naturally be slower than similar FORTRAN algorithms.
-On the other hand, PythonicDISORT should be easier to install, use, and modify than FORTRAN-based Discrete Ordinates Solvers.
+It is coded entirely in Python 3 and is not a wrapper.
+PythonicDISORT has been optimized for speed and **as of v1.8 is one-third the speed of FORTRAN DISORT while being NumPy and Scipy only**.
+PythonicDISORT is intended to be easier to install, use, and modify than FORTRAN-based Discrete Ordinates Solvers.
 
-PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]) and has its main features: multi-layer solver, 
-delta-_M_ scaling, Nakajima-Tanaka (NT) corrections, only flux option, direct beam source, isotropic internal source (blackbody emission), 
-Dirichlet boundary conditions (diffuse flux boundary sources), Bi-Directional Reflectance Function (BDRF) for surface reflection,
-and interpolation with respect to polar angle.
-In addition, we added a subroutine to compute actinic fluxes to satisfy a user request, and integration with respect to optical depth was also added.
+PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]),
+as of v1.8 the only **missing features** are $\delta$-$M$+ scaling (PythonicDISORT instead implements NT corrections), 
+the Chapman function for near-horizon solar angles, and pseudo-spherical corrections. 
+On the other hand, we added a subroutine to compute actinic fluxes to satisfy a user request, 
+added analytic integration with respect to optical depth, and improved the handling of singularities.
 Further feature requests as well as feedback are welcome.
 
 You may contact me, Dion, through dh3065@columbia.edu.
@@ -48,8 +48,11 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 * Test Problem 7: Absorption + Scattering + All Possible Sources, Lambertian and Hapke Surface Reflectivities (one layer)
 * Test Problem 8: Absorbing / Isotropic-Scattering Medium (multiple layers)
 * Test Problem 9: General Emitting / Absorbing / Scattering Medium (multiple layers)
-* Test Problem 11: Single-Layer vs. Multiple Layers (no corresponding Jupyter Notebook)
-* Test Problem I: Antiderivative / integration functionality (no corresponding Jupyter Notebook)
+
+(no corresponding Jupyter Notebook)
+* Test Problem 11: Single-Layer vs. Multiple Layers
+* Test Problem I: Antiderivative / integration functionality
+* Test Problem Interp: Interpolation + NT Correction functionality
 
 # Installation
 

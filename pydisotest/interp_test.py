@@ -214,8 +214,10 @@ def test_interp_NT_singularity_continuity():
     u_false = _pydisort(False)[4]
     u_interpol_eval = interpolate(u_false, NT_cor="eval")
 
-    # The IMS-scaled mu0 (must mirror the formula in `pydisort`'s NT statics,
-    # which weights by layer optical thickness following DISORT's `SECSCA`)
+    # An IMS-scaled mu0: the whole-atmosphere average below equals the BOTTOM-boundary
+    # set of `pydisort`'s per-boundary NT statics (which weight by layer optical
+    # thickness following DISORT's `SECSCA`), so it is a removable-singularity candidate
+    # for evaluation points in the last layer
     thickness_arr = np.diff(tau_arr, prepend=0)
     sum1 = np.sum(omega_arr * thickness_arr)
     omega_avg = sum1 / tau_arr[-1]
@@ -232,6 +234,22 @@ def test_interp_NT_singularity_continuity():
         for eps, rtol in ((1e-6, 1e-3), (1e-9, 1e-6), (1e-12, 1e-9)):
             vals_near = u_interpol_eval(np.array([mu_sing * (1 + eps)]), tau_eval, phi_eval)
             assert np.allclose(vals_near, vals_at, rtol=0, atol=rtol * scale)
+
+
+def test_NT_tau_continuity_at_layer_boundaries():
+    """The NT-corrected intensity must be continuous in `tau` across layer boundaries
+    of an inhomogeneous atmosphere. This exercises the IMS boundary-blending scheme
+    (the correction's per-boundary optical-property averages follow DISORT's `SECSCA`
+    at the layer boundaries and are blended/interpolated linearly in `tau` within each layer)."""
+    u_true = _pydisort(True)[4]
+    u_interpol_eval = interpolate(u_true, NT_cor="eval")
+
+    scale = np.max(np.abs(u_interpol_eval(mu_eval, tau_eval, phi_eval)))
+    eps = 1e-11
+    for tau_b in tau_arr[:-1]:
+        above = u_interpol_eval(mu_eval, np.array([tau_b - eps]), phi_eval)
+        below = u_interpol_eval(mu_eval, np.array([tau_b + eps]), phi_eval)
+        assert np.allclose(above, below, rtol=0, atol=1e-8 * scale)
 
 
 def test_NT_mu0_at_quadrature_node():
