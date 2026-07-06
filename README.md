@@ -9,7 +9,7 @@ PythonicDISORT has been optimized for speed and **as of v1.8 is one-third the sp
 PythonicDISORT is intended to be easier to install, use, and modify than FORTRAN-based Discrete Ordinates Solvers.
 
 PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]),
-as of v1.8 the only **missing features** are $\delta$-$M$+ scaling (PythonicDISORT instead implements NT corrections), 
+as of v1.8 the only **missing features** are $\delta$-M+ scaling (PythonicDISORT instead implements NT corrections), 
 the Chapman function for near-horizon solar angles, and pseudo-spherical corrections. 
 On the other hand, we added a subroutine to compute actinic fluxes to satisfy a user request, 
 added analytic integration with respect to optical depth, and improved the handling of singularities.
