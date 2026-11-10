@@ -275,46 +275,29 @@ def generate_diff_act_flux_funcs(u0):
         Returns the diffuse flux magnitudes (type: array).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
-        Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
+        Carries ``tau_arr`` as an attribute.
     Fm_act(tau) : function
         Actinic flux function with argument ``tau`` (type: array) for negative (downward) ``mu`` values.
         Returns the diffuse flux magnitudes (type: array).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
-        Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
+        Carries ``tau_arr`` as an attribute.
 
     """
     N = len(u0(0)) // 2
     GL_weights = Gauss_Legendre_quad(N)[1]
 
     # Note that the zeroth axis of the array u0(tau) captures variation with mu
-    def flux_act_up(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False):
-        if return_tau_arr:
-            (
-                u0_cache, 
-                tau_arr,
-            ) = u0(tau, is_antiderivative_wrt_tau, True)
-            return np.squeeze(2 * pi * GL_weights @ u0_cache[:N])[()], tau_arr
-        else:
-            return np.squeeze(2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[:N])[()]
-        
-    def flux_act_down_diffuse(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False):
-        if return_tau_arr:
-            (
-                u0_cache, 
-                tau_arr,
-                act_dscale_reclassification,
-            ) = u0(tau, is_antiderivative_wrt_tau, True, _return_act_dscale_for_reclass=True)
-            result_without_reclassification = 2 * pi * GL_weights @ u0_cache[N:]
-            return np.squeeze(result_without_reclassification + act_dscale_reclassification)[()], tau_arr
-        else:
-            (
-                u0_cache, 
-                act_dscale_reclassification,
-            ) = u0(tau, is_antiderivative_wrt_tau, False, _return_act_dscale_for_reclass=True)
-            result_without_reclassification = 2 * pi * GL_weights @ u0_cache[N:]
-            return np.squeeze(result_without_reclassification + act_dscale_reclassification)[()]
-    
+    def flux_act_up(tau, is_antiderivative_wrt_tau=False):
+        return np.squeeze(2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[:N])[()]
+
+    def flux_act_down_diffuse(tau, is_antiderivative_wrt_tau=False):
+        # `u0` is evaluated first and it validates `tau` (no need to repeat the validation here)
+        result_without_reclassification = 2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[N:]
+        act_dscale_reclassification = u0._act_dscale_reclassification(tau, is_antiderivative_wrt_tau)
+        return np.squeeze(result_without_reclassification + act_dscale_reclassification)[()]
+
+    flux_act_up.tau_arr = flux_act_down_diffuse.tau_arr = u0.tau_arr
     return flux_act_up, flux_act_down_diffuse
 
 
@@ -607,8 +590,8 @@ def affine_transform_poly_coeffs(poly_coeffs, a_arr, b_arr):
         * (1 / a_arr)[:, None, None] ** (Ncoeffs_arange[None, None, :])
         * (-b_arr[:, None, None]) ** pow_for_shifts[None, :, :]
     )  # Transformation matrix for the polynomial coefficients
-    
-    return np.einsum("lij, lj -> li", T, poly_coeffs, optimize=True)
+
+    return np.einsum("lij, lj -> li", T, poly_coeffs)
 
 
 
@@ -621,6 +604,9 @@ def interpolate(u, NT_cor=None):
     ----------
     u or u0 : function
         Non-interpolated intensity function as given by ``pydisort``.
+        Functions from ``pydisort`` carry their quadrature nodes as the attribute ``_mu_arr_pos``.
+        Any other function with the same arguments is instead evaluated once, at ``tau = 0``
+        (and ``phi = 0``), to determine ``NQuad``, from which the nodes are recomputed.
     NT_cor : optional, None, bool or str
         Nakajima-Tanaka (NT) corrections flag which overrides the ``NT_cor`` argument
         that was passed to ``pydisort``. Only supported when interpolating the full
@@ -653,24 +639,18 @@ def interpolate(u, NT_cor=None):
         Returns an ndarray with axes corresponding to variation with each argument in the same order.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
-        Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the
+        Pass ``return_Fourier_error = True`` (defaults to ``False``; only for ``u``) to return the
         Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
-        Pass ``return_tau_arr`` to return ``tau_arr`` (defaults to ``False``).
+        Carries ``tau_arr`` as an attribute if ``u`` does.
 
     """
-    # Resolve the NT corrections flag (see GitHub issue #47)
     # --------------------------------------------------------------------------------------------------
-    add_corrections_at = None  # `None`, "quad" or "eval"
+    add_corrections_at = None
     if NT_cor is not None:
-        if NT_cor is False or NT_cor == "off":
-            NT_mode = "off"
-        elif NT_cor is True or NT_cor == "quad":
-            NT_mode = "quad"
-        elif NT_cor == "eval":
-            NT_mode = "eval"
-        else:
+        NT_mode = {False: "off", "off": "off", True: "quad", "quad": "quad", "eval": "eval"}.get(NT_cor)
+        if NT_mode is None:
             raise ValueError(
-                '`NT_cor` must be one of None, False / "off", True / "quad", or "eval".'
+                '`NT_cor` must be one of None, False/"off", True/"quad", or "eval".'
             )
 
         NT_data = getattr(u, "_NT_data", None)
@@ -679,14 +659,12 @@ def interpolate(u, NT_cor=None):
                 "The `NT_cor` options of this subroutine require the full intensity function `u`"
                 + " as output by `pydisort` (in particular, they are unsupported for `u0`)."
             )
+        corrections_available = NT_data["corrections_available"]
+        NT_corrections_at_mu = NT_data["corrections_at_mu"]
 
         # The string options explicitly request corrections, so warn if they are inapplicable;
         # the boolean options instead mirror `pydisort`'s own silent behavior (see the docstring)
-        if (
-            isinstance(NT_cor, str)
-            and NT_cor in ("quad", "eval")
-            and not NT_data["corrections_available"]
-        ):
+        if NT_cor in ("quad", "eval") and not corrections_available:
             warnings.warn(
                 'NT corrections were requested through `interpolate` (`NT_cor="'
                 + NT_cor
@@ -696,23 +674,23 @@ def interpolate(u, NT_cor=None):
                 + " Proceeding without corrections."
             )
 
-        if NT_mode == "off":
-            u = NT_data["u_star"]
-        elif NT_mode == "quad":
-            # If `pydisort` was run with `NT_cor=True` then `u` is already corrected at the quadrature points
-            if not NT_data["NT_cor_applied"] and NT_data["corrections_available"]:
-                add_corrections_at = "quad"
-        elif NT_mode == "eval":
-            u = NT_data["u_star"]
-            if NT_data["corrections_available"]:
-                add_corrections_at = "eval"
-
-        if add_corrections_at is not None:
-            NT_corrections_at_mu = NT_data["corrections_at_mu"]
+        # Interpolate the uncorrected `u_star` and add any corrections to it, unless `u` is already
+        # corrected at the quadrature points as requested (`pydisort` was run with `NT_cor=True`)
+        if not (NT_mode == "quad" and NT_data["NT_cor_applied"]):
+            if NT_data["NT_cor_applied"]:
+                u = NT_data["u_star"]
+            if NT_mode != "off" and corrections_available:
+                add_corrections_at = NT_mode
     # --------------------------------------------------------------------------------------------------
 
-    N = len(u(0, 0)) // 2
-    mu_arr_pos = Gauss_Legendre_quad(N)[0]
+    # Functions from `pydisort` carry their upper hemisphere quadrature nodes as `_mu_arr_pos`;
+    # only for other functions are the nodes recomputed, after an evaluation to find `NQuad`
+    mu_arr_pos = getattr(u, "_mu_arr_pos", None)
+    if mu_arr_pos is None:
+        # A bit of spaghetti code here, but this works even if `u` is actually `u0` because 
+        # in that case the second argument is `is_antiderivative_wrt_tau`.
+        mu_arr_pos = Gauss_Legendre_quad(len(u(0, 0)) // 2)[0]
+    N = len(mu_arr_pos)
 
     if add_corrections_at == "quad":
         mu_arr = np.concatenate([mu_arr_pos, -mu_arr_pos])
@@ -721,10 +699,8 @@ def interpolate(u, NT_cor=None):
     u_neg_interpol = sc.interpolate.BarycentricInterpolator(-mu_arr_pos)
 
     # Value-keyed cache for the most recent (tau, phi, is_antideriv) -> u_cache.
-    # Hits when the user loops over `mu` with the same (tau, phi); otherwise re-evaluates `u`.
-    # Cache stores copies of `tau`/`phi` so in-place mutation of the user's arrays
-    # cannot return stale values (compared via `np.array_equal`).
-    # Only used on the simple-return path (skipped when Fourier_error / tau_arr are requested).
+    # Hits when the user makes multiple `mu` calls with the same (tau, phi); otherwise re-evaluates `u`.
+    # Only used on the simple-return path (skipped when the Fourier error is requested).
     _cache = [None, None, None, None]  # [tau_copy, phi_copy, is_antideriv, u_cache]
 
     # Identity tokens for the data most recently loaded into each interpolator;
@@ -732,16 +708,15 @@ def interpolate(u, NT_cor=None):
     _yi_token = [None, None]
 
     argcount = u.__code__.co_argcount
-    if argcount == 5: # Function is `u` instead of `u0`
-        def u_interpol(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
+    if argcount == 4: # Function is `u` instead of `u0`
+        def u_interpol(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False):
             if not np.all(np.abs(mu) <= 1):
                 raise ValueError("mu values must be between -1 and 1.")
 
             mu = np.atleast_1d(mu)
 
-            if return_Fourier_error or return_tau_arr:
-                u_outputs = u(tau, phi, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
-                u_cache = u_outputs[0]
+            if return_Fourier_error:
+                u_cache, Fourier_error = u(tau, phi, is_antiderivative_wrt_tau, True)
                 if add_corrections_at == "quad":
                     u_cache = u_cache + NT_corrections_at_mu(
                         mu_arr, tau, phi, is_antiderivative_wrt_tau
@@ -778,22 +753,19 @@ def interpolate(u, NT_cor=None):
                     mu, tau, phi, is_antiderivative_wrt_tau
                 ).reshape(np.shape(results))
 
-            if return_Fourier_error or return_tau_arr:
-                return (np.squeeze(results)[()],) + u_outputs[1:]
+            if return_Fourier_error:
+                return np.squeeze(results)[()], Fourier_error
             else:
                 return np.squeeze(results)[()]
 
-    elif argcount == 4: # Function is u0 instead of u
-        def u_interpol(mu, tau, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
+    elif argcount == 2: # Function is u0 instead of u
+        def u_interpol(mu, tau, is_antiderivative_wrt_tau=False):
             if not np.all(np.abs(mu) <= 1):
                 raise ValueError("mu values must be between -1 and 1.")
 
             mu = np.atleast_1d(mu)
 
-            if return_Fourier_error or return_tau_arr:
-                u_outputs = u(tau, is_antiderivative_wrt_tau, return_Fourier_error, return_tau_arr)
-                u_cache = u_outputs[0]
-            elif (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2]
+            if (_cache[3] is not None and is_antiderivative_wrt_tau == _cache[2]
                   and np.array_equal(tau, _cache[0])):
                 u_cache = _cache[3]
             else:
@@ -815,13 +787,12 @@ def interpolate(u, NT_cor=None):
                     _yi_token[1] = u_cache
                 results[mask_else] = u_neg_interpol(mu[mask_else])
 
-            if return_Fourier_error or return_tau_arr:
-                return (np.squeeze(results)[()],) + u_outputs[1:]
-            else:
-                return np.squeeze(results)[()]
+            return np.squeeze(results)[()]
     else:
         raise ValueError("This subroutine can only interpolate u or u0.")
-    
+
+    if hasattr(u, "tau_arr"):
+        u_interpol.tau_arr = u.tau_arr
     return u_interpol
          
 
@@ -906,8 +877,8 @@ def _mathscr_v(tau,                             # Input optical depths
     if Nscoeffs == 1:
         s0 = s_poly_coeffs[:, 0:1]
         c0w = s0 * K_inv * G_inv_mu_inv  # (NL, 1) * (NL, NQuad) -> (NL, NQuad)
-        
-        d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)
+
+        d0 = np.einsum("lij, lj -> il", G, c0w)
 
         if is_antiderivative_wrt_tau:
             p0 = tau
@@ -925,8 +896,8 @@ def _mathscr_v(tau,                             # Input optical depths
         c0w = s1 * K_inv * G_inv_mu_inv
         c1w = (s0 * K_inv + s1 * K_inv2) * G_inv_mu_inv
         
-        d0 = np.einsum("lij, lj -> il", G, c0w, optimize=True)  # (NQuad, NL)
-        d1 = np.einsum("lij, lj -> il", G, c1w, optimize=True)  # (NQuad, NL)
+        d0 = np.einsum("lij, lj -> il", G, c0w)  # (NQuad, NL)
+        d1 = np.einsum("lij, lj -> il", G, c1w)  # (NQuad, NL)
 
         if is_antiderivative_wrt_tau:
             p0 = tau * tau / 2
@@ -966,19 +937,19 @@ def _mathscr_v(tau,                             # Input optical depths
         # Only take lower triangle values
         lower_tri = np.where((jj >= 0)[None, :, :], np.take(weighted_mathscr_a, jj, axis=1), 0)
         
-        unweighted_mathscr_b_sigma = np.einsum("lkp, lip -> lki", K_invP, lower_tri, optimize=True)
-        mathscr_b_sigma = (unweighted_mathscr_b_sigma * inv_fac_rev[None, None, :]).transpose(2, 0, 1)
-        mathscr_b_right = mathscr_b_sigma * G_inv_mu_inv[None, :, :]
-        mathscr_b = np.einsum("lqk, plk- > lqp", G, mathscr_b_right, optimize=True)
+        unweighted_mathscr_b_sigma = K_invP @ np.swapaxes(lower_tri, 1, 2)
+        mathscr_b_sigma = unweighted_mathscr_b_sigma * inv_fac_rev[None, None, :]
+        mathscr_b_right = mathscr_b_sigma * G_inv_mu_inv[:, :, None]
+        mathscr_b = G @ mathscr_b_right
 
         powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
         if is_antiderivative_wrt_tau:
             p = powers + 1
             tau_poly = (tau[:, None] ** p) / p
-            return np.einsum("tqp, tp -> qt", (mathscr_b / scale_tau[:, None, None])[l, :, :], tau_poly, optimize=True)
+            return np.einsum("tqp, tp -> qt", (mathscr_b / scale_tau[:, None, None])[l, :, :], tau_poly)
         else:
             tau_poly = tau[:, None] ** powers
-            return np.einsum("tqp, tp -> qt", mathscr_b[l, :, :], tau_poly, optimize=True)
+            return np.einsum("tqp, tp -> qt", mathscr_b[l, :, :], tau_poly)
 
 
 

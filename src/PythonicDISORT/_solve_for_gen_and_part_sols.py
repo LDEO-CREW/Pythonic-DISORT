@@ -11,9 +11,7 @@ def _seminormalized_asso_leg_table(x, NFourier, NLeg):
     (Condon-Shortley phase included, matching `scipy.special.lpmv` up to the normalization)
     for all orders m < NFourier and degrees l < NLeg, built in a single pass by the standard,
     numerically stable three-term recurrences. This replaces the former per-mode
-    `scipy.special.lpmv` calls, and the seminormalization exactly absorbs the Pochhammer
-    factor that the Fourier-mode assembly would otherwise apply, since
-    poch(l + m + 1, -2m) * P_l^m(x) * P_l^m(x') = Pbar_l^m(x) * Pbar_l^m(x').
+    `scipy.special.lpmv` calls.
 
     Returns
     -------
@@ -27,7 +25,7 @@ def _seminormalized_asso_leg_table(x, NFourier, NLeg):
     # for all orders at once via a cumulative product over m
     diag_factors = np.cumprod(
         np.concatenate([[1.0], -np.sqrt((2 * ms_all[1:] - 1) / (2 * ms_all[1:]))])
-    )                                                                       # (NFourier,)
+    )                                                                                # (NFourier,)
     Pmm_all = diag_factors[:, None] * np.sqrt(1 - x**2)[None, :] ** ms_all[:, None]  # (NFourier, Nx)
     table[ms_all, ms_all, :] = Pmm_all
 
@@ -40,7 +38,7 @@ def _seminormalized_asso_leg_table(x, NFourier, NLeg):
     # March up in degree, vectorized over all orders m <= l - 2 simultaneously.
     # Seminormalized form of (l - m) P_l^m = (2l - 1) x P_{l-1}^m - (l + m - 1) P_{l-2}^m.
     for ell in range(2, NLeg):
-        ms = ms_all[: min(ell - 1, NFourier)]                               # orders with m <= l - 2
+        ms = ms_all[: min(ell - 1, NFourier)]                                        # orders with m <= l - 2
         c1 = ((2 * ell - 1) / np.sqrt((ell - ms) * (ell + ms)))[:, None]
         c2 = np.sqrt((ell - 1 - ms) * (ell - 1 + ms) / ((ell - ms) * (ell + ms)))[:, None]
         table[ms, ell, :] = c1 * x[None, :] * table[ms, ell - 1, :] - c2 * table[ms, ell - 2, :]
@@ -48,15 +46,10 @@ def _seminormalized_asso_leg_table(x, NFourier, NLeg):
 
 
 # In-process caches for the seminormalized associated Legendre tables (see the `cache_asso_leg`
-# argument of `pydisort`). The tables at the quadrature nodes are fully determined by `N` -- the
-# nodes are the deterministic Gauss-Legendre nodes -- and by the degree extent `NLeg`, so they can
-# be reused across the (potentially very many) `pydisort` calls of a batch run with a fixed
-# discretization. Since a table entry Pbar_l^m does not depend on the order extent `NFourier`, and
-# `pydisort` enforces `NFourier <= NLeg`, the caches are built at the maximal order `NFourier = NLeg`
-# and are NOT keyed on `NFourier`: a call needing fewer modes simply slices `[:NFourier]`. A single
-# cached entry thus serves every `NFourier` of a given `(N, NLeg)` (e.g. a mix of `only_flux` calls
-# and full-intensity calls). The cached arrays are returned read-only so the shared entries, which
-# the solver only ever reads, can never be mutated by a caller. `maxsize` bounds the memory
+# argument of `pydisort`). The tables at the quadrature nodes are fully determined by `N` so they can
+# be reused across the `pydisort` calls of a batch run with a fixed
+# discretization. Since `pydisort` enforces `NFourier <= NLeg`, the caches are built at the maximal 
+# order `NFourier = NLeg`. The cached arrays are returned read-only. `maxsize` bounds the memory
 # footprint; realistic batch runs use a single discretization (one live entry).
 
 @lru_cache(maxsize=32)
@@ -160,12 +153,8 @@ def _solve_for_gen_and_part_sols(
     no_shortcut_indices_0 = []
 
     if there_is_beam_source:
-        # The seminormalized table absorbs the Pochhammer factors (see `_seminormalized_asso_leg_table`).
-        # `cache_asso_leg` optionally reuses the discretization-determined table across calls; see the
-        # `cache_asso_leg` argument of `pydisort`. All branches produce the identical table.
         if cache_asso_leg == "mu0":
             # Cache the full table, including the direct-beam `-mu0` column (mu0 assumed ~constant).
-            # Built at NFourier = NLeg and sliced to the requested number of modes.
             asso_leg_table = _cached_full_asso_leg_table(N, mu0, NLeg)[:NFourier]
         elif cache_asso_leg == "no_mu0":
             # Cache only the mu0-independent part and rebuild the single `-mu0` column per call.
@@ -184,8 +173,8 @@ def _solve_for_gen_and_part_sols(
         X_arr = np.empty((NFourier * NLayers, NQuad))
         B_collect = np.zeros((NFourier * NLayers, NQuad))
     else:
-        # With no beam there is no `-mu0` column, so "no_mu0" and "mu0" both reduce to the
-        # mu0-independent quadrature-node table (built at NFourier = NLeg, then sliced)
+        # Without the direct beam there is no `-mu0` column, so "no_mu0" and "mu0" both reduce to the
+        # mu0-independent quadrature-node table.
         if cache_asso_leg is None:
             asso_leg_table = _seminormalized_asso_leg_table(mu_arr_pos, NFourier, NLeg)
         else:
@@ -258,28 +247,27 @@ def _solve_for_gen_and_part_sols(
         alpha_arr = A_arr[:, N:, N:]
         beta_arr = A_arr[:, N:, :N]
         
-        # Diagonalization of coefficient matrix (refer to section 3.4.2 of the Comprehensive Documentation)
+        # Diagonalization of coefficient matrix (refer to section 3.5 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         apb = alpha_arr + beta_arr
         amb = alpha_arr - beta_arr
-        K_squared_arr, eigenvecs_GpG_arr = np.linalg.eig(
-            np.einsum("lij, ljk -> lik", amb, apb, optimize=True)
-        )
+        K_squared_arr, eigenvecs_GmG_arr = np.linalg.eig(apb @ amb)
 
-        # In theory K^2 is real and positive, but `eig` may return complex eigenpairs
-        # (e.g. spurious imaginary parts from nearly-defective pairs) or non-positive K^2
-        # in numerically borderline problems. We warn instead of raising -- `pydisort`
-        # may be called an enormous number of times in long runs, and the real parts have
-        # been observed to still produce reasonable outputs -- and proceed with the real
-        # parts. (Python prints each distinct warning only once per process by default.)
+        # In theory K^2 is real and positive, but `eig` may return complex eigenpairs either as
+        # numerical artifacts or due to the truncated phase function genuinely having complex eigenvalues.
+        # We warn instead of raising an error as `pydisort` may be called an enormous number of times in long runs,
+        # and the real parts have been observed to sometimes still produce reasonable outputs, then proceed with the real parts.
+        # Note that Python prints each distinct warning only once per process by default.
+        # In NumPy >= 2.5 `eig` always returns complex arrays, thus we test the imaginary parts, not the dtype.
         if np.iscomplexobj(K_squared_arr):
-            warnings.warn(
-                "Some eigenvalues of the coefficient matrices are incorrectly complex and their"
-                + " imaginary parts will be discarded. The results MAY still be reasonable"
-                + " but should be checked, e.g. at higher `NQuad` (more streams)."
-            )
+            if np.any(K_squared_arr.imag != 0):
+                warnings.warn(
+                    "Some eigenvalues of the coefficient matrices are incorrectly complex and their"
+                    + " imaginary parts will be discarded. The results MAY still be reasonable"
+                    + " but should be checked."
+                )
             K_squared_arr = np.real(K_squared_arr)
-            eigenvecs_GpG_arr = np.real(eigenvecs_GpG_arr)
+            eigenvecs_GmG_arr = np.real(eigenvecs_GmG_arr)
         if np.any(K_squared_arr <= 0):
             warnings.warn(
                 "Some squared eigenvalues of the coefficient matrices are non-positive."
@@ -291,8 +279,8 @@ def _solve_for_gen_and_part_sols(
         K_arr = np.concatenate((-K_arr_pos, K_arr_pos), axis=1)
         
         # Build eigenvector matrix from four blocks
-        eigenvecs_GpG_arr /= 2
-        eigenvecs_GmG_arr = np.einsum("lij, ljk -> lik", apb, eigenvecs_GpG_arr / K_arr_pos[:, None, :], optimize=True)
+        eigenvecs_GmG_arr /= 2
+        eigenvecs_GpG_arr = amb @ (eigenvecs_GmG_arr / K_arr_pos[:, None, :])
         GpG_p_GmG_div_2 = eigenvecs_GpG_arr + eigenvecs_GmG_arr
         GpG_m_GmG_div_2 = eigenvecs_GpG_arr - eigenvecs_GmG_arr
         
@@ -311,34 +299,25 @@ def _solve_for_gen_and_part_sols(
         # --------------------------------------------------------------------------------------------------------------------------
         
         if there_is_beam_source:
-
-            # Warn on near-resonance between the direct beam and any eigenvalue: the
-            # particular-solution denominators 1/mu0 + K blow up as -1/mu0 approaches an
-            # eigenvalue, and the (finite) physical solution is then recovered only through
-            # increasingly catastrophic cancellation against the homogeneous terms.
-            # The relative threshold |1 + mu0 K| < 1e-8 flags roughly >= 8 lost digits.
-            # Only the scattering (non-shortcut) eigenvalues matter: shortcut layers have
-            # zero beam particular solution, so their K = -1/mu (quadrature) collisions
-            # with -1/mu0 are harmless. See section 3.6.1 of the Comprehensive Documentation.
-            if np.any(np.abs(1 + mu0 * K_arr) < 1e-8):
+            
+            # Warn if -1/mu0 is close to an eigenvalue (see section 3.6.1 of the Comprehensive Documentation)
+            if np.any(np.abs(K_arr + 1 / mu0) < 1e-8):
                 warnings.warn(
-                    "The direct beam nearly resonates with an eigenvalue (`-1/mu0` is within"
-                    + " 1e-8 relative distance of an eigenvalue). The intensities and fluxes"
-                    + " may be inaccurate; consider perturbing `mu0` or `NQuad`."
+                    "`-1/mu0` is close to an eigenvalue so the results may be inaccurate."
+                    + " Consider slightly perturbing `mu0`."
                 )
 
             # Solve for particular solution w.r.t. direct beam source (refer to section 3.6.1 of the Comprehensive Documentation)
             # --------------------------------------------------------------------------------------------------------------------------
             if len_no_shortcut_indices_0 > 0: # In this case we have `G_inv_collect_0`, so use it
-                B_collect[no_shortcut_indices_0, :] = np.einsum(
-                    "bij, bjk, bk -> bi",
+                B_collect[no_shortcut_indices_0, :] = (
                     # Note that the minus sign has been absorbed into `X_arr`
-                    G_collect[no_shortcut_indices_0, :, :]
-                    / (1 / mu0 + K_collect[no_shortcut_indices_0, None, :]),
-                    G_inv_collect_0[no_shortcut_indices_0, :, :],
-                    X_arr[no_shortcut_indices_0, :],
-                    optimize=True,
-                )
+                    (
+                        G_collect[no_shortcut_indices_0, :, :]
+                        / (1 / mu0 + K_collect[no_shortcut_indices_0, None, :])
+                    )
+                    @ (G_inv_collect_0[no_shortcut_indices_0, :, :] @ X_arr[no_shortcut_indices_0, :, None])
+                ).squeeze(-1)
                 no_shortcut_indices = no_shortcut_indices[len_no_shortcut_indices_0:]
             
             if len(no_shortcut_indices) > 0:

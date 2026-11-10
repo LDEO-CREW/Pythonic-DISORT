@@ -52,7 +52,7 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 (no corresponding Jupyter Notebook)
 * Test Problem 11: Single-Layer vs. Multiple Layers
 * Test Problem I: Antiderivative / integration functionality
-* Test Problem Interp: Interpolation + NT Correction functionality
+* Test Problem NT: NT Correction + Interpolation functionality
 
 # Installation
 
@@ -78,7 +78,14 @@ is required to properly run the last section (section 6).
 ## Compatibility
 
 The PythonicDISORT package should be system agnostic given its minimal dependencies and pure Python code.
-Everything in the repository was built and tested on Windows 11.
+Everything in the repository was built and tested on Windows 11. It is written and tuned for double-precision.
+
+**Known issue:** if SciPy uses Intel MKL 2024.2.x (check with `conda list mkl`), Python may crash
+when `NQuad >= 44` and `NLayers >= use_banded_solver_NLayers` (default 10).
+This is a bug in MKL's banded solver `dgbsv`, which `scipy.linalg.solve_banded` calls, and we observed it on Windows 11 with an AMD CPU.
+To avoid it, either set the environment variable `MKL_CBWR=COMPATIBLE` before starting Python
+(for a conda environment: `conda env config vars set MKL_CBWR=COMPATIBLE`, then reactivate),
+or install an unaffected MKL version (2024.1.0 and 2025.3.0 worked in our tests) or OpenBLAS.
 
 # Acknowledgements
 

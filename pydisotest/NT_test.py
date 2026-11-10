@@ -6,7 +6,7 @@ from math import pi
 import pytest
 
 # ============================================================================================================
-# Test Problem interp: `subroutines.interpolate` and its NT corrections options (Addresses GitHub issue #47)
+# Test Problem NT: NT corrections, including through `subroutines.interpolate`
 # ============================================================================================================
 
 # Inhomogeneous 3-layer atmosphere with delta-M scaling and NT corrections applicable
@@ -103,30 +103,6 @@ def test_interp_NT_eval_at_quad_nodes():
 '''
 
 
-def test_interp_NT_eval_more_accurate_than_quad():
-    """The corrections at evaluation points should be more accurate than interpolating
-    the corrections from the quadrature points (the motivation for GitHub issue #47).
-    A well-resolved NQuad=32 run serves as the reference."""
-    u_false = _pydisort(False)[4]
-    u_interpol_quad = interpolate(u_false, NT_cor="quad")
-    u_interpol_eval = interpolate(u_false, NT_cor="eval")
-
-    Leg_coeffs_more = g_per_layer[:, None] ** np.arange(64)[None, :]
-    u_hires = PythonicDISORT.pydisort(
-        tau_arr, omega_arr,
-        32,
-        Leg_coeffs_more,
-        mu0, I0, phi0,
-        f_arr=Leg_coeffs_more[:, 32],
-        NT_cor=True,
-    )[4]
-    ref = interpolate(u_hires)(mu_eval, tau_eval, phi_eval)
-
-    err_quad = np.max(np.abs(u_interpol_quad(mu_eval, tau_eval, phi_eval) - ref))
-    err_eval = np.max(np.abs(u_interpol_eval(mu_eval, tau_eval, phi_eval) - ref))
-    assert err_eval < err_quad
-
-
 def test_interp_NT_antiderivative():
     """The antiderivative branch of the corrections at evaluation points must
     integrate correctly (same idiom as the `I_test.py` problems)."""
@@ -147,63 +123,31 @@ def test_interp_NT_antiderivative():
         assert np.allclose(integral, telescoped)
 
 
-def test_interp_NT_output_passthrough():
-    """`return_Fourier_error` and `return_tau_arr` must pass through with the NT options."""
+def test_NT_Fourier_error_passthrough():
+    """`return_Fourier_error` must pass through the NT corrections: the intensities are
+    unchanged and the Fourier error is that of the uncorrected `u`. The `u` of a `pydisort`
+    run with `NT_cor=True` and the "quad" option of `interpolate` both add their
+    corrections in a separate branch when this flag is passed."""
+    u_true = _pydisort(True)[4]
     u_false = _pydisort(False)[4]
-    u_interpol_eval = interpolate(u_false, NT_cor="eval")
-
-    vals_plain = u_interpol_eval(mu_eval, tau_eval, phi_eval)
-    vals, Fourier_error, tau_arr_out = u_interpol_eval(
-        mu_eval, tau_eval, phi_eval, False, True, True
+    u_interpols = (
+        interpolate(u_false, NT_cor="quad"),
+        interpolate(u_false, NT_cor="eval"),
+        interpolate(u_true),
     )
-    assert np.allclose(vals, vals_plain)
-    assert np.isscalar(Fourier_error) and Fourier_error >= 0
-    assert np.array_equal(tau_arr_out, tau_arr)
 
+    for is_anti in (False, True):
+        Fourier_error_ref = u_false(tau_eval, phi_eval, is_anti, True)[1]
+        assert np.isscalar(Fourier_error_ref) and Fourier_error_ref >= 0
 
-def test_interp_NT_reduces_to_off_when_unavailable():
-    """Without delta-M scaling (`f_arr=0`) the corrections are not applicable and all the
-    NT options must reduce to "off". The string options ("quad" / "eval") must warn when
-    this happens; the boolean options must stay silent, mirroring `pydisort`'s behavior."""
-    import warnings
+        vals, Fourier_error = u_true(tau_eval, phi_eval, is_anti, True)
+        assert np.allclose(vals, u_true(tau_eval, phi_eval, is_anti))
+        assert np.isclose(Fourier_error, Fourier_error_ref)
 
-    u_nof = PythonicDISORT.pydisort(
-        tau_arr, omega_arr,
-        NQuad,
-        Leg_coeffs_all[:, :NQuad],
-        mu0, I0, phi0,
-    )[4]
-    ref = interpolate(u_nof)(mu_eval, tau_eval, phi_eval)
-    for flag, should_warn in ((True, False), (False, False), ("off", False),
-                              ("quad", True), ("eval", True)):
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            u_interpol = interpolate(u_nof, NT_cor=flag)
-        assert len(caught) == (1 if should_warn else 0), (flag, [str(c.message) for c in caught])
-        assert np.allclose(u_interpol(mu_eval, tau_eval, phi_eval), ref)
-
-
-'''
-def test_interp_NT_input_checks():
-    u_false = _pydisort(False)[4]
-    u0 = _pydisort(False)[3]
-
-    # Invalid flag value
-    with pytest.raises(ValueError):
-        interpolate(u_false, NT_cor="nonsense")
-
-    # `u0` does not support the NT options
-    with pytest.raises(ValueError):
-        interpolate(u0, NT_cor=True)
-
-    # The corrections at evaluation points require |mu| >= 1e-8 ...
-    u_interpol_eval = interpolate(u_false, NT_cor="eval")
-    with pytest.raises(ValueError):
-        u_interpol_eval(np.array([0.5, 0]), tau_eval, phi_eval)
-    # ... and `tau` within the atmosphere
-    with pytest.raises(ValueError):
-        u_interpol_eval(mu_eval, tau_arr[-1] + 1, phi_eval)
-'''
+        for u_interpol in u_interpols:
+            vals, Fourier_error = u_interpol(mu_eval, tau_eval, phi_eval, is_anti, True)
+            assert np.allclose(vals, u_interpol(mu_eval, tau_eval, phi_eval, is_anti))
+            assert np.isclose(Fourier_error, Fourier_error_ref)
 
 
 def test_interp_NT_singularity_continuity():

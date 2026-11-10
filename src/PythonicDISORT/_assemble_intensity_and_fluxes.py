@@ -167,11 +167,8 @@ def _assemble_intensity_and_fluxes(
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Value-keyed cache for the most recent `tau` evaluation grid, shared across the output
-    # functions `u`, `u0`, `flux_up` and `flux_down` (evaluating several outputs on the same
-    # grid, e.g. `flux_up(tau); flux_down(tau)`, then recomputes nothing).
-    # Stores a copy of `tau` (compared by value like the cache in `subroutines.interpolate`)
-    # with the derived layer indices and delta-scaled `tau`, and, lazily, the exponentials of
-    # the homogeneous-solution exponents for the 0th mode ("exp0") and for all modes ("expm").
+    # functions `u`, `u0`, `flux_up` and `flux_down` so that evaluating several outputs on the same
+    # grid, e.g. `flux_up(tau); flux_down(tau)`, recomputes nothing.
     # The cache is bypassed when `autograd_compatible` as it would break gradient tracing.
     # --------------------------------------------------------------------------------------------------------------------------
     is_delta_scaled = np.any(scale_tau != 1)
@@ -228,7 +225,7 @@ def _assemble_intensity_and_fluxes(
  
         # Construct the intensity function (refer to section 3.7 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
-        def u(tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False, return_tau_arr=False):
+        def u(tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False):
             """
             Intensity function with arguments `(tau, phi)` of types `(array or float, array or float)`.
             Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
@@ -258,7 +255,6 @@ def _assemble_intensity_and_fluxes(
                         "mtij, mtj -> mit",
                         GC_collect[:, l, :, :],
                         exp_exponent / (scale_tau[None, :, None] * K_collect)[:, l, :],
-                        optimize=True,
                     )
                     + direct_beam_contribution
                 )
@@ -270,9 +266,7 @@ def _assemble_intensity_and_fluxes(
                     )
 
                 um = (
-                    np.einsum(
-                        "mtij, mtj -> mit", GC_collect[:, l, :, :], exp_exponent, optimize=True
-                    )
+                    np.einsum("mtij, mtj -> mit", GC_collect[:, l, :, :], exp_exponent)
                     + direct_beam_contribution
                 )
             
@@ -298,18 +292,12 @@ def _assemble_intensity_and_fluxes(
                 else:
                     um[0, :, :] += _mathscr_v_contribution
                 
-            # Contract over the Fourier modes directly: materializing the
-            # (NFourier, NQuad, Ntau, Nphi) product only to sum over its first axis
-            # is substantially slower and heavier for large NFourier * Nphi
             u = np.einsum(
                 "mit, mp -> itp",
                 um,
                 np.cos(np.arange(NFourier)[:, None] * (phi0 - phi)[None, :]),
                 optimize=True,
             )
-            
-            outputs = (rescale_factor * np.squeeze(u),)
-            output_is_tuple = False
 
             if return_Fourier_error:
                 # The last Fourier mode's exponentials are the last slice of the cached tensor
@@ -330,7 +318,6 @@ def _assemble_intensity_and_fluxes(
                             "tij, tj -> it",
                             GC_collect[-1, l, :, :],
                             exp_exponent_last / (scale_tau[:, None] * K_collect[-1, :, :])[l, :],
-                            optimize=True,
                         )
                         + direct_beam_contribution
                     )
@@ -342,9 +329,7 @@ def _assemble_intensity_and_fluxes(
                         )
 
                     ulast = (
-                        np.einsum(
-                            "tij, tj -> it", GC_collect[-1, l, :, :], exp_exponent_last, optimize=True
-                        )
+                        np.einsum("tij, tj -> it", GC_collect[-1, l, :, :], exp_exponent_last)
                         + direct_beam_contribution
                     )
         
@@ -359,20 +344,15 @@ def _assemble_intensity_and_fluxes(
                         where=u_abs > 1e-8,
                     )
                 )
-                
-                outputs += (Fourier_error,)
-                output_is_tuple = True
-                
-            if return_tau_arr:
-                outputs += (tau_arr,)
-                output_is_tuple = True
-                
-            return outputs if output_is_tuple else outputs[0]
+
+                return rescale_factor * np.squeeze(u), Fourier_error
+            else:
+                return rescale_factor * np.squeeze(u)
         # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct u0
     # --------------------------------------------------------------------------------------------------------------------------
-    def u0(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False, _return_act_dscale_for_reclass=False):
+    def u0(tau, is_antiderivative_wrt_tau=False):
         """        
         Zeroth Fourier mode of the intensity with argument `tau` (type: array or float).
         Returns an ndarray with axes corresponding to variation with `mu` and `tau` respectively.
@@ -390,19 +370,6 @@ def _assemble_intensity_and_fluxes(
         l, scaled_tau = _process_tau(tau)
         exp_exponent = _exp_exponent(l, scaled_tau, all_modes=False)
 
-        # The following complements the function `subroutines.generate_diff_act_flux_funcs`
-        # in performing the reclassification of delta-scaled actinic flux
-        if _return_act_dscale_for_reclass:
-            if not is_delta_scaled:
-                act_dscale_reclassification = 0
-            elif is_antiderivative_wrt_tau:
-                act_dscale_reclassification = (
-                    I0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0)
-                    - I0 * np.exp(-tau / mu0) * -mu0
-                )
-            else:
-                act_dscale_reclassification = I0 * np.exp(-scaled_tau / mu0) - I0 * np.exp(-tau / mu0)
-
         direct_beam_contribution = 0
         if is_antiderivative_wrt_tau:
             if there_is_beam_source:
@@ -415,7 +382,6 @@ def _assemble_intensity_and_fluxes(
                     "tij, tj -> it",
                     GC_collect_0[l, :, :],
                     exp_exponent / (scale_tau[:, None] * K_collect_0)[l, :],
-                    optimize=True,
                 )
                 + direct_beam_contribution
             )
@@ -426,9 +392,7 @@ def _assemble_intensity_and_fluxes(
                 )
 
             u0 = (
-                np.einsum(
-                    "tij, tj -> it", GC_collect_0[l, :, :], exp_exponent, optimize=True
-                )
+                np.einsum("tij, tj -> it", GC_collect_0[l, :, :], exp_exponent)
                 + direct_beam_contribution
             )
 
@@ -447,17 +411,26 @@ def _assemble_intensity_and_fluxes(
                 autograd_compatible,
             )
             u0 = u0 + _mathscr_v_contribution
-            
-        outputs = (rescale_factor * np.squeeze(u0),)
-        outputs_len = 1
-        if return_tau_arr:
-            outputs += (tau_arr,)
-            outputs_len += 1
-        if _return_act_dscale_for_reclass:
-            outputs += (act_dscale_reclassification,)
-            outputs_len += 1
-        return outputs[0] if outputs_len == 1 else outputs
-        
+
+        return rescale_factor * np.squeeze(u0)
+
+
+    def _act_dscale_reclassification(tau, is_antiderivative_wrt_tau=False):
+        """Reclassification of delta-scaled actinic flux at `tau`; it complements `u0` in
+        `subroutines.generate_diff_act_flux_funcs`. Attached to `u0` as an attribute of the same name.
+        """
+        if not is_delta_scaled:
+            return 0
+        tau = np.atleast_1d(tau)
+        l, scaled_tau = _process_tau(tau)
+        if is_antiderivative_wrt_tau:
+            act_dscale_reclassification = (
+                I0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0)
+                - I0 * np.exp(-tau / mu0) * -mu0
+            )
+        else:
+            act_dscale_reclassification = I0 * np.exp(-scaled_tau / mu0) - I0 * np.exp(-tau / mu0)
+        return rescale_factor * act_dscale_reclassification
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Construct the flux functions (refer to section 3.8 of the Comprehensive Documentation)
@@ -469,7 +442,7 @@ def _assemble_intensity_and_fluxes(
         B_neg = B_collect_0[:, N:].T
 
 
-    def flux_up(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False):
+    def flux_up(tau, is_antiderivative_wrt_tau=False):
         """    
         (Energetic) Flux function with argument `tau` (type: array or float) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (same type and size as `tau`).
@@ -527,14 +500,11 @@ def _assemble_intensity_and_fluxes(
             )
             
         flux = 2 * pi * (mu_arr_pos * W) @ u0_pos
-        
-        if return_tau_arr:
-            return rescale_factor * np.squeeze(flux)[()], tau_arr
-        else:
-            return rescale_factor * np.squeeze(flux)[()]
+
+        return rescale_factor * np.squeeze(flux)[()]
 
 
-    def flux_down(tau, is_antiderivative_wrt_tau=False, return_tau_arr=False):
+    def flux_down(tau, is_antiderivative_wrt_tau=False):
         """
         (Energetic) Flux function with argument `tau` (type: array or float) for negative (downward) `mu` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
@@ -593,21 +563,23 @@ def _assemble_intensity_and_fluxes(
             )
             
         diffuse_flux = 2 * pi * (mu_arr_pos * W) @ u0_neg + direct_beam_scaled - direct_beam
-        
-        if return_tau_arr:
-            return (
-                rescale_factor * np.squeeze(diffuse_flux)[()],
-                rescale_factor * np.squeeze(direct_beam)[()],
-                tau_arr
-            )
-        else:
-            return (
-                rescale_factor * np.squeeze(diffuse_flux)[()],
-                rescale_factor * np.squeeze(direct_beam)[()],
-            )
+
+        return (
+            rescale_factor * np.squeeze(diffuse_flux)[()],
+            rescale_factor * np.squeeze(direct_beam)[()],
+        )
         # --------------------------------------------------------------------------------------------------------------------------
 
+    # Attach the upper hemisphere quadrature nodes to the intensity functions so that
+    # `subroutines.interpolate` need neither evaluate them to find `NQuad` nor recompute the nodes
+    # (`pydisort` does the same for its NT-corrected `u`)
+    u0._mu_arr_pos = mu_arr_pos
+    # Attach other useful attributes
+    u0._act_dscale_reclassification = _act_dscale_reclassification
+    flux_up.tau_arr = flux_down.tau_arr = u0.tau_arr = tau_arr
     if only_flux:
         return flux_up, flux_down, u0#, GC_collect_0, K_collect_0#, B_collect_0
     else:
+        u._mu_arr_pos = mu_arr_pos
+        u.tau_arr = tau_arr
         return flux_up, flux_down, u0, u
