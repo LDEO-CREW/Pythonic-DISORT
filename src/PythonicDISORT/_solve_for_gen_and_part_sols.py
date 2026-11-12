@@ -37,11 +37,17 @@ def _seminormalized_asso_leg_table(x, NFourier, NLeg):
 
     # March up in degree, vectorized over all orders m <= l - 2 simultaneously.
     # Seminormalized form of (l - m) P_l^m = (2l - 1) x P_{l-1}^m - (l + m - 1) P_{l-2}^m.
+    # REVIEW (speed): the coefficients are now precomputed for all degrees and the orders are sliced rather than
+    # fancy-indexed, which makes this function 1.5-2 times faster with bit-identical results
+    ells = np.arange(2, NLeg)[:, None]                                               # (NLeg - 2, 1)
+    with np.errstate(invalid="ignore", divide="ignore"):                             # Unused entries m > l - 2
+        c1_all = (2 * ells - 1) / np.sqrt((ells - ms_all) * (ells + ms_all))         # (NLeg - 2, NFourier)
+        c2_all = np.sqrt((ells - 1 - ms_all) * (ells - 1 + ms_all) / ((ells - ms_all) * (ells + ms_all)))
     for ell in range(2, NLeg):
-        ms = ms_all[: min(ell - 1, NFourier)]                                        # orders with m <= l - 2
-        c1 = ((2 * ell - 1) / np.sqrt((ell - ms) * (ell + ms)))[:, None]
-        c2 = np.sqrt((ell - 1 - ms) * (ell - 1 + ms) / ((ell - ms) * (ell + ms)))[:, None]
-        table[ms, ell, :] = c1 * x[None, :] * table[ms, ell - 1, :] - c2 * table[ms, ell - 2, :]
+        k = min(ell - 1, NFourier)                                                   # orders m <= l - 2
+        c1 = c1_all[ell - 2, :k, None]
+        c2 = c2_all[ell - 2, :k, None]
+        table[:k, ell, :] = c1 * x[None, :] * table[:k, ell - 1, :] - c2 * table[:k, ell - 2, :]
     return table
 
 
@@ -325,9 +331,27 @@ def _solve_for_gen_and_part_sols(
                 A_arr[:, :N, N:] = -A_arr[:, N:, :N]
                 A_arr[:, :N, :N] = -A_arr[:, N:, N:]
                 A_arr.reshape(-1, NQuad * NQuad)[:, ::NQuad + 1] += 1 / mu0
+                X_arr = X_arr[no_shortcut_indices, :, None]
+                # REVIEW (bug 3): if -1/mu0 equals an eigenvalue to rounding, e.g. when `mu0` is a quadrature node which a
+                # high Fourier mode barely scatters into or out of, the matrix is singular to working precision and
+                # `solve` returns a huge, inaccurate `B`. The (mode, layer) pairs which trip the test of the warning above
+                # are therefore solved by a pseudoinverse instead, which drops the directions that are singular to rounding.
+                # Each row is first scaled to unit size so that the cutoff of the pseudoinverse is relative to that row.
+                # Before this fix every pair was solved by `solve`.
+                resonant = np.any(np.abs(K_arr[len_no_shortcut_indices_0:] + 1 / mu0) < 1e-8, axis=1)
                 # Note that the minus sign has been absorbed into `X_arr`
-                B_collect[no_shortcut_indices, :] = np.linalg.solve(A_arr, X_arr[no_shortcut_indices, :, None]).squeeze(-1)
-            
+                if np.any(resonant):
+                    B_arr = np.empty((len(no_shortcut_indices), NQuad))
+                    row_scale = (1 / (np.concatenate([M_inv, M_inv]) + 1 / mu0))[:, None]
+                    B_arr[resonant] = (
+                        np.linalg.pinv(row_scale * A_arr[resonant], 1e-13) @ (row_scale * X_arr[resonant])
+                    ).squeeze(-1)
+                    if not np.all(resonant):
+                        B_arr[~resonant] = np.linalg.solve(A_arr[~resonant], X_arr[~resonant]).squeeze(-1)
+                    B_collect[no_shortcut_indices, :] = B_arr
+                else:
+                    B_collect[no_shortcut_indices, :] = np.linalg.solve(A_arr, X_arr).squeeze(-1)
+
             # --------------------------------------------------------------------------------------------------------------------------
 
     outputs = (
@@ -338,4 +362,6 @@ def _solve_for_gen_and_part_sols(
         outputs += (B_collect.reshape((NFourier, NLayers, NQuad)),)
     if there_is_iso_source:
         outputs += (G_inv_collect_0,)
+    # REVIEW (IotS): the table is now also returned, for reuse by the integration of the source function
+    outputs += (asso_leg_table,)
     return outputs

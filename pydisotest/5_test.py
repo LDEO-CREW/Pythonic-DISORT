@@ -90,8 +90,10 @@ def test_5a():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 10 degrees around the direct beam
-    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    # We may not want to compare intensities around the direct beam
+    # REVIEW (bug 1): this was 10 degrees, which hid the wrong sign of the IMS correction. With 0, test 5b
+    # compares the nodes next to the beam with Stamnes' DISORT and so guards the sign.
+    deg_around_beam_to_not_compare = 0
     mu_to_compare = (
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
         > deg_around_beam_to_not_compare
@@ -167,8 +169,10 @@ def test_5b():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 10 degrees around the direct beam
-    deg_around_beam_to_not_compare = 10  # This parameter changes the size of the region
+    # We may not want to compare intensities around the direct beam
+    # REVIEW (bug 1): this was 10 degrees, which hid the wrong sign of the IMS correction. With 0, test 5b
+    # compares the nodes next to the beam with Stamnes' DISORT and so guards the sign.
+    deg_around_beam_to_not_compare = 0
     mu_to_compare = (
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
         > deg_around_beam_to_not_compare

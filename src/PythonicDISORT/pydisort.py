@@ -75,10 +75,9 @@ def pydisort(
         or ``Leg_coeffs_all[:, NLeg]`` for a multi-layer atmosphere.
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
-        The corrections are applied at the quadrature points; see the ``NT_cor``
-        argument of ``subroutines.interpolate`` for overriding this option after
-        the fact, in particular to instead apply the corrections directly at
-        interpolated ``mu`` evaluation points as Stamnes' DISORT does.
+        The corrections are applied at the quadrature points, and ``subroutines.interpolate``
+        applies them directly at its ``mu`` evaluation points, as Stamnes' DISORT does;
+        see its ``NT_cor`` argument for overriding this option after the fact.
     BDRF_Fourier_modes : optional, list of functions
         BDRF Fourier modes, each a float, or a function with arguments ``mu, -mu_p`` of type array
         which output has the same dimensions as the outer product of the two arrays.
@@ -197,11 +196,13 @@ def pydisort(
     
     # Turn floats into arrays
     # --------------------------------------------------------------------------------------------------------------------------
-    tau_arr = np.atleast_1d(tau_arr)
-    omega_arr = np.atleast_1d(omega_arr)
-    Leg_coeffs_all = np.atleast_2d(Leg_coeffs_all)
+    # REVIEW (bug 5): `tau_arr`, `omega_arr`, `Leg_coeffs_all` and `f_arr` are now copied because the output functions
+    # keep using them, so that changing the caller's arrays in place afterwards no longer corrupts the outputs
+    tau_arr = np.atleast_1d(tau_arr).copy()
+    omega_arr = np.atleast_1d(omega_arr).copy()
+    Leg_coeffs_all = np.atleast_2d(Leg_coeffs_all).copy()
     s_poly_coeffs = np.atleast_2d(s_poly_coeffs)
-    f_arr = np.atleast_1d(f_arr)
+    f_arr = np.atleast_1d(f_arr).copy()
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Setup
@@ -211,7 +212,8 @@ def pydisort(
     if only_flux:
         NFourier = 1 # We only need to solve for the 0th Fourier mode to compute the flux
     elif NFourier is None:
-        NFourier = NQuad
+        # REVIEW (bug 8): the default was `NQuad`, which failed the `NFourier <= NLeg` check whenever `NLeg < NQuad`
+        NFourier = NLeg
     if np.all(b_pos == 0):
         b_pos = 0
     if np.all(b_neg == 0):
@@ -263,9 +265,7 @@ def pydisort(
     # Value checks on the phase function Legendre coefficients
     if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
         warnings.warn("The zeroth index phase function Legendre coefficient must be, and has been corrected to, 1.")
-        # Copy before correcting: `np.atleast_2d` returns a view of 2D inputs,
-        # so writing in place would mutate the caller's array
-        Leg_coeffs_all = Leg_coeffs_all.copy()
+        # REVIEW (bug 5): `Leg_coeffs_all` is already a copy (see above), so the copy that was made here is gone
         Leg_coeffs_all[:, 0] = 1
     if not (np.all(-1 < Leg_coeffs_all[:, 1:]) and np.all(Leg_coeffs_all[:, 1:] < 1)):
         raise ValueError("The phase function Legendre coefficients must all be between -1 and 1 exclusive (only the zeroth coefficient can equal 1).")
@@ -279,7 +279,8 @@ def pydisort(
     if not NFourier <= NLeg:
         raise ValueError("The number of Fourier modes to use in the solution must be less than or equal to the number of phase function Legendre coefficients used.")
     if NFourier > 64 and not only_flux:
-        warnings.warn("`NFourier` is large and may cause errors, consider decreasing `NFourier` to 64 and it probably should be even less. By default `NFourier` equals `NQuad`.")
+        # REVIEW (bug 8): the message said that `NFourier` equals `NQuad` by default
+        warnings.warn("`NFourier` is large and may cause errors, consider decreasing `NFourier` to 64 and it probably should be even less. By default `NFourier` equals `NLeg`.")
     # Not strictly necessary but there will be tremendous inaccuracies if this is violated
     if not NLeg <= NQuad:
         raise ValueError("There should be more streams than the number of phase function Legendre coefficients used.")
@@ -292,21 +293,23 @@ def pydisort(
         if not (0 <= phi0 and phi0 < 2 * pi):
             raise ValueError("Provide the principal azimuthal angle for the incident beam (must be between 0 and 2pi, excluding 2pi).")
     # Ensure that the BC inputs are of the correct shape
+    # REVIEW (bug 2): the vector tests now require 1D inputs; `len(b) == N` alone also matched `N x NFourier` matrices
     if len(np.atleast_1d(b_pos)) == 1:
         b_pos_is_scalar = True
-    elif len(b_pos) == N:
+    elif np.ndim(b_pos) == 1 and len(b_pos) == N:
         b_pos_is_vector = True
     elif not np.shape(b_pos) == (N, NFourier):
         raise ValueError("The shape of the bottom boundary condition is incorrect.")
     if len(np.atleast_1d(b_neg)) == 1:
         b_neg_is_scalar = True
-    elif len(b_neg) == N:
+    elif np.ndim(b_neg) == 1 and len(b_neg) == N:
         b_neg_is_vector = True
     elif not np.shape(b_neg) == (N, NFourier):
         raise ValueError("The shape of the top boundary condition is incorrect.")
-    # The fractional scattering must be between 0 and 1
-    if not (np.all(0 <= f_arr) and np.all(f_arr <= 1)):
-        raise ValueError("The fractional scattering must be between 0 and 1.")
+    # The fractional scattering must be between 0 and 1, excluding 1
+    # REVIEW (bug 11): `f_arr = 1` used to pass this check and then divide by `1 - f_arr = 0`
+    if not (np.all(0 <= f_arr) and np.all(f_arr < 1)):
+        raise ValueError("The fractional scattering must be between 0 and 1, excluding 1.")
     # The minimum threshold is 3 else the matrix will not be banded
     if not use_banded_solver_NLayers >= 3:
         raise ValueError("The minimum threshold `use_banded_solver_NLayers` is 3, else the matrix will not be banded.")
@@ -378,10 +381,15 @@ def pydisort(
                 scaled_s_poly_coeffs[-1, :] @ (scaled_tau_arr_with_0[-1] ** np.arange(Nscoeffs))
             )
         )
-        I0 = (I0 / rescale_factor).copy()
-        b_pos = (b_pos / rescale_factor).copy()
-        b_neg = (b_neg / rescale_factor).copy()
-        scaled_s_poly_coeffs = (scaled_s_poly_coeffs / rescale_factor).copy()
+        # REVIEW (bug 4): the factor is 0 if the isotropic source vanishes at both boundaries and there is
+        # no other source, which made every output NaN; there is now no rescaling in that case
+        if rescale_factor > 0:
+            I0 = (I0 / rescale_factor).copy()
+            b_pos = (b_pos / rescale_factor).copy()
+            b_neg = (b_neg / rescale_factor).copy()
+            scaled_s_poly_coeffs = (scaled_s_poly_coeffs / rescale_factor).copy()
+        else:
+            rescale_factor = 1
     else:
         rescale_factor = np.max((I0, np.max(b_pos), np.max(b_neg)))
         if rescale_factor != 0:

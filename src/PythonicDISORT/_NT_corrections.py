@@ -208,12 +208,13 @@ def _NT_corrections(
                     statics["tau_arr_with_0"],
                     autograd_compatible,
                 )
+                # REVIEW (bug 1): the IMS correction is now subtracted, as in NT1988 and Stamnes' DISORT; it used to be added
                 if autograd_compatible:
-                    NT_corrections = NT_corrections + np.concatenate(
+                    NT_corrections = NT_corrections - np.concatenate(
                         [np.zeros((Nmu_pos, len(tau), len(phi))), IMS_corrections], axis=0
                     )
                 else:
-                    NT_corrections[Nmu_pos:, :, :] += IMS_corrections
+                    NT_corrections[Nmu_pos:, :, :] -= IMS_corrections
 
             return NT_corrections
 
@@ -279,7 +280,8 @@ def _NT_corrections(
 
         # `u_corrected` wraps `u_star`, so it needs its own copies of the attributes
         # that `_assemble_intensity_and_fluxes` attaches to `u_star`
-        u_corrected._mu_arr_pos = mu_arr_pos
+        # REVIEW (IotS): `_IotS` replaces `_mu_arr_pos`; it is always the uncorrected intensity (see `subroutines.interpolate`)
+        u_corrected._IotS = u_star._IotS
         u_corrected.tau_arr = tau_arr
 
         u_out = u_corrected
@@ -336,7 +338,9 @@ def _TMS_mu_statics(M_inv_h, positive_hemisphere, scaled_thickness_arr, mu0, exp
         y = M_inv_h - 1 / mu0                                                       # (H,)
         near_singularity = np.abs(w) < 1.0
         y_safe = np.where(y == 0.0, 1.0, y)[:, None]
-        w_safe = np.where(w == 0.0, 1.0, w)
+        # REVIEW (bug 12): phi1(-w) is only used near the singularity, so it is now evaluated at a dummy argument
+        # elsewhere; `expm1` used to overflow there (spurious warnings for small `mu0` and thick layers)
+        w_safe = np.where(near_singularity & (w != 0.0), w, 1.0)
         phi1_neg_w = np.where(w == 0.0, 1.0, -np.expm1(-w_safe) / w_safe)           # phi1(-w)
         em1 = np.expm1(-np.abs(w))                                                  # (H, NLayers)
         exp_x1 = exp_scaled_tau_arr_with_0[1:][None, :]                             # (1, NLayers)
@@ -428,7 +432,8 @@ def _TMS_correction(
     w = Delta[None, :] * y_neg[:, None]                                 # (Nneg, Ntau)
     near_singularity = np.abs(w) < 1.0
     y_safe = np.where(y_neg == 0.0, 1.0, y_neg)[:, None]
-    w_safe = np.where(w == 0.0, 1.0, w)
+    # REVIEW (bug 12): as in `_TMS_mu_statics`, phi1(-w) is evaluated at a dummy argument where it is unused
+    w_safe = np.where(near_singularity & (w != 0.0), w, 1.0)
     phi1_neg_w = np.where(w == 0.0, 1.0, -np.expm1(-w_safe) / w_safe)   # phi1(-w)
     E1 = exp_neg_scaled_tau_div_mu0[None, :]
     E2 = np.exp(

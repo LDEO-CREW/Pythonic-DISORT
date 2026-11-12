@@ -1,6 +1,7 @@
 from PythonicDISORT.subroutines import _mathscr_v
 from PythonicDISORT._solve_for_gen_and_part_sols import _solve_for_gen_and_part_sols
 from PythonicDISORT._solve_for_coeffs import _solve_for_coeffs
+from PythonicDISORT._IotS import _build_IotS
 
 import numpy as np
 from math import pi
@@ -121,6 +122,9 @@ def _assemble_intensity_and_fluxes(
         there_is_iso_source,
         cache_asso_leg,
     )
+    # REVIEW (IotS): the last output is the associated Legendre table, which `_build_IotS` reuses
+    asso_leg_table = outputs[-1]
+    outputs = outputs[:-1]
     if there_is_beam_source and there_is_iso_source:
         G_collect, K_collect, B_collect, G_inv_collect_0 = outputs
         B_collect_0 = B_collect[0, :, :]
@@ -419,7 +423,8 @@ def _assemble_intensity_and_fluxes(
         """Reclassification of delta-scaled actinic flux at `tau`; it complements `u0` in
         `subroutines.generate_diff_act_flux_funcs`. Attached to `u0` as an attribute of the same name.
         """
-        if not is_delta_scaled:
+        # REVIEW (bug 10): without a beam there is nothing to reclassify; `mu0 = 0` used to give NaN at `tau = 0`
+        if not (is_delta_scaled and there_is_beam_source):
             return 0
         tau = np.atleast_1d(tau)
         l, scaled_tau = _process_tau(tau)
@@ -537,7 +542,8 @@ def _assemble_intensity_and_fluxes(
             _mathscr_v_contribution = 0
             
         direct_beam_contribution = 0
-        direct_beam = 0
+        # REVIEW (bug 9): without a beam the direct flux was returned as the scalar 0 whatever the size of `tau`
+        direct_beam = np.zeros(len(tau))
         direct_beam_scaled = 0
         if is_antiderivative_wrt_tau:
             if there_is_beam_source:
@@ -570,16 +576,29 @@ def _assemble_intensity_and_fluxes(
         )
         # --------------------------------------------------------------------------------------------------------------------------
 
-    # Attach the upper hemisphere quadrature nodes to the intensity functions so that
-    # `subroutines.interpolate` need neither evaluate them to find `NQuad` nor recompute the nodes
-    # (`pydisort` does the same for its NT-corrected `u`)
-    u0._mu_arr_pos = mu_arr_pos
+    # REVIEW (IotS): `subroutines.interpolate` now uses the intensity functions below, attached as `_IotS`, for the
+    # outputs of `pydisort`. The `_mu_arr_pos` attributes, which only the polynomial interpolation used, are removed.
+    # Intensities at arbitrary polar angles by the integration of the source function (IotS), for
+    # `subroutines.interpolate` (refer to section 3.7); nothing is computed unless they are used
+    IotS_u, IotS_u0 = _build_IotS(
+        asso_leg_table,
+        G_collect_0, K_collect, B_collect, GC_collect, G_inv_mu_inv,
+        tau_arr, scaled_tau_arr_with_0, scale_tau,
+        mu_arr_pos, W, N, NQuad, NLeg, NFourier, NLayers, NBDRF,
+        scaled_omega_arr, weighted_scaled_Leg_coeffs, BDRF_Fourier_modes,
+        mu0, I0_div_4pi, phi0, rescale_factor,
+        there_is_beam_source,
+        b_pos, b_neg, b_pos_is_scalar, b_neg_is_scalar,
+        Nscoeffs, scaled_s_poly_coeffs, there_is_iso_source,
+    )
+    u0._IotS = IotS_u0
+
     # Attach other useful attributes
     u0._act_dscale_reclassification = _act_dscale_reclassification
     flux_up.tau_arr = flux_down.tau_arr = u0.tau_arr = tau_arr
     if only_flux:
         return flux_up, flux_down, u0#, GC_collect_0, K_collect_0#, B_collect_0
     else:
-        u._mu_arr_pos = mu_arr_pos
+        u._IotS = IotS_u
         u.tau_arr = tau_arr
         return flux_up, flux_down, u0, u
