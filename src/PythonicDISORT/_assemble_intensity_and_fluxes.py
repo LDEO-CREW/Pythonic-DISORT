@@ -31,10 +31,12 @@ def _assemble_intensity_and_fluxes(
     use_banded_solver_NLayers,          # Number of layers above or equal which to use `scipy.linalg.solve_banded`
     autograd_compatible,                # Should the output functions be compatible with autograd?
     cache_asso_leg,                     # Assoc. Legendre table cache mode: None, "no_mu0" or "mu0"
+    interpolate_mu,                     # Should the intensity functions take `mu` as an argument?
 ):
-    """Assembles the solution functions: intensity `u`, upward flux `flux_up`, downward flux `flux_down` 
-    from the previously solved eigenpairs and coefficients from the boundary conditions. 
-    Returns these solution functions.
+    """Assembles the solution functions: intensity `u`, its zeroth Fourier mode `u0`, upward flux `flux_up`,
+    downward flux `flux_down` from the previously solved eigenpairs and coefficients from the boundary conditions.
+    Returns these solution functions. If `interpolate_mu`, the intensity functions are instead those of
+    `_build_IotS`, which take `mu` as their first argument.
     This function is wrapped by the `pydisort` function.
     It should be called through `pydisort` and never directly.
     It has many seemingly redundant arguments, which are described below,
@@ -66,7 +68,7 @@ def _assemble_intensity_and_fluxes(
     | `I0_div_4pi`                   | scalar                                       |
     | `rescale_factor`               | scalar                                       |
     | `phi0`                         | scalar                                       |
-    | `there_is_beam_source`         | scalar                                       |
+    | `there_is_beam_source`         | boolean                                      |
     | `b_pos`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  |
     | `b_neg`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  | 
     | `b_pos_is_scalar`              | boolean                                      |
@@ -81,20 +83,22 @@ def _assemble_intensity_and_fluxes(
     | `use_banded_solver_NLayers`    | scalar                                       |
     | `autograd_compatible`          | boolean                                      |
     | `cache_asso_leg`               | None, "no_mu0" or "mu0"                      |
+    | `interpolate_mu`               | boolean                                      |
 
     Notable internal variables of _assemble_intensity_and_fluxes
     |     Variable      |             Type / Shape               |
     | ----------------- | -------------------------------------- |
     | `G_collect`       | `NFourier x NLayers x NQuad x NQuad`   |
     | `G_collect_0`     | `NLayers x NQuad x NQuad`              |
-    | `G_inv_mu_inv`    | `NLayers x NQuad x NQuad` or `None`    |
+    | `G_inv_mu_inv`    | `NLayers x NQuad` or `None`            |
     | `K_collect`       | `NFourier x NLayers x NQuad`           |
     | `K_collect_0`     | `NLayers x NQuad`                      |
     | `B_collect`       | `NFourier x NLayers x NQuad` or `None` |
     | `B_collect_0`     | `NLayers x NQuad` or `None`            |
-    | `B_pos`           | `NLayers x NQuad/2` or `None`          |
-    | `B_neg`           | `NLayers x NQuad/2` or `None`          |
-    | `GC_collect`      | `NFourier x NLayers x NQuad x NQuad`   |
+    | `B_pos`           | `NQuad/2 x NLayers` or `None`          |
+    | `B_neg`           | `NQuad/2 x NLayers` or `None`          |
+    | `C_collect`       | `NFourier x NLayers x NQuad`           |
+    | `GC_collect`      | `NFourier x NLayers x NQuad x NQuad`   | Only if the function `u` at the quadrature nodes is constructed
     | `GC_collect_0`    | `NLayers x NQuad x NQuad`              |
     | `GC_pos`          | `NLayers x NQuad/2 x NQuad`            |
     | `GC_neg`          | `NLayers x NQuad/2 x NQuad`            |
@@ -109,7 +113,7 @@ def _assemble_intensity_and_fluxes(
     
     # Compute all the necessary quantities
     # --------------------------------------------------------------------------------------------------------------------------
-    outputs = _solve_for_gen_and_part_sols(
+    G_collect, K_collect, B_collect, G_inv_collect_0, asso_leg_table = _solve_for_gen_and_part_sols(
         NFourier,
         scaled_omega_arr,
         mu_arr_pos,
@@ -122,27 +126,14 @@ def _assemble_intensity_and_fluxes(
         there_is_iso_source,
         cache_asso_leg,
     )
-    # REVIEW (IotS): the last output is the associated Legendre table, which `_build_IotS` reuses
-    asso_leg_table = outputs[-1]
-    outputs = outputs[:-1]
-    if there_is_beam_source and there_is_iso_source:
-        G_collect, K_collect, B_collect, G_inv_collect_0 = outputs
+    if there_is_beam_source:
         B_collect_0 = B_collect[0, :, :]
-        G_inv_mu_inv = G_inv_collect_0 @ np.concatenate([M_inv, -M_inv])
-    elif there_is_beam_source and not there_is_iso_source:
-        G_collect, K_collect, B_collect = outputs
-        B_collect_0 = B_collect[0, :, :]
-        G_inv_mu_inv = None
-    elif not there_is_beam_source and there_is_iso_source:
-        G_collect, K_collect, G_inv_collect_0 = outputs
-        B_collect = None
+    if there_is_iso_source:
         G_inv_mu_inv = G_inv_collect_0 @ np.concatenate([M_inv, -M_inv])
     else:
-        G_collect, K_collect = outputs
-        B_collect = None
         G_inv_mu_inv = None
-            
-    GC_collect = _solve_for_coeffs(
+
+    C_collect = _solve_for_coeffs(
         NFourier,
         G_collect,
         K_collect,
@@ -167,7 +158,12 @@ def _assemble_intensity_and_fluxes(
     
     G_collect_0 = G_collect[0, :, :, :]
     K_collect_0 = K_collect[0, :, :]
-    GC_collect_0 = GC_collect[0, :, :, :]
+    construct_u_at_nodes = not (only_flux or interpolate_mu)
+    if construct_u_at_nodes:
+        GC_collect = G_collect * C_collect[:, :, None, :]
+        GC_collect_0 = GC_collect[0, :, :, :]
+    else:
+        GC_collect_0 = G_collect_0 * C_collect[0, :, None, :]
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Value-keyed cache for the most recent `tau` evaluation grid, shared across the output
@@ -225,8 +221,8 @@ def _assemble_intensity_and_fluxes(
         return result
     # --------------------------------------------------------------------------------------------------------------------------
 
-    if not only_flux:
- 
+    if construct_u_at_nodes:
+
         # Construct the intensity function (refer to section 3.7 of the Comprehensive Documentation)
         # --------------------------------------------------------------------------------------------------------------------------
         def u(tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False):
@@ -423,7 +419,6 @@ def _assemble_intensity_and_fluxes(
         """Reclassification of delta-scaled actinic flux at `tau`; it complements `u0` in
         `subroutines.generate_diff_act_flux_funcs`. Attached to `u0` as an attribute of the same name.
         """
-        # REVIEW (bug 10): without a beam there is nothing to reclassify; `mu0 = 0` used to give NaN at `tau = 0`
         if not (is_delta_scaled and there_is_beam_source):
             return 0
         tau = np.atleast_1d(tau)
@@ -542,7 +537,6 @@ def _assemble_intensity_and_fluxes(
             _mathscr_v_contribution = 0
             
         direct_beam_contribution = 0
-        # REVIEW (bug 9): without a beam the direct flux was returned as the scalar 0 whatever the size of `tau`
         direct_beam = np.zeros(len(tau))
         direct_beam_scaled = 0
         if is_antiderivative_wrt_tau:
@@ -576,29 +570,36 @@ def _assemble_intensity_and_fluxes(
         )
         # --------------------------------------------------------------------------------------------------------------------------
 
-    # REVIEW (IotS): `subroutines.interpolate` now uses the intensity functions below, attached as `_IotS`, for the
-    # outputs of `pydisort`. The `_mu_arr_pos` attributes, which only the polynomial interpolation used, are removed.
-    # Intensities at arbitrary polar angles by the integration of the source function (IotS), for
-    # `subroutines.interpolate` (refer to section 3.7); nothing is computed unless they are used
-    IotS_u, IotS_u0 = _build_IotS(
-        asso_leg_table,
-        G_collect_0, K_collect, B_collect, GC_collect, G_inv_mu_inv,
-        tau_arr, scaled_tau_arr_with_0, scale_tau,
-        mu_arr_pos, W, N, NQuad, NLeg, NFourier, NLayers, NBDRF,
-        scaled_omega_arr, weighted_scaled_Leg_coeffs, BDRF_Fourier_modes,
-        mu0, I0_div_4pi, phi0, rescale_factor,
-        there_is_beam_source,
-        b_pos, b_neg, b_pos_is_scalar, b_neg_is_scalar,
-        Nscoeffs, scaled_s_poly_coeffs, there_is_iso_source,
-    )
-    u0._IotS = IotS_u0
-
     # Attach other useful attributes
     u0._act_dscale_reclassification = _act_dscale_reclassification
     flux_up.tau_arr = flux_down.tau_arr = u0.tau_arr = tau_arr
+    if construct_u_at_nodes:
+        u.tau_arr = tau_arr
+
+    # Intensities at arbitrary polar angles by the integration of the source function (refer to section 3.7)
+    # --------------------------------------------------------------------------------------------------------------------------
+    if interpolate_mu:
+        u0_at_nodes = u0
+        u0, u = _build_IotS(
+            asso_leg_table,
+            G_collect, K_collect, B_collect, C_collect, G_inv_mu_inv,
+            tau_arr, scaled_tau_arr_with_0, scale_tau,
+            mu_arr_pos, W, N, NLeg, NFourier, NLayers, NBDRF,
+            scaled_omega_arr, weighted_scaled_Leg_coeffs, BDRF_Fourier_modes,
+            mu0, I0_div_4pi, phi0, rescale_factor,
+            there_is_beam_source,
+            b_pos, b_neg, b_pos_is_scalar, b_neg_is_scalar,
+            Nscoeffs, scaled_s_poly_coeffs, there_is_iso_source,
+            only_flux,
+        )
+        # `subroutines.generate_diff_act_flux_funcs` integrates the zeroth Fourier mode at the quadrature nodes
+        u0._at_quad_nodes = u0_at_nodes
+        u0.tau_arr = tau_arr
+        if not only_flux:
+            u.tau_arr = tau_arr
+    # --------------------------------------------------------------------------------------------------------------------------
+
     if only_flux:
         return flux_up, flux_down, u0#, GC_collect_0, K_collect_0#, B_collect_0
     else:
-        u._IotS = IotS_u
-        u.tau_arr = tau_arr
         return flux_up, flux_down, u0, u

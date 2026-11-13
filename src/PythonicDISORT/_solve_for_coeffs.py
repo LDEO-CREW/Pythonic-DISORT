@@ -30,7 +30,7 @@ def _solve_for_coeffs(
     """
     Uses the boundary conditions to solve for the unknown coefficients 
     of the general solution to the system of ordinary differential equations for each Fourier mode. 
-    Returns the product of the coefficients and the eigenvectors.
+    Returns the coefficients.
     This function is wrapped by the `_assemble_intensity_and_fluxes` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
@@ -43,7 +43,7 @@ def _solve_for_coeffs(
     | `G_collect`                    | `NFourier x NLayers x NQuad x NQuad`         |
     | `K_collect`                    | `NFourier x NLayers x NQuad`                 |
     | `B_collect`                    | `NFourier x NLayers x NQuad` or `None`       |
-    | `G_inv_mu_inv`                 | `NLayers x NQuad x NQuad` or `None`          |
+    | `G_inv_mu_inv`                 | `NLayers x NQuad` or `None`                  |
     | `scaled_tau_arr_with_0`        | `NLayers + 1`                                |
     | `mu_arr_pos`                   | `NQuad/2`                                    |
     | `mu_arr_pos_times_W`           | `NQuad/2`                                    |
@@ -68,9 +68,9 @@ def _solve_for_coeffs(
     | `use_banded_solver_NLayers`    | scalar                                       |
     
     Notable internal variables of _solve_for_coeffs
-    |   Variable   |                 Shape                |
-    | ------------ | ------------------------------------ |
-    | `GC_collect` | `NFourier x NLayers x NQuad x NQuad` |
+    |   Variable   |             Shape            |
+    | ------------ | ---------------------------- |
+    | `C_collect`  | `NFourier x NLayers x NQuad` | Stored as `NFourier x NLayers*NQuad` until it is returned
 
     """
     ################################## Solve for coefficients of homogeneous solution ##########################################
@@ -388,4 +388,4 @@ def _solve_for_coeffs(
         # One batched call for all Fourier modes
         C_collect = np.linalg.solve(LHS_batch, RHS_batch[:, :, None])[:, :, 0]
 
-    return G_collect * C_collect.reshape((NFourier, NLayers, 1, NQuad))
+    return C_collect.reshape((NFourier, NLayers, NQuad))

@@ -52,7 +52,8 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 (no corresponding Jupyter Notebook)
 * Test Problem 11: Single-Layer vs. Multiple Layers
 * Test Problem I: Antiderivative / integration functionality
-* Test Problem NT: NT Correction + Interpolation functionality
+* Test Problem NT: NT corrections, at the quadrature nodes and at arbitrary polar angles
+* Test Problem IotS: Intensity at arbitrary polar angles (`interpolate_mu=True`)
 
 # Installation
 
@@ -61,9 +62,9 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 * By cloning repository: `pip install .` in the `Pythonic-DISORT` directory; `pip install -r all_optional_dependencies.txt` to install all optional dependencies (see *Requirements to run PythonicDISORT*)
 
 ## Requirements to run PythonicDISORT
-* Python 3.8+
-* `numpy >= 1.8.0`
-* `scipy >= 1.8.0`
+* Python 3.10+
+* `numpy >= 1.23.5`
+* `scipy >= 1.15.0`
 * (OPTIONAL) `autograd >= 1.5` (`autograd` can be used to compute gradients of the output functions)
 * (OPTIONAL) `pytest >= 6.2.5` (Required to use the command `pytest`, see *PyTest and examples of how to use PythonicDISORT*)
 

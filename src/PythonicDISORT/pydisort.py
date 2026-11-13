@@ -25,10 +25,12 @@ def pydisort(
     use_banded_solver_NLayers=10,
     autograd_compatible=False,
     cache_asso_leg=None,
+    interpolate_mu=False,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
-    and sources. Optionally performs delta-M scaling and NT corrections. 
+    and sources. Optionally performs delta-M scaling and NT corrections, and optionally
+    returns the intensity at arbitrary polar angles instead of at the quadrature nodes.
     Refer to the ``*_test.ipynb`` Jupyter Notebooks in the ``pydisotest`` directory for examples of use.
     
         See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters
@@ -48,7 +50,7 @@ def pydisort(
     Leg_coeffs_all : 2darray
         All available unweighted phase function Legendre coefficients.
         Each row pertains to an atmospheric layer (from top to bottom).
-        Each coefficient should be between 0 and 1 inclusive.
+        Each coefficient must be strictly between -1 and 1, except the zeroth which must be 1.
     mu0 : float
         Cosine of polar angle of the incident beam.
     I0 : float
@@ -75,9 +77,9 @@ def pydisort(
         or ``Leg_coeffs_all[:, NLeg]`` for a multi-layer atmosphere.
     NT_cor : optional, bool
         Perform Nakajima-Tanaka intensity corrections?
-        The corrections are applied at the quadrature points, and ``subroutines.interpolate``
-        applies them directly at its ``mu`` evaluation points, as Stamnes' DISORT does;
-        see its ``NT_cor`` argument for overriding this option after the fact.
+        The corrections are applied at the quadrature points or, if ``interpolate_mu=True``,
+        directly at the ``mu`` values that are passed to ``u``, as Stamnes' DISORT does,
+        which requires ``|mu| >= 1e-8``.
     BDRF_Fourier_modes : optional, list of functions
         BDRF Fourier modes, each a float, or a function with arguments ``mu, -mu_p`` of type array
         which output has the same dimensions as the outer product of the two arrays.
@@ -107,6 +109,16 @@ def pydisort(
 
         The cache lives for the lifetime of the process and is bounded (least-recently-used); a run
         with a single discretization keeps a single entry.
+    interpolate_mu : optional, bool
+        If ``True``, the intensity functions ``u0`` and ``u`` take ``mu`` (cosine of polar angle) as their
+        first argument and return the intensity at those ``mu`` values rather than at the quadrature nodes.
+        The intensity at each ``mu`` is computed by the integration of the source function, like Stamnes'
+        DISORT does: the transfer equation is solved exactly along ``mu`` with the source function of the
+        discrete ordinates solution. The result equals that solution at the quadrature nodes and satisfies
+        the boundary conditions at every ``mu``. Vector boundary conditions ``b_pos`` and ``b_neg`` are only
+        known at the quadrature nodes and are interpolated polynomially.
+        It is fastest to pass all the ``mu`` values of interest in one call of ``u``.
+        Not supported when ``autograd_compatible=True``.
 
     Returns
     -------
@@ -117,7 +129,7 @@ def pydisort(
         Returns the diffuse flux magnitudes (same type and size as ``tau``).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
-        For example, ``Fp(tau_arr, True) - Fp(np.insert(tau_arr[:-1] + 1e-15, 0, 0), True)``
+        For example, ``Fp(tau_arr, True) - Fp(np.insert(np.nextafter(tau_arr[:-1], np.inf), 0, 0), True)``
         will produce an array of the tau-integral over each layer.
         Carries ``tau_arr`` as an attribute.
     Fm(tau) : function
@@ -127,25 +139,30 @@ def pydisort(
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
         Carries ``tau_arr`` as an attribute.
-    u0(tau) : function
-        Zeroth Fourier mode of the intensity with argument ``tau`` (type: array or float).
-        Returns an ndarray with axes corresponding to variation with ``mu`` and ``tau`` respectively.
+    u0(tau) or u0(mu, tau) : function
+        Zeroth Fourier mode of the intensity with argument ``tau`` (type: array or float)
+        or, if ``interpolate_mu=True``, with arguments ``(mu, tau)`` each of type array or float.
+        Returns an ndarray with axes corresponding to variation with ``mu`` and ``tau`` respectively,
+        where ``mu`` are the quadrature nodes ``mu_arr`` unless ``interpolate_mu=True``.
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually
         (for actinic flux ``subroutines.generate_diff_act_flux_funcs`` will automatically perform the reclassification).
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
         Carries ``tau_arr`` as an attribute.
-    u(tau, phi) : function, optional
-        Intensity function with arguments ``(tau, phi)`` each of type array or float.
-        Returns an ndarray with axes corresponding to variation with ``mu, tau, phi`` respectively.
+    u(tau, phi) or u(mu, tau, phi) : function, optional
+        Intensity function with arguments ``(tau, phi)`` each of type array or float
+        or, if ``interpolate_mu=True``, with arguments ``(mu, tau, phi)`` each of type array or float.
+        Returns an ndarray with axes corresponding to variation with ``mu, tau, phi`` respectively,
+        where ``mu`` are the quadrature nodes ``mu_arr`` unless ``interpolate_mu=True``.
         Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
         to switch to an antiderivative of this function with respect to ``tau``.
-        Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the 
-        Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
+        Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the
+        Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term,
+        over the points at which the intensity is evaluated.
         Carries ``tau_arr`` as an attribute.
     """
-    
+
     """
     Arguments of pydisort
     |          Variable           |                    Type / Shape                 |
@@ -169,6 +186,7 @@ def pydisort(
     | `use_banded_solver_NLayers` | scalar                                          |
     | `autograd_compatible`       | boolean                                         |
     | `cache_asso_leg`            | None, "no_mu0" or "mu0"                         |
+    | `interpolate_mu`            | boolean                                         |
 
     Notable internal variables of pydisort
     |          Variable            |     Type / Shape     |
@@ -196,8 +214,6 @@ def pydisort(
     
     # Turn floats into arrays
     # --------------------------------------------------------------------------------------------------------------------------
-    # REVIEW (bug 5): `tau_arr`, `omega_arr`, `Leg_coeffs_all` and `f_arr` are now copied because the output functions
-    # keep using them, so that changing the caller's arrays in place afterwards no longer corrupts the outputs
     tau_arr = np.atleast_1d(tau_arr).copy()
     omega_arr = np.atleast_1d(omega_arr).copy()
     Leg_coeffs_all = np.atleast_2d(Leg_coeffs_all).copy()
@@ -212,7 +228,6 @@ def pydisort(
     if only_flux:
         NFourier = 1 # We only need to solve for the 0th Fourier mode to compute the flux
     elif NFourier is None:
-        # REVIEW (bug 8): the default was `NQuad`, which failed the `NFourier <= NLeg` check whenever `NLeg < NQuad`
         NFourier = NLeg
     if np.all(b_pos == 0):
         b_pos = 0
@@ -265,7 +280,6 @@ def pydisort(
     # Value checks on the phase function Legendre coefficients
     if not np.all(omega_arr * Leg_coeffs_all[:, 0] == omega_arr):
         warnings.warn("The zeroth index phase function Legendre coefficient must be, and has been corrected to, 1.")
-        # REVIEW (bug 5): `Leg_coeffs_all` is already a copy (see above), so the copy that was made here is gone
         Leg_coeffs_all[:, 0] = 1
     if not (np.all(-1 < Leg_coeffs_all[:, 1:]) and np.all(Leg_coeffs_all[:, 1:] < 1)):
         raise ValueError("The phase function Legendre coefficients must all be between -1 and 1 exclusive (only the zeroth coefficient can equal 1).")
@@ -279,7 +293,6 @@ def pydisort(
     if not NFourier <= NLeg:
         raise ValueError("The number of Fourier modes to use in the solution must be less than or equal to the number of phase function Legendre coefficients used.")
     if NFourier > 64 and not only_flux:
-        # REVIEW (bug 8): the message said that `NFourier` equals `NQuad` by default
         warnings.warn("`NFourier` is large and may cause errors, consider decreasing `NFourier` to 64 and it probably should be even less. By default `NFourier` equals `NLeg`.")
     # Not strictly necessary but there will be tremendous inaccuracies if this is violated
     if not NLeg <= NQuad:
@@ -293,7 +306,6 @@ def pydisort(
         if not (0 <= phi0 and phi0 < 2 * pi):
             raise ValueError("Provide the principal azimuthal angle for the incident beam (must be between 0 and 2pi, excluding 2pi).")
     # Ensure that the BC inputs are of the correct shape
-    # REVIEW (bug 2): the vector tests now require 1D inputs; `len(b) == N` alone also matched `N x NFourier` matrices
     if len(np.atleast_1d(b_pos)) == 1:
         b_pos_is_scalar = True
     elif np.ndim(b_pos) == 1 and len(b_pos) == N:
@@ -307,7 +319,6 @@ def pydisort(
     elif not np.shape(b_neg) == (N, NFourier):
         raise ValueError("The shape of the top boundary condition is incorrect.")
     # The fractional scattering must be between 0 and 1, excluding 1
-    # REVIEW (bug 11): `f_arr = 1` used to pass this check and then divide by `1 - f_arr = 0`
     if not (np.all(0 <= f_arr) and np.all(f_arr < 1)):
         raise ValueError("The fractional scattering must be between 0 and 1, excluding 1.")
     # The minimum threshold is 3 else the matrix will not be banded
@@ -316,6 +327,9 @@ def pydisort(
     # Associated Legendre table caching mode
     if cache_asso_leg not in (None, "no_mu0", "mu0"):
         raise ValueError('`cache_asso_leg` must be one of None, "no_mu0" or "mu0".')
+    # The intensity functions at arbitrary `mu` are not compatible with autograd
+    if interpolate_mu and autograd_compatible:
+        raise ValueError("`interpolate_mu=True` is not supported when `autograd_compatible=True`.")
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Post input checks setup
@@ -381,8 +395,6 @@ def pydisort(
                 scaled_s_poly_coeffs[-1, :] @ (scaled_tau_arr_with_0[-1] ** np.arange(Nscoeffs))
             )
         )
-        # REVIEW (bug 4): the factor is 0 if the isotropic source vanishes at both boundaries and there is
-        # no other source, which made every output NaN; there is now no rescaling in that case
         if rescale_factor > 0:
             I0 = (I0 / rescale_factor).copy()
             b_pos = (b_pos / rescale_factor).copy()
@@ -426,6 +438,7 @@ def pydisort(
         use_banded_solver_NLayers,
         autograd_compatible,
         cache_asso_leg,
+        interpolate_mu,
     )
     if only_flux:
         return (mu_arr,) + outputs
@@ -435,6 +448,7 @@ def pydisort(
     u = _NT_corrections(
         u_star,
         NT_cor,
+        interpolate_mu,
         tau_arr,
         thickness_arr,
         omega_arr,

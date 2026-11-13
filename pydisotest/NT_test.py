@@ -1,12 +1,11 @@
 import numpy as np
 from scipy.integrate import quad_vec
 import PythonicDISORT
-from PythonicDISORT.subroutines import interpolate
 from math import pi
 import pytest
 
 # ============================================================================================================
-# Test Problem NT: NT corrections, including through `subroutines.interpolate`
+# Test Problem NT: NT corrections, at the quadrature nodes and at arbitrary `mu` (`interpolate_mu=True`)
 # ============================================================================================================
 
 # Inhomogeneous 3-layer atmosphere with delta-M scaling and NT corrections applicable
@@ -39,102 +38,43 @@ def _pydisort(NT_cor, **kwargs):
         **kwargs,
     )
 
-'''
-def test_interp_NT_quad_equivalence():
-    """`interpolate(u, NT_cor=True)` on an uncorrected `u` must reproduce
-    the interpolation of a `pydisort` run with `NT_cor=True`."""
-    u_true = _pydisort(True)[4]
-    u_false = _pydisort(False)[4]
-
-    u_interpol_ref = interpolate(u_true)
-    u_interpol_quad = interpolate(u_false, NT_cor=True)
+def test_NT_at_quad_nodes():
+    """At the quadrature nodes, the corrections which are evaluated at the `mu` values passed to `u`
+    (`interpolate_mu=True`) must agree with those which are evaluated at the quadrature nodes."""
+    mu_arr, _, _, _, u_nodes = _pydisort(True)
+    u = _pydisort(True, interpolate_mu=True)[4]
 
     for is_anti in (False, True):
-        ref = u_interpol_ref(mu_eval, tau_eval, phi_eval, is_anti)
-        res = u_interpol_quad(mu_eval, tau_eval, phi_eval, is_anti)
-        assert np.allclose(res, ref)
-
-    # The string flag is equivalent to the boolean flag
-    u_interpol_quad_str = interpolate(u_false, NT_cor="quad")
-    assert np.allclose(
-        u_interpol_quad_str(mu_eval, tau_eval, phi_eval),
-        u_interpol_ref(mu_eval, tau_eval, phi_eval),
-    )
-
-    # `NT_cor=True` on an already-corrected `u` is a no-op
-    assert np.allclose(
-        interpolate(u_true, NT_cor=True)(mu_eval, tau_eval, phi_eval),
-        u_interpol_ref(mu_eval, tau_eval, phi_eval),
-    )
-
-
-def test_interp_NT_off_equivalence():
-    """`interpolate(u, NT_cor=False)` on a corrected `u` must reproduce
-    the interpolation of a `pydisort` run with `NT_cor=False`."""
-    u_true = _pydisort(True)[4]
-    u_false = _pydisort(False)[4]
-
-    u_interpol_ref = interpolate(u_false)
-    u_interpol_off = interpolate(u_true, NT_cor=False)
-
-    for is_anti in (False, True):
-        ref = u_interpol_ref(mu_eval, tau_eval, phi_eval, is_anti)
-        res = u_interpol_off(mu_eval, tau_eval, phi_eval, is_anti)
-        assert np.allclose(res, ref)
-
-    assert np.allclose(
-        interpolate(u_true, NT_cor="off")(mu_eval, tau_eval, phi_eval),
-        u_interpol_ref(mu_eval, tau_eval, phi_eval),
-    )
-
-
-def test_interp_NT_eval_at_quad_nodes():
-    """At the quadrature nodes the barycentric interpolation is exact, so the
-    "eval" option must agree with the "quad" option (and with the corrected `u` itself)."""
-    mu_arr, _, _, _, u_true = _pydisort(True)
-    u_false = _pydisort(False)[4]
-
-    u_interpol_eval = interpolate(u_false, NT_cor="eval")
-
-    for is_anti in (False, True):
-        ref = u_true(tau_eval, phi_eval, is_anti)
-        res = u_interpol_eval(mu_arr, tau_eval, phi_eval, is_anti)
-        assert np.allclose(res, ref)
-'''
+        ref = u_nodes(tau_eval, phi_eval, is_anti)
+        res = u(mu_arr, tau_eval, phi_eval, is_anti)
+        assert np.max(np.abs(res - ref)) < 1e-12 * np.max(np.abs(ref))
 
 
 def test_interp_NT_antiderivative():
     """The antiderivative branch of the corrections at evaluation points must
     integrate correctly (same idiom as the `I_test.py` problems)."""
-    u_false = _pydisort(False)[4]
-    u_interpol_eval = interpolate(u_false, NT_cor="eval")
-    u_interpol_quad = interpolate(u_false, NT_cor="quad")
+    u = _pydisort(True, interpolate_mu=True)[4]
 
     end = tau_arr[-1]
     upper = tau_arr.astype(float)
     lower = np.insert(upper[:-1] + 1e-15, 0, 0)
 
-    for u_interpol in (u_interpol_eval, u_interpol_quad):
-        integral = quad_vec(lambda tau: u_interpol(mu_eval, tau, phi_eval), 0, end)[0]
-        telescoped = (
-            u_interpol(mu_eval, upper, phi_eval, True)
-            - u_interpol(mu_eval, lower, phi_eval, True)
-        ).sum(axis=1)
-        assert np.allclose(integral, telescoped)
+    integral = quad_vec(lambda tau: u(mu_eval, tau, phi_eval), 0, end)[0]
+    telescoped = (
+        u(mu_eval, upper, phi_eval, True)
+        - u(mu_eval, lower, phi_eval, True)
+    ).sum(axis=1)
+    assert np.allclose(integral, telescoped)
 
 
 def test_NT_Fourier_error_passthrough():
     """`return_Fourier_error` must pass through the NT corrections: the intensities are
-    unchanged and the Fourier error is that of the uncorrected `u`. The `u` of a `pydisort`
-    run with `NT_cor=True` and the "quad" option of `interpolate` both add their
-    corrections in a separate branch when this flag is passed."""
+    unchanged and the Fourier error is that of the uncorrected `u`, both at the quadrature
+    nodes and at arbitrary `mu` (`interpolate_mu=True`)."""
     u_true = _pydisort(True)[4]
     u_false = _pydisort(False)[4]
-    u_interpols = (
-        interpolate(u_false, NT_cor="quad"),
-        interpolate(u_false, NT_cor="eval"),
-        interpolate(u_true),
-    )
+    u_true_at_mu = _pydisort(True, interpolate_mu=True)[4]
+    u_false_at_mu = _pydisort(False, interpolate_mu=True)[4]
 
     for is_anti in (False, True):
         Fourier_error_ref = u_false(tau_eval, phi_eval, is_anti, True)[1]
@@ -144,10 +84,12 @@ def test_NT_Fourier_error_passthrough():
         assert np.allclose(vals, u_true(tau_eval, phi_eval, is_anti))
         assert np.isclose(Fourier_error, Fourier_error_ref)
 
-        for u_interpol in u_interpols:
-            vals, Fourier_error = u_interpol(mu_eval, tau_eval, phi_eval, is_anti, True)
-            assert np.allclose(vals, u_interpol(mu_eval, tau_eval, phi_eval, is_anti))
-            assert np.isclose(Fourier_error, Fourier_error_ref)
+        Fourier_error_ref = u_false_at_mu(mu_eval, tau_eval, phi_eval, is_anti, True)[1]
+        assert np.isscalar(Fourier_error_ref) and Fourier_error_ref >= 0
+
+        vals, Fourier_error = u_true_at_mu(mu_eval, tau_eval, phi_eval, is_anti, True)
+        assert np.allclose(vals, u_true_at_mu(mu_eval, tau_eval, phi_eval, is_anti))
+        assert np.isclose(Fourier_error, Fourier_error_ref)
 
 
 def test_interp_NT_singularity_continuity():
@@ -155,8 +97,7 @@ def test_interp_NT_singularity_continuity():
     IMS-scaled -mu0 are handled exactly by the phi-kernel formulations: evaluating
     exactly AT the singular angles must give finite values matching the limit of
     nearby evaluations to increasing accuracy."""
-    u_false = _pydisort(False)[4]
-    u_interpol_eval = interpolate(u_false, NT_cor="eval")
+    u_interpol_eval = _pydisort(True, interpolate_mu=True)[4]
 
     # An IMS-scaled mu0: the whole-atmosphere average below equals the BOTTOM-boundary
     # set of `pydisort`'s per-boundary NT statics (which weight by layer optical
@@ -185,8 +126,7 @@ def test_NT_tau_continuity_at_layer_boundaries():
     of an inhomogeneous atmosphere. This exercises the IMS boundary-blending scheme
     (the correction's per-boundary optical-property averages follow DISORT's `SECSCA`
     at the layer boundaries and are blended/interpolated linearly in `tau` within each layer)."""
-    u_true = _pydisort(True)[4]
-    u_interpol_eval = interpolate(u_true, NT_cor="eval")
+    u_interpol_eval = _pydisort(True, interpolate_mu=True)[4]
 
     scale = np.max(np.abs(u_interpol_eval(mu_eval, tau_eval, phi_eval)))
     eps = 1e-11

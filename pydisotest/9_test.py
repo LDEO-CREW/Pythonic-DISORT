@@ -53,7 +53,7 @@ def test_9a():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 10 degrees around the direct beam
+    # We may not want to compare intensities around the direct beam
     deg_around_beam_to_not_compare = 0 # Changed to 0 since this test problem has no direct beam
     mu_to_compare = (
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
@@ -135,7 +135,7 @@ def test_9b():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 10 degrees around the direct beam
+    # We may not want to compare intensities around the direct beam
     deg_around_beam_to_not_compare = 0 # Changed to 0 since this test problem has no direct beam
     mu_to_compare = (
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
@@ -226,7 +226,7 @@ def test_9c():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 10 degrees around the direct beam
+    # We may not want to compare intensities around the direct beam
     deg_around_beam_to_not_compare = 0 # Changed to 0 since this test problem has no direct beam
     mu_to_compare = (
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi
@@ -330,7 +330,7 @@ def test_9corrections():
     reorder_mu = np.argsort(mu_arr)
     mu_arr_RO = mu_arr[reorder_mu]
 
-    # By default we do not compare intensities 10 degrees around the direct beam
+    # We may not want to compare intensities around the direct beam
     deg_around_beam_to_not_compare = 0 # Changed to 0 since this test problem has no direct beam
     mu_to_compare = (
         np.abs(np.arccos(np.abs(mu_arr_RO)) - np.arccos(mu0)) * 180 / pi

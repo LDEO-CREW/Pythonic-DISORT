@@ -5,50 +5,70 @@ from functools import lru_cache
 from PythonicDISORT.subroutines import Gauss_Legendre_quad
 
 
-def _seminormalized_asso_leg_table(x, NFourier, NLeg):
-    """Table of seminormalized associated Legendre functions
-    Pbar_l^m(x) = sqrt((l - m)! / (l + m)!) * P_l^m(x)
-    (Condon-Shortley phase included, matching `scipy.special.lpmv` up to the normalization)
-    for all orders m < NFourier and degrees l < NLeg, built in a single pass by the standard,
-    numerically stable three-term recurrences. This replaces the former per-mode
-    `scipy.special.lpmv` calls.
-
-    Returns
-    -------
-    3darray of shape (NFourier, NLeg, len(x))
-    """
-    Nx = len(x)
-    table = np.zeros((NFourier, NLeg, Nx))
+@lru_cache(maxsize=32)
+def _asso_leg_recurrence_coeffs(NFourier, NLeg):
+    """Coefficients of the three-term recurrence of `_asso_leg_table_by_offset`,
+    each of shape (NLeg, NFourier, 1), and its diagonal seed factors of shape (NFourier, 1)."""
     ms_all = np.arange(NFourier)
-
+    ells = ms_all[None, :] + np.arange(NLeg)[:, None]                                # Degree l = m + r; (NLeg, NFourier)
+    with np.errstate(invalid="ignore", divide="ignore"):                             # Unused rows r < 2
+        c1 = (2 * ells - 1) / np.sqrt((ells - ms_all) * (ells + ms_all))
+        c2 = np.sqrt((ells - 1 - ms_all) * (ells - 1 + ms_all) / ((ells - ms_all) * (ells + ms_all)))
+    # The rows r < 2 are seeds, and the degrees l >= NLeg are not part of the table and are left as zeros
+    c1[:2] = c2[:2] = 0
+    c1[ells >= NLeg] = 0
+    c2[ells >= NLeg] = 0
     # Diagonal seeds Pbar_m^m = -sqrt((2m - 1) / (2m)) * sqrt(1 - x^2) * Pbar_{m-1}^{m-1}
     # for all orders at once via a cumulative product over m
     diag_factors = np.cumprod(
         np.concatenate([[1.0], -np.sqrt((2 * ms_all[1:] - 1) / (2 * ms_all[1:]))])
-    )                                                                                # (NFourier,)
-    Pmm_all = diag_factors[:, None] * np.sqrt(1 - x**2)[None, :] ** ms_all[:, None]  # (NFourier, Nx)
-    table[ms_all, ms_all, :] = Pmm_all
-
-    # First recurrence step Pbar_{m+1}^m = sqrt(2m + 1) * x * Pbar_m^m, all orders at once
-    ms_first = ms_all[ms_all + 1 < NLeg]
-    table[ms_first, ms_first + 1, :] = (
-        np.sqrt(2 * ms_first + 1)[:, None] * x[None, :] * Pmm_all[ms_first]
     )
+    # First recurrence step Pbar_{m+1}^m = sqrt(2m + 1) * x * Pbar_m^m
+    first_step = np.sqrt(2 * ms_all + 1) * (ms_all + 1 < NLeg)
+    outputs = (c1[:, :, None], c2[:, :, None], diag_factors[:, None], first_step[:, None])
+    for array in outputs:
+        array.setflags(write=False)
+    return outputs
 
-    # March up in degree, vectorized over all orders m <= l - 2 simultaneously.
+
+def _asso_leg_table_by_offset(x, NFourier, NLeg):
+    """Table of seminormalized associated Legendre functions
+    Pbar_l^m(x) = sqrt((l - m)! / (l + m)!) * P_l^m(x)
+    (Condon-Shortley phase included, matching `scipy.special.lpmv` up to the normalization)
+    for all orders m < NFourier and degrees l < NLeg, built in a single pass by the standard,
+    numerically stable three-term recurrences.
+
+    Returns
+    -------
+    3darray of shape (NLeg, NFourier, len(x)) whose entry [r, m, :] is the function of degree l = m + r
+    (zero if m + r >= NLeg). The functions of even r are even in `x` and those of odd r are odd.
+    """
+    c1, c2, diag_factors, first_step = _asso_leg_recurrence_coeffs(NFourier, NLeg)
+    table = np.empty((NLeg, NFourier, len(x)))
+    table[0] = diag_factors * np.sqrt(1 - x**2)[None, :] ** np.arange(NFourier)[:, None]
+    if NLeg > 1:
+        table[1] = first_step * x[None, :] * table[0]
+
+    # March up in degree, vectorized over all orders simultaneously.
     # Seminormalized form of (l - m) P_l^m = (2l - 1) x P_{l-1}^m - (l + m - 1) P_{l-2}^m.
-    # REVIEW (speed): the coefficients are now precomputed for all degrees and the orders are sliced rather than
-    # fancy-indexed, which makes this function 1.5-2 times faster with bit-identical results
-    ells = np.arange(2, NLeg)[:, None]                                               # (NLeg - 2, 1)
-    with np.errstate(invalid="ignore", divide="ignore"):                             # Unused entries m > l - 2
-        c1_all = (2 * ells - 1) / np.sqrt((ells - ms_all) * (ells + ms_all))         # (NLeg - 2, NFourier)
-        c2_all = np.sqrt((ells - 1 - ms_all) * (ells - 1 + ms_all) / ((ells - ms_all) * (ells + ms_all)))
-    for ell in range(2, NLeg):
-        k = min(ell - 1, NFourier)                                                   # orders m <= l - 2
-        c1 = c1_all[ell - 2, :k, None]
-        c2 = c2_all[ell - 2, :k, None]
-        table[:k, ell, :] = c1 * x[None, :] * table[:k, ell - 1, :] - c2 * table[:k, ell - 2, :]
+    c1_x = c1 * x                                                                    # (NLeg, NFourier, Nx)
+    buffer = np.empty(table.shape[1:])
+    for r in range(2, NLeg):
+        np.multiply(c1_x[r], table[r - 1], out=table[r])
+        np.multiply(c2[r], table[r - 2], out=buffer)
+        table[r] -= buffer
     return table
+
+
+def _seminormalized_asso_leg_table(x, NFourier, NLeg):
+    """`_asso_leg_table_by_offset` with the order as the zeroth axis.
+
+    Returns
+    -------
+    3darray of shape (NFourier, NLeg, len(x)) whose entry [m, r, :] is the function of degree l = m + r
+    (zero if m + r >= NLeg), so that `table[m, :NLeg - m, :]` holds all the degrees of order m.
+    """
+    return np.ascontiguousarray(_asso_leg_table_by_offset(x, NFourier, NLeg).transpose(1, 0, 2))
 
 
 # In-process caches for the seminormalized associated Legendre tables (see the `cache_asso_leg`
@@ -100,6 +120,8 @@ def _solve_for_gen_and_part_sols(
     Diagonalizes the coefficient matrix of the system of ordinary differential equations (ODEs) 
     for each Fourier mode and returns the eigenpairs which give the general solution up to unknown coefficients.
     Also solves for the particular solution to each system of ODEs and returns its coefficient vector.
+    Returns `G_collect`, `K_collect`, `B_collect` (`None` without a beam source), `G_inv_collect_0`
+    (`None` without an isotropic source) and the associated Legendre table `asso_leg_table`.
     This function is wrapped by the `_assemble_intensity_and_fluxes` function.
     It has many seemingly redundant arguments to maximize precomputation in the `pydisort` function.
     See the Jupyter Notebook, especially section 3, for documentation, explanation and derivation.
@@ -129,12 +151,13 @@ def _solve_for_gen_and_part_sols(
     | ------------------- | -------------------------------------- |
     | `G_collect`         | `NFourier*NLayers x NQuad x NQuad`     | Reshaped to NFourier x NLayers x NQuad x NQuad
     | `K_collect`         | `NFourier*NLayers x NQuad`             | Reshaped to NFourier x NLayers x NQuad
-    | `alpha_arr`         | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
-    | `beta_arr`          | `NFourier*NLayers x NQuad/2 x NQuad/2` | Reshaped to NFourier x NLayers x NQuad/2 x NQuad/2
+    | `alpha_arr`         | `Nns x NQuad/2 x NQuad/2`              | Nns is the number of (mode, layer) pairs without the no-scattering shortcut
+    | `beta_arr`          | `Nns x NQuad/2 x NQuad/2`              |
     | `B_collect`         | `NFourier*NLayers x NQuad` or `None`   | Reshaped to NFourier x NLayers x NQuad
-    | `eigenvecs_GpG_arr` | `NFourier*NLayers x NQuad/2 x NQuad    |
-    | `eigenvecs_GmG_arr` | `NFourier*NLayers x NQuad/2 x NQuad    |
+    | `eigenvecs_GpG_arr` | `Nns x NQuad/2 x NQuad/2`              |
+    | `eigenvecs_GmG_arr` | `Nns x NQuad/2 x NQuad/2`              |
     | `G_inv_collect_0`   | `NLayers x NQuad x NQuad` or `None`    |
+    | `asso_leg_table`    | `NFourier x NLeg x (NQuad/2 or NQuad/2 + 1)` | Entry [m, r, :] has degree l = m + r; the last column is at `-mu0` (if there is a beam)
 
     """
     ############################### Assemble system and diagonalize coefficient matrix #########################################
@@ -199,11 +222,11 @@ def _solve_for_gen_and_part_sols(
         signs = signs_all[:NLeg - m]
 
         if there_is_beam_source:
-            asso_leg_m = asso_leg_table[m, m:, :]
+            asso_leg_m = asso_leg_table[m, :NLeg - m, :]
             asso_leg_term_pos = asso_leg_m[:, :-1]
             scalar_fac_asso_leg_term_mu0 = I0_div_4pi * (2 - m_equals_0) * asso_leg_m[:, -1]
         else:
-            asso_leg_term_pos = asso_leg_table[m, m:, :]
+            asso_leg_term_pos = asso_leg_table[m, :NLeg - m, :]
 
         asso_leg_term_neg = asso_leg_term_pos * signs[:, None]
         fac_asso_leg_term_posT = asso_leg_term_pos.T
@@ -280,7 +303,7 @@ def _solve_for_gen_and_part_sols(
                 + " Their square roots, and consequently some outputs, will be NaN."
             )
 
-        # Eigenvalues arranged negative then positive, from largest to smallest magnitude
+        # Eigenvalues arranged negative then positive
         K_arr_pos = np.sqrt(K_squared_arr)
         K_arr = np.concatenate((-K_arr_pos, K_arr_pos), axis=1)
         
@@ -307,7 +330,7 @@ def _solve_for_gen_and_part_sols(
         if there_is_beam_source:
             
             # Warn if -1/mu0 is close to an eigenvalue (see section 3.6.1 of the Comprehensive Documentation)
-            if np.any(np.abs(K_arr + 1 / mu0) < 1e-8):
+            if np.any(np.abs(K_arr + 1 / mu0) < 1e-8) and not np.any(np.abs(M_inv - 1 / mu0) < 1e-8):
                 warnings.warn(
                     "`-1/mu0` is close to an eigenvalue so the results may be inaccurate."
                     + " Consider slightly perturbing `mu0`."
@@ -332,12 +355,11 @@ def _solve_for_gen_and_part_sols(
                 A_arr[:, :N, :N] = -A_arr[:, N:, N:]
                 A_arr.reshape(-1, NQuad * NQuad)[:, ::NQuad + 1] += 1 / mu0
                 X_arr = X_arr[no_shortcut_indices, :, None]
-                # REVIEW (bug 3): if -1/mu0 equals an eigenvalue to rounding, e.g. when `mu0` is a quadrature node which a
+                # If -1/mu0 equals an eigenvalue to rounding, e.g. when `mu0` is a quadrature node which a
                 # high Fourier mode barely scatters into or out of, the matrix is singular to working precision and
                 # `solve` returns a huge, inaccurate `B`. The (mode, layer) pairs which trip the test of the warning above
                 # are therefore solved by a pseudoinverse instead, which drops the directions that are singular to rounding.
                 # Each row is first scaled to unit size so that the cutoff of the pseudoinverse is relative to that row.
-                # Before this fix every pair was solved by `solve`.
                 resonant = np.any(np.abs(K_arr[len_no_shortcut_indices_0:] + 1 / mu0) < 1e-8, axis=1)
                 # Note that the minus sign has been absorbed into `X_arr`
                 if np.any(resonant):
@@ -354,14 +376,10 @@ def _solve_for_gen_and_part_sols(
 
             # --------------------------------------------------------------------------------------------------------------------------
 
-    outputs = (
+    return (
         G_collect.reshape((NFourier, NLayers, NQuad, NQuad)),
         K_collect.reshape((NFourier, NLayers, NQuad)),
+        B_collect.reshape((NFourier, NLayers, NQuad)) if there_is_beam_source else None,
+        G_inv_collect_0 if there_is_iso_source else None,
+        asso_leg_table,
     )
-    if there_is_beam_source:
-        outputs += (B_collect.reshape((NFourier, NLayers, NQuad)),)
-    if there_is_iso_source:
-        outputs += (G_inv_collect_0,)
-    # REVIEW (IotS): the table is now also returned, for reuse by the integration of the source function
-    outputs += (asso_leg_table,)
-    return outputs
