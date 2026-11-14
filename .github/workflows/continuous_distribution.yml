@@ -8,10 +8,10 @@ jobs:
   build-artifacts:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         name: Install Python
         with:
           # REVIEW (merge): was 3.8; the package now requires Python 3.10 (through SciPy >= 1.15)
@@ -38,7 +38,7 @@ jobs:
           else
             echo "✅ Looks good"
           fi
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: releases
           path: dist
@@ -47,12 +47,12 @@ jobs:
     if: "!github.event.release.prerelease"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v7.0.0
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: releases
           path: dist
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.13.0
+        uses: pypa/gh-action-pypi-publish@v1.14.3
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}
