@@ -51,7 +51,7 @@ source .venv/bin/activate
   pip install -e ".[pytest]"
   ```
 
-- Notebook/example deps (adds `autograd`, `jupyter`, `notebook`, `matplotlib`)  
+- Notebook/example deps (adds `jupyter`, `notebook`, `matplotlib`)  
   ```bash
   pip install -e ".[notebook_dependencies]"
   ```

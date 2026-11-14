@@ -1,4 +1,9 @@
-from PythonicDISORT.subroutines import _mathscr_v
+from PythonicDISORT.subroutines import (
+    _mathscr_v_coeffs,
+    _poly_tau_derivative,
+    _check_tau_derivative_order,
+    _Fourier_error,
+)
 from PythonicDISORT._solve_for_gen_and_part_sols import _solve_for_gen_and_part_sols
 from PythonicDISORT._solve_for_coeffs import _solve_for_coeffs
 from PythonicDISORT._IotS import _build_IotS
@@ -12,7 +17,7 @@ def _assemble_intensity_and_fluxes(
     scaled_tau_arr_with_0,              # Delta-scaled lower boundary of layers with 0 inserted in front
     mu_arr_pos,                         # Upper hemisphere quadrature nodes (cosine polar angles)
     M_inv, W,                           # 1) 1 / `mu_arr_pos`; 2) quadrature weights for each hemisphere
-    N, NQuad, NLeg,                     # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients 
+    N, NQuad, NLeg,                     # Number of 1) upper 2) both hemispheres quadrature nodes; 3) phase function Legendre coefficients
     NFourier, NLayers, NBDRF,           # Number of 1) intensity Fourier modes; 2) layers; 3) BDRF Fourier modes
     is_atmos_multilayered,              # Is the atmosphere multilayered?
     weighted_scaled_Leg_coeffs,         # Weighted and delta-scaled Legendre coefficients
@@ -20,16 +25,18 @@ def _assemble_intensity_and_fluxes(
     mu0, I0, I0_div_4pi,                # Primary direct beam parameters
     rescale_factor, phi0,               # Secondary direct beam parameters
     there_is_beam_source,               # Is there a beam source?
+    mu0_arr,                            # Cosine of the direct beam in each layer
+    slant_tau_arr_with_0,               # Slant optical depth of the direct beam at each layer boundary
+    scaled_mu0_arr,                     # Cosine of the direct beam in each delta-scaled layer
+    scaled_slant_tau_arr_with_0,        # Slant optical depth of the direct beam at each delta-scaled layer boundary
     b_pos, b_neg,                       # Dirichlet BCs
     b_pos_is_scalar, b_neg_is_scalar,   # Is each Dirichlet BCs scalar and so isotropic?
     b_pos_is_vector, b_neg_is_vector,   # Is each Dirichlet BCs vector?
-    Nscoeffs,                           # Number of isotropic source polynomial coefficients
     scaled_s_poly_coeffs,               # Delta-scaled polynomial coefficients of isotropic source
     there_is_iso_source,                # Is there an isotropic source?
     scale_tau,                          # Delta-scale factor for tau
     only_flux,                          # Only compute fluxes?
     use_banded_solver_NLayers,          # Number of layers above or equal which to use `scipy.linalg.solve_banded`
-    autograd_compatible,                # Should the output functions be compatible with autograd?
     cache_asso_leg,                     # Assoc. Legendre table cache mode: None, "no_mu0" or "mu0"
     interpolate_mu,                     # Should the intensity functions take `mu` as an argument?
 ):
@@ -41,10 +48,14 @@ def _assemble_intensity_and_fluxes(
     It should be called through `pydisort` and never directly.
     It has many seemingly redundant arguments, which are described below,
     to maximize precomputation in `pydisort`
-    These arguments are passed on to the `_solve_for_gen_and_part_sols` and `_solve_for_coeffs` functions 
-    which this function wraps. See the Jupyter Notebook, especially section 3, for 
+    These arguments are passed on to the `_solve_for_gen_and_part_sols` and `_solve_for_coeffs` functions
+    which this function wraps. See the Jupyter Notebook, especially section 3, for
     documentation, explanation and derivation.
-    
+
+    Every solution function is a sum of exponentials in `tau` and, if there are isotropic internal sources,
+    a polynomial in `tau`. Its `tau`-derivative of order `tau_derivative_order` (an antiderivative if -1) therefore
+    multiplies each exponential by its rate to the power of that order and differentiates the polynomial.
+
     Arguments of _assemble_intensity_and_fluxes
     |            Variable            |                 Type / Shape                 |
     | ------------------------------ | -------------------------------------------- |
@@ -69,48 +80,38 @@ def _assemble_intensity_and_fluxes(
     | `rescale_factor`               | scalar                                       |
     | `phi0`                         | scalar                                       |
     | `there_is_beam_source`         | boolean                                      |
+    | `mu0_arr`                      | `NLayers` or `None`                          |
+    | `slant_tau_arr_with_0`         | `NLayers + 1` or `None`                      |
+    | `scaled_mu0_arr`               | `NLayers` or `None`                          |
+    | `scaled_slant_tau_arr_with_0`  | `NLayers + 1` or `None`                      |
     | `b_pos`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  |
-    | `b_neg`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  | 
+    | `b_neg`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  |
     | `b_pos_is_scalar`              | boolean                                      |
-    | `b_neg_is_scalar`              | boolean                                      |  
+    | `b_neg_is_scalar`              | boolean                                      |
     | `b_pos_is_vector`              | boolean                                      |
-    | `b_neg_is_vector`              | boolean                                      |     
-    | `Nscoeffs`                     | scalar                                       |    
+    | `b_neg_is_vector`              | boolean                                      |
     | `scaled_s_poly_coeffs`         | `NLayers x Nscoeffs`                         |
     | `there_is_iso_source`          | boolean                                      |
     | `scale_tau`                    | `NLayers`                                    |
     | `only_flux`                    | boolean                                      |
     | `use_banded_solver_NLayers`    | scalar                                       |
-    | `autograd_compatible`          | boolean                                      |
     | `cache_asso_leg`               | None, "no_mu0" or "mu0"                      |
     | `interpolate_mu`               | boolean                                      |
 
     Notable internal variables of _assemble_intensity_and_fluxes
-    |     Variable      |             Type / Shape               |
-    | ----------------- | -------------------------------------- |
-    | `G_collect`       | `NFourier x NLayers x NQuad x NQuad`   |
-    | `G_collect_0`     | `NLayers x NQuad x NQuad`              |
-    | `G_inv_mu_inv`    | `NLayers x NQuad` or `None`            |
-    | `K_collect`       | `NFourier x NLayers x NQuad`           |
-    | `K_collect_0`     | `NLayers x NQuad`                      |
-    | `B_collect`       | `NFourier x NLayers x NQuad` or `None` |
-    | `B_collect_0`     | `NLayers x NQuad` or `None`            |
-    | `B_pos`           | `NQuad/2 x NLayers` or `None`          |
-    | `B_neg`           | `NQuad/2 x NLayers` or `None`          |
-    | `C_collect`       | `NFourier x NLayers x NQuad`           |
-    | `GC_collect`      | `NFourier x NLayers x NQuad x NQuad`   | Only if the function `u` at the quadrature nodes is constructed
-    | `GC_collect_0`    | `NLayers x NQuad x NQuad`              |
-    | `GC_pos`          | `NLayers x NQuad/2 x NQuad`            |
-    | `GC_neg`          | `NLayers x NQuad/2 x NQuad`            |
+    |      Variable      |             Type / Shape               |
+    | ------------------ | -------------------------------------- |
+    | `G_collect`        | `NFourier x NLayers x NQuad x NQuad`   |
+    | `K_collect`        | `NFourier x NLayers x NQuad`           |
+    | `B_collect`        | `NFourier x NLayers x NQuad` or `None` |
+    | `mathscr_v_coeffs` | `NLayers x NQuad x Nscoeffs` or `None` |
+    | `C_collect`        | `NFourier x NLayers x NQuad`           |
+    | `GC_collect`       | `NFourier x NLayers x NQuad x NQuad`   |
+    | `tau_rates`        | `NFourier x NLayers x NQuad`           | Rate of each exponential with respect to `tau`
+    | `scaled_tau_refs`  | `NLayers x NQuad`                      | Delta-scaled optical depth at which each exponential equals 1
     """
-    if autograd_compatible:
-        import autograd.numpy as np
-    else:
-        import numpy as np
-    
-    
     ################################## Assemble uncorrected intensity and flux functions #######################################
-    
+
     # Compute all the necessary quantities
     # --------------------------------------------------------------------------------------------------------------------------
     G_collect, K_collect, B_collect, G_inv_collect_0, asso_leg_table = _solve_for_gen_and_part_sols(
@@ -123,22 +124,27 @@ def _assemble_intensity_and_fluxes(
         weighted_scaled_Leg_coeffs,
         mu0, I0_div_4pi,
         there_is_beam_source,
+        scaled_mu0_arr,
         there_is_iso_source,
         cache_asso_leg,
     )
-    if there_is_beam_source:
-        B_collect_0 = B_collect[0, :, :]
+    # Particular solution for isotropic internal sources (refer to section 3.6.1 of the Comprehensive Documentation)
     if there_is_iso_source:
-        G_inv_mu_inv = G_inv_collect_0 @ np.concatenate([M_inv, -M_inv])
+        mathscr_v_coeffs = _mathscr_v_coeffs(
+            scaled_s_poly_coeffs,
+            G_collect[0],
+            K_collect[0],
+            G_inv_collect_0 @ np.concatenate([M_inv, -M_inv]),
+        )
     else:
-        G_inv_mu_inv = None
+        mathscr_v_coeffs = None
 
     C_collect = _solve_for_coeffs(
         NFourier,
         G_collect,
         K_collect,
         B_collect,
-        G_inv_mu_inv,
+        mathscr_v_coeffs,
         scaled_tau_arr_with_0,
         mu_arr_pos, mu_arr_pos * W,
         N, NQuad,
@@ -147,459 +153,214 @@ def _assemble_intensity_and_fluxes(
         BDRF_Fourier_modes,
         mu0, I0_div_4pi,
         there_is_beam_source,
+        scaled_slant_tau_arr_with_0,
         b_pos, b_neg,
         b_pos_is_scalar, b_neg_is_scalar,
         b_pos_is_vector, b_neg_is_vector,
-        Nscoeffs,
-        scaled_s_poly_coeffs,
         there_is_iso_source,
         use_banded_solver_NLayers,
     )
-    
-    G_collect_0 = G_collect[0, :, :, :]
-    K_collect_0 = K_collect[0, :, :]
-    construct_u_at_nodes = not (only_flux or interpolate_mu)
-    if construct_u_at_nodes:
-        GC_collect = G_collect * C_collect[:, :, None, :]
-        GC_collect_0 = GC_collect[0, :, :, :]
-    else:
-        GC_collect_0 = G_collect_0 * C_collect[0, :, None, :]
+
+    GC_collect = G_collect * C_collect[:, :, None, :]
+    tau_rates = scale_tau[None, :, None] * K_collect
+    # The exponentials with negative eigenvalues equal 1 at the top of their layer and those with positive
+    # eigenvalues at its bottom, so that none exceeds 1 within the layer
+    scaled_tau_refs = np.concatenate(
+        [np.tile(scaled_tau_arr_with_0[:-1, None], N), np.tile(scaled_tau_arr_with_0[1:, None], N)], axis=1
+    )
+    tau_arr_with_0 = np.concatenate([[0], tau_arr])
     # --------------------------------------------------------------------------------------------------------------------------
 
     # Value-keyed cache for the most recent `tau` evaluation grid, shared across the output
     # functions `u`, `u0`, `flux_up` and `flux_down` so that evaluating several outputs on the same
     # grid, e.g. `flux_up(tau); flux_down(tau)`, recomputes nothing.
-    # The cache is bypassed when `autograd_compatible` as it would break gradient tracing.
     # --------------------------------------------------------------------------------------------------------------------------
     is_delta_scaled = np.any(scale_tau != 1)
-    _tau_cache = {"tau": None, "l": None, "scaled_tau": None, "exp0": None, "expm": None}
+    _tau_cache = {"tau": None}
 
     def _process_tau(tau):
         """Layer indices and delta-scaled `tau` for the evaluation grid `tau`, cached."""
-        if (not autograd_compatible and _tau_cache["tau"] is not None
-                and np.array_equal(tau, _tau_cache["tau"])):
-            return _tau_cache["l"], _tau_cache["scaled_tau"]
-        # Atmospheric layer indices: smallest l with tau <= tau_arr[l]
-        l = np.searchsorted(tau_arr, tau, side="left")
-        if is_delta_scaled:
-            scaled_tau = scaled_tau_arr_with_0[1:][l] - (tau_arr[l] - tau) * scale_tau[l]
-        else:
-            scaled_tau = tau
-        if not autograd_compatible:
-            _tau_cache.update(
-                tau=np.array(tau, copy=True), l=l, scaled_tau=scaled_tau, exp0=None, expm=None
-            )
-        return l, scaled_tau
-
-    def _exp_exponent(l, scaled_tau, all_modes):
-        """exp of the homogeneous-solution exponents for the (cached) evaluation grid.
-        Returns shape (Ntau, NQuad) for the 0th mode, or (NFourier, Ntau, NQuad) for all modes."""
-        key = "expm" if all_modes else "exp0"
-        if not autograd_compatible and _tau_cache[key] is not None:
-            return _tau_cache[key]
-        scaled_tau_arr_l = scaled_tau_arr_with_0[1:][l]
-        scaled_tau_arr_lm1 = scaled_tau_arr_with_0[l]
-        if all_modes:
-            exponent = np.concatenate(
-                [
-                    K_collect[:, l, :N] * (scaled_tau - scaled_tau_arr_lm1)[None, :, None],
-                    K_collect[:, l, N:] * (scaled_tau - scaled_tau_arr_l)[None, :, None],
-                ],
-                axis=-1,
-            )
-        else:
-            exponent = np.concatenate(
-                [
-                    K_collect_0[l, :N] * (scaled_tau - scaled_tau_arr_lm1)[:, None],
-                    K_collect_0[l, N:] * (scaled_tau - scaled_tau_arr_l)[:, None],
-                ],
-                axis=-1,
-            )
-        result = np.exp(exponent)
-        if not autograd_compatible:
-            _tau_cache[key] = result
-        return result
-    # --------------------------------------------------------------------------------------------------------------------------
-
-    if construct_u_at_nodes:
-
-        # Construct the intensity function (refer to section 3.7 of the Comprehensive Documentation)
-        # --------------------------------------------------------------------------------------------------------------------------
-        def u(tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False):
-            """
-            Intensity function with arguments `(tau, phi)` of types `(array or float, array or float)`.
-            Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
-            Pass `return_Fourier_error = True` (defaults to `False`) to return the 
-            Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
-            Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-            to switch to an antiderivative of this function with respect to `tau`.
-            """
-            tau = np.atleast_1d(tau)
-            phi = np.atleast_1d(phi)
+        if _tau_cache["tau"] is None or not np.array_equal(tau, _tau_cache["tau"]):
             if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
                 raise ValueError("tau input outside the tau range specified for the atmosphere (check `tau_arr`).")
-            
-            # Atmospheric layer indices, delta-M scaling and exponentials (cached)
-            l, scaled_tau = _process_tau(tau)
-            exp_exponent = _exp_exponent(l, scaled_tau, all_modes=True)
-
-            direct_beam_contribution = 0
-            if is_antiderivative_wrt_tau:
-                if there_is_beam_source:
-                    direct_beam_contribution = (
-                        B_collect.transpose(0, 2, 1) / (-scale_tau / mu0)[None, None, :]
-                    )[:, :, l] * np.exp(-scaled_tau / mu0)[None, None, :]
-
-                um = (
-                    np.einsum(
-                        "mtij, mtj -> mit",
-                        GC_collect[:, l, :, :],
-                        exp_exponent / (scale_tau[None, :, None] * K_collect)[:, l, :],
-                    )
-                    + direct_beam_contribution
-                )
+            # Atmospheric layer indices: smallest l with tau <= tau_arr[l]
+            l = np.searchsorted(tau_arr, tau, side="left")
+            if is_delta_scaled:
+                scaled_tau = scaled_tau_arr_with_0[l + 1] - (tau_arr[l] - tau) * scale_tau[l]
             else:
-                if there_is_beam_source:
-                    direct_beam_contribution = (
-                        B_collect.transpose(0, 2, 1)[:, :, l]
-                        * np.exp(-scaled_tau / mu0)[None, None, :]
-                    )
+                scaled_tau = tau
+            _tau_cache.clear()
+            _tau_cache.update(tau=np.array(tau, copy=True), l=l, scaled_tau=scaled_tau)
+        return _tau_cache["l"], _tau_cache["scaled_tau"]
 
-                um = (
-                    np.einsum("mtij, mtj -> mit", GC_collect[:, l, :, :], exp_exponent)
-                    + direct_beam_contribution
-                )
-            
-            # Contribution from particular solution for isotropic internal sources
-            if there_is_iso_source:
-                l_uniq, l_inv = np.unique(l, return_inverse=True)
-                _mathscr_v_contribution = _mathscr_v(
-                    scaled_tau, scale_tau[l_uniq], # `scale_tau` is only required to determine the antiderivative
-                    l_inv, 
-                    Nscoeffs,
-                    scaled_s_poly_coeffs[l_uniq],
-                    G_collect_0[l_uniq],
-                    K_collect_0[l_uniq],
-                    G_inv_mu_inv[l_uniq],
-                    is_antiderivative_wrt_tau,
-                    autograd_compatible,
-                )
-                
-                if NFourier == 1:
-                    um = um + _mathscr_v_contribution
-                elif autograd_compatible:
-                    um = np.concatenate((um[[0], :, :] + _mathscr_v_contribution, um[1:, :, :]), axis=0)
-                else:
-                    um[0, :, :] += _mathscr_v_contribution
-                
-            u = np.einsum(
-                "mit, mp -> itp",
-                um,
-                np.cos(np.arange(NFourier)[:, None] * (phi0 - phi)[None, :]),
-                optimize=True,
+    def _exponentials(l, scaled_tau, Nm):
+        """Exponentials of the homogeneous solution of the first `Nm` Fourier modes for the (cached)
+        evaluation grid; (Nm, Ntau, NQuad)."""
+        if len(_tau_cache.get("exponentials", ())) < Nm:
+            _tau_cache["exponentials"] = np.exp(
+                K_collect[:Nm, l, :] * (scaled_tau[:, None] - scaled_tau_refs[l, :])[None, :, :]
             )
+        return _tau_cache["exponentials"][:Nm]
 
-            if return_Fourier_error:
-                # The last Fourier mode's exponentials are the last slice of the cached tensor
-                exp_exponent_last = exp_exponent[-1]
+    def _scaled_beam(l, scaled_tau):
+        """Transmittance of the direct beam in the delta-scaled atmosphere; (Ntau,)."""
+        return np.exp(
+            -(scaled_slant_tau_arr_with_0[l] + (scaled_tau - scaled_tau_arr_with_0[l]) / scaled_mu0_arr[l])
+        )
+    # --------------------------------------------------------------------------------------------------------------------------
 
-                direct_beam_contribution = 0
-                if is_antiderivative_wrt_tau:
-                    if there_is_beam_source:
-                        # `B_collect[-1].T` has shape (NQuad, NLayers): the last Fourier mode's
-                        # particular-solution coefficients (`B_collect.T[-1]` would wrongly
-                        # index the last quadrature node)
-                        direct_beam_contribution = (
-                            B_collect[-1].T / (-scale_tau / mu0)[None, :]
-                        )[:, l] * np.exp(-scaled_tau / mu0)[None, :]
+    # Fourier modes of the intensity at the quadrature nodes (refer to section 3.7 of the Comprehensive Documentation)
+    # --------------------------------------------------------------------------------------------------------------------------
+    def _um_at_nodes(tau, tau_derivative_order, Nm, nodes=slice(None)):
+        """`tau`-derivative of order `tau_derivative_order` of the first `Nm` Fourier modes of the intensity
+        at the quadrature `nodes` (a slice) and the optical depths `tau`; (Nm, number of nodes, Ntau)."""
+        _check_tau_derivative_order(tau_derivative_order)
+        l, scaled_tau = _process_tau(tau)
 
-                    ulast = (
-                        np.einsum(
-                            "tij, tj -> it",
-                            GC_collect[-1, l, :, :],
-                            exp_exponent_last / (scale_tau[:, None] * K_collect[-1, :, :])[l, :],
-                        )
-                        + direct_beam_contribution
-                    )
-                else:
-                    if there_is_beam_source:
-                        # See the shape note in the `is_antiderivative_wrt_tau` branch above
-                        direct_beam_contribution = (
-                            B_collect[-1].T[:, l] * np.exp(-scaled_tau / mu0)[None, :]
-                        )
+        um = np.einsum(
+            "mtij, mtj -> mit",
+            GC_collect[:Nm, l, nodes, :],
+            _exponentials(l, scaled_tau, Nm) * tau_rates[:Nm, l, :] ** tau_derivative_order,
+        )
+        if there_is_beam_source:
+            beam = _scaled_beam(l, scaled_tau) * (-scale_tau[l] / scaled_mu0_arr[l]) ** tau_derivative_order
+            um += np.swapaxes(B_collect[:Nm, l, nodes], 1, 2) * beam[None, None, :]
+        # Contribution from particular solution for isotropic internal sources
+        if there_is_iso_source:
+            um[0] += scale_tau[l] ** tau_derivative_order * (
+                _poly_tau_derivative(mathscr_v_coeffs[l, nodes, :], scaled_tau, tau_derivative_order).T
+            )
+        return um
 
-                    ulast = (
-                        np.einsum("tij, tj -> it", GC_collect[-1, l, :, :], exp_exponent_last)
-                        + direct_beam_contribution
-                    )
-        
-                u_abs = np.abs(u)
-                Fourier_error = np.max(
-                    np.divide(
-                        np.abs(
-                            ulast[:, :, None] * np.cos((NFourier - 1) * (phi0 - phi))[None, None, :]
-                        ),
-                        u_abs,
-                        out=np.zeros_like(u_abs),
-                        where=u_abs > 1e-8,
-                    )
-                )
+    def _direct_beam(tau, tau_derivative_order):
+        """`tau`-derivative of order `tau_derivative_order` of the intensity of the direct beam at `tau` and of
+        the same in the delta-scaled atmosphere; each (Ntau,). Their difference is the delta-scaled
+        direct beam which is reclassified as diffuse (refer to section 3.8 of the Comprehensive Documentation)."""
+        l, scaled_tau = _process_tau(tau)
+        if not there_is_beam_source:
+            return np.zeros(len(tau)), np.zeros(len(tau))
+        direct_beam = I0 * (-1 / mu0_arr[l]) ** tau_derivative_order * np.exp(
+            -(slant_tau_arr_with_0[l] + (tau - tau_arr_with_0[l]) / mu0_arr[l])
+        )
+        direct_beam_scaled = (
+            I0 * (-scale_tau[l] / scaled_mu0_arr[l]) ** tau_derivative_order * _scaled_beam(l, scaled_tau)
+        )
+        return direct_beam, direct_beam_scaled
+    # --------------------------------------------------------------------------------------------------------------------------
 
-                return rescale_factor * np.squeeze(u), Fourier_error
-            else:
-                return rescale_factor * np.squeeze(u)
-        # --------------------------------------------------------------------------------------------------------------------------
-    
+    # Construct the intensity function (refer to section 3.7 of the Comprehensive Documentation)
+    # --------------------------------------------------------------------------------------------------------------------------
+    def u(tau, phi, tau_derivative_order=0, return_Fourier_error=False):
+        """
+        Intensity function with arguments `(tau, phi)` of types `(array or float, array or float)`.
+        Returns an ndarray with axes corresponding to variation with `mu, tau, phi` respectively.
+        Pass `tau_derivative_order = 1` or `-1` (defaults to `0`)
+        to switch to the derivative or an antiderivative of this function with respect to `tau`.
+        Pass `return_Fourier_error = True` (defaults to `False`) to return the
+        Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term.
+        """
+        tau = np.atleast_1d(tau)
+        phi = np.atleast_1d(phi)
+        um = _um_at_nodes(tau, tau_derivative_order, NFourier)
+        cosines = np.cos(np.arange(NFourier)[:, None] * (phi0 - phi)[None, :])
+        u = np.einsum("mit, mp -> itp", um, cosines, optimize=True)
+
+        if return_Fourier_error:
+            return rescale_factor * np.squeeze(u), _Fourier_error(um[-1], cosines[-1], u)
+        else:
+            return rescale_factor * np.squeeze(u)
+    # --------------------------------------------------------------------------------------------------------------------------
+
     # Construct u0
     # --------------------------------------------------------------------------------------------------------------------------
-    def u0(tau, is_antiderivative_wrt_tau=False):
-        """        
+    def u0(tau, tau_derivative_order=0):
+        """
         Zeroth Fourier mode of the intensity with argument `tau` (type: array or float).
         Returns an ndarray with axes corresponding to variation with `mu` and `tau` respectively.
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually
         (for actinic flux `generate_diff_act_flux_funcs` will automatically perform the reclassification).
-        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of this function with respect to `tau`.
+        Pass `tau_derivative_order = 1` or `-1` (defaults to `0`)
+        to switch to the derivative or an antiderivative of this function with respect to `tau`.
         """
-        tau = np.atleast_1d(tau)
-        if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
-            raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
-        
-        # Atmospheric layer indices, delta-M scaling and exponentials (cached)
-        l, scaled_tau = _process_tau(tau)
-        exp_exponent = _exp_exponent(l, scaled_tau, all_modes=False)
-
-        direct_beam_contribution = 0
-        if is_antiderivative_wrt_tau:
-            if there_is_beam_source:
-                direct_beam_contribution = (B_collect_0.T / (-scale_tau / mu0)[None, :])[
-                    :, l
-                ] * np.exp(-scaled_tau / mu0)[None, :]
-
-            u0 = (
-                np.einsum(
-                    "tij, tj -> it",
-                    GC_collect_0[l, :, :],
-                    exp_exponent / (scale_tau[:, None] * K_collect_0)[l, :],
-                )
-                + direct_beam_contribution
-            )
-        else:
-            if there_is_beam_source:
-                direct_beam_contribution = (
-                    B_collect_0.T[:, l] * np.exp(-scaled_tau / mu0)[None, :]
-                )
-
-            u0 = (
-                np.einsum("tij, tj -> it", GC_collect_0[l, :, :], exp_exponent)
-                + direct_beam_contribution
-            )
-
-        # Contribution from particular solution for isotropic internal sources
-        if there_is_iso_source:
-            l_uniq, l_inv = np.unique(l, return_inverse=True)
-            _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, scale_tau[l_uniq], # `scale_tau` is only required to determine the antiderivative
-                l_inv,
-                Nscoeffs,
-                scaled_s_poly_coeffs[l_uniq],
-                G_collect_0[l_uniq],
-                K_collect_0[l_uniq],
-                G_inv_mu_inv[l_uniq],
-                is_antiderivative_wrt_tau,
-                autograd_compatible,
-            )
-            u0 = u0 + _mathscr_v_contribution
-
-        return rescale_factor * np.squeeze(u0)
+        return rescale_factor * np.squeeze(_um_at_nodes(np.atleast_1d(tau), tau_derivative_order, 1)[0])
 
 
-    def _act_dscale_reclassification(tau, is_antiderivative_wrt_tau=False):
+    def _act_dscale_reclassification(tau, tau_derivative_order=0):
         """Reclassification of delta-scaled actinic flux at `tau`; it complements `u0` in
         `subroutines.generate_diff_act_flux_funcs`. Attached to `u0` as an attribute of the same name.
         """
-        if not (is_delta_scaled and there_is_beam_source):
-            return 0
-        tau = np.atleast_1d(tau)
-        l, scaled_tau = _process_tau(tau)
-        if is_antiderivative_wrt_tau:
-            act_dscale_reclassification = (
-                I0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0)
-                - I0 * np.exp(-tau / mu0) * -mu0
-            )
-        else:
-            act_dscale_reclassification = I0 * np.exp(-scaled_tau / mu0) - I0 * np.exp(-tau / mu0)
-        return rescale_factor * act_dscale_reclassification
+        direct_beam, direct_beam_scaled = _direct_beam(np.atleast_1d(tau), tau_derivative_order)
+        return rescale_factor * (direct_beam_scaled - direct_beam)
     # --------------------------------------------------------------------------------------------------------------------------
-    
+
     # Construct the flux functions (refer to section 3.8 of the Comprehensive Documentation)
     # --------------------------------------------------------------------------------------------------------------------------
-    GC_pos = GC_collect_0[:, :N, :]
-    GC_neg = GC_collect_0[:, N:, :]
-    if there_is_beam_source:
-        B_pos = B_collect_0[:, :N].T
-        B_neg = B_collect_0[:, N:].T
-
-
-    def flux_up(tau, is_antiderivative_wrt_tau=False):
-        """    
+    def flux_up(tau, tau_derivative_order=0):
+        """
         (Energetic) Flux function with argument `tau` (type: array or float) for positive (upward) `mu` values.
         Returns the diffuse flux magnitudes (same type and size as `tau`).
-        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of this function with respect to `tau`.
+        Pass `tau_derivative_order = 1` or `-1` (defaults to `0`)
+        to switch to the derivative or an antiderivative of this function with respect to `tau`.
         """
-        tau = np.atleast_1d(tau)
-        if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
-            raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
-        
-        # Atmospheric layer indices, delta-M scaling and exponentials (cached)
-        l, scaled_tau = _process_tau(tau)
-        exp_exponent = _exp_exponent(l, scaled_tau, all_modes=False)
-
-        if there_is_iso_source:
-            l_uniq, l_inv = np.unique(l, return_inverse=True)
-            _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, scale_tau[l_uniq], # `scale_tau` is only required to determine the antiderivative
-                l_inv,
-                Nscoeffs,
-                scaled_s_poly_coeffs[l_uniq],
-                G_collect_0[l_uniq, :N, :],
-                K_collect_0[l_uniq],
-                G_inv_mu_inv[l_uniq],
-                is_antiderivative_wrt_tau,
-                autograd_compatible,
-            )
-        else:
-            _mathscr_v_contribution = 0
-        
-        direct_beam_contribution = 0
-        if is_antiderivative_wrt_tau:
-            if there_is_beam_source:
-                direct_beam_contribution = (
-                    (B_pos / (-scale_tau / mu0)[None, :])[:, l] * np.exp(-scaled_tau / mu0)[None, :] 
-                )
-                
-            u0_pos = (
-                np.einsum(
-                    "tij, tj -> it",
-                    GC_pos[l, :, :],
-                    exp_exponent / (scale_tau[:, None] * K_collect_0)[l, :],
-                )
-                + direct_beam_contribution
-                + _mathscr_v_contribution
-            )
-        else:
-            if there_is_beam_source:
-                direct_beam_contribution = B_pos[:, l] * np.exp(-scaled_tau / mu0)[None, :]
-                
-            u0_pos = (
-                np.einsum("tij, tj -> it", GC_pos[l, :, :], exp_exponent)
-                + direct_beam_contribution
-                + _mathscr_v_contribution
-            )
-            
+        u0_pos = _um_at_nodes(np.atleast_1d(tau), tau_derivative_order, 1, slice(0, N))[0]
         flux = 2 * pi * (mu_arr_pos * W) @ u0_pos
 
         return rescale_factor * np.squeeze(flux)[()]
 
 
-    def flux_down(tau, is_antiderivative_wrt_tau=False):
+    def flux_down(tau, tau_derivative_order=0):
         """
         (Energetic) Flux function with argument `tau` (type: array or float) for negative (downward) `mu` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
         same type and size as `tau`.
-        Pass `is_antiderivative_wrt_tau = True` (defaults to `False`)
-        to switch to an antiderivative of this function with respect to `tau`.
+        Pass `tau_derivative_order = 1` or `-1` (defaults to `0`)
+        to switch to the derivative or an antiderivative of this function with respect to `tau`.
         """
         tau = np.atleast_1d(tau)
-        if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
-            raise ValueError("tau input outside the tau range given for the atmosphere (check `tau_arr`).")
-
-        # Atmospheric layer indices, delta-M scaling and exponentials (cached)
-        l, scaled_tau = _process_tau(tau)
-        exp_exponent = _exp_exponent(l, scaled_tau, all_modes=False)
-
-        if there_is_iso_source:
-            l_uniq, l_inv = np.unique(l, return_inverse=True)
-            _mathscr_v_contribution = _mathscr_v(
-                scaled_tau, scale_tau[l_uniq], # `scale_tau` is only required to determine the antiderivative
-                l_inv,
-                Nscoeffs,
-                scaled_s_poly_coeffs[l_uniq],
-                G_collect_0[l_uniq, N:, :],
-                K_collect_0[l_uniq],
-                G_inv_mu_inv[l_uniq],
-                is_antiderivative_wrt_tau,
-                autograd_compatible,
-            )
-        else:
-            _mathscr_v_contribution = 0
-            
-        direct_beam_contribution = 0
-        direct_beam = np.zeros(len(tau))
-        direct_beam_scaled = 0
-        if is_antiderivative_wrt_tau:
-            if there_is_beam_source:
-                direct_beam_contribution = (B_neg / (-scale_tau / mu0)[None, :])[:, l] * np.exp(-scaled_tau / mu0)[None, :]
-                direct_beam = I0 * mu0 * np.exp(-tau / mu0) * -mu0
-                direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0) / (-scale_tau[l] / mu0)
-            
-            u0_neg = (
-                np.einsum("tij, tj -> it", GC_neg[l, :, :], exp_exponent / (scale_tau[:, None] * K_collect_0)[l, :])
-                + direct_beam_contribution
-                + _mathscr_v_contribution
-            )
-        else:
-            if there_is_beam_source:
-                direct_beam_contribution = B_neg[:, l] * np.exp(-scaled_tau / mu0)[None, :]
-                direct_beam = I0 * mu0 * np.exp(-tau / mu0)
-                direct_beam_scaled = I0 * mu0 * np.exp(-scaled_tau / mu0)
-            
-            u0_neg = (
-                np.einsum("tij, tj -> it", GC_neg[l, :, :], exp_exponent)
-                + direct_beam_contribution
-                + _mathscr_v_contribution
-            )
-            
-        diffuse_flux = 2 * pi * (mu_arr_pos * W) @ u0_neg + direct_beam_scaled - direct_beam
+        u0_neg = _um_at_nodes(tau, tau_derivative_order, 1, slice(N, None))[0]
+        direct_beam, direct_beam_scaled = _direct_beam(tau, tau_derivative_order)
+        diffuse_flux = 2 * pi * (mu_arr_pos * W) @ u0_neg + mu0 * direct_beam_scaled - mu0 * direct_beam
 
         return (
             rescale_factor * np.squeeze(diffuse_flux)[()],
-            rescale_factor * np.squeeze(direct_beam)[()],
+            rescale_factor * np.squeeze(mu0 * direct_beam)[()],
         )
-        # --------------------------------------------------------------------------------------------------------------------------
-
-    # Attach other useful attributes
-    u0._act_dscale_reclassification = _act_dscale_reclassification
-    flux_up.tau_arr = flux_down.tau_arr = u0.tau_arr = tau_arr
-    if construct_u_at_nodes:
-        u.tau_arr = tau_arr
+    # --------------------------------------------------------------------------------------------------------------------------
 
     # Intensities at arbitrary polar angles by the integration of the source function (refer to section 3.7)
     # --------------------------------------------------------------------------------------------------------------------------
+    u0._act_dscale_reclassification = _act_dscale_reclassification
     if interpolate_mu:
         u0_at_nodes = u0
         u0, u = _build_IotS(
+            _process_tau,
+            _um_at_nodes(tau_arr[-1:], 0, NFourier, slice(N, None))[:, :, 0],
             asso_leg_table,
-            G_collect, K_collect, B_collect, C_collect, G_inv_mu_inv,
-            tau_arr, scaled_tau_arr_with_0, scale_tau,
-            mu_arr_pos, W, N, NLeg, NFourier, NLayers, NBDRF,
-            scaled_omega_arr, weighted_scaled_Leg_coeffs, BDRF_Fourier_modes,
-            mu0, I0_div_4pi, phi0, rescale_factor,
+            G_collect, K_collect, B_collect, C_collect, mathscr_v_coeffs,
+            scaled_tau_arr_with_0, scale_tau,
+            mu_arr_pos, W,
+            N, NQuad, NLeg,
+            NFourier, NLayers, NBDRF,
+            scaled_omega_arr, weighted_scaled_Leg_coeffs,
+            BDRF_Fourier_modes,
+            mu0, I0_div_4pi, phi0,
+            rescale_factor,
             there_is_beam_source,
-            b_pos, b_neg, b_pos_is_scalar, b_neg_is_scalar,
-            Nscoeffs, scaled_s_poly_coeffs, there_is_iso_source,
-            only_flux,
+            scaled_mu0_arr, scaled_slant_tau_arr_with_0,
+            b_pos, b_neg,
+            b_pos_is_scalar, b_neg_is_scalar,
+            scaled_s_poly_coeffs,
+            there_is_iso_source,
         )
         # `subroutines.generate_diff_act_flux_funcs` integrates the zeroth Fourier mode at the quadrature nodes
         u0._at_quad_nodes = u0_at_nodes
-        u0.tau_arr = tau_arr
-        if not only_flux:
-            u.tau_arr = tau_arr
     # --------------------------------------------------------------------------------------------------------------------------
 
+    # Attach other useful attributes
+    flux_up.tau_arr = flux_down.tau_arr = u0.tau_arr = u.tau_arr = tau_arr
+
     if only_flux:
-        return flux_up, flux_down, u0#, GC_collect_0, K_collect_0#, B_collect_0
+        return flux_up, flux_down, u0
     else:
         return flux_up, flux_down, u0, u

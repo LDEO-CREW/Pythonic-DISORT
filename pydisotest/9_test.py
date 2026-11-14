@@ -205,7 +205,6 @@ def test_9c():
     f_arr = 0
     NT_cor = False
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -293,7 +292,6 @@ def test_9corrections():
     #f_arr = 0
     #NT_cor = False
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 

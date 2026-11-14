@@ -35,7 +35,6 @@ def test_1a():
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -110,8 +109,6 @@ def test_1b():
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers=10
-    autograd_compatible=False
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -186,7 +183,6 @@ def test_1c():
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -261,7 +257,6 @@ def test_1d():
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -335,7 +330,6 @@ def test_1e():
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -409,7 +403,6 @@ def test_1f():
     BDRF_Fourier_modes=[]
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 

@@ -3,7 +3,6 @@
 
 PythonicDISORT
 pytest
-autograd
 jupyter
 notebook
 matplotlib

@@ -1,4 +1,4 @@
-from PythonicDISORT.subroutines import _mathscr_v
+from PythonicDISORT.subroutines import _poly_tau_derivative
 
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
@@ -10,7 +10,7 @@ def _solve_for_coeffs(
     G_collect,                                # Eigenvector matrices
     K_collect,                                # Eigenvalues
     B_collect,                                # Coefficients vectors for particular solutions
-    G_inv_mu_inv,                             # Inverse of eigenvector matrix for the 0th Fourier mode
+    mathscr_v_coeffs,                         # Polynomial coefficients of the particular solution for isotropic internal sources
     scaled_tau_arr_with_0,                    # Delta-scaled lower boundary of layers with 0 inserted in front
     mu_arr_pos, mu_arr_pos_times_W,           # Upper hemisphere quadrature nodes (cosine polar angles); same but multiplied by weights
     N, NQuad,                                 # Number of 1) upper 2) both hemispheres quadrature nodes
@@ -19,11 +19,10 @@ def _solve_for_coeffs(
     BDRF_Fourier_modes,                       # BDRF Fourier modes
     mu0, I0_div_4pi,                          # Primary properties of the direct beam
     there_is_beam_source,                     # Is there a beam source?
+    scaled_slant_tau_arr_with_0,              # Slant optical depth of the direct beam at each delta-scaled layer boundary
     b_pos, b_neg,                             # Dirichlet BCs
     b_pos_is_scalar, b_neg_is_scalar,         # Is each Dirichlet BCs scalar and so isotropic?
     b_pos_is_vector, b_neg_is_vector,         # Is each Dirichlet BCs vector?
-    Nscoeffs,                                 # Number of isotropic source polynomial coefficients
-    scaled_s_poly_coeffs,                     # Polynomial coefficients of isotropic source           
     there_is_iso_source,                      # Is there an isotropic source?
     use_banded_solver_NLayers,                # Number of layers above or equal which to use `scipy.linalg.solve_banded`
 ):
@@ -43,7 +42,7 @@ def _solve_for_coeffs(
     | `G_collect`                    | `NFourier x NLayers x NQuad x NQuad`         |
     | `K_collect`                    | `NFourier x NLayers x NQuad`                 |
     | `B_collect`                    | `NFourier x NLayers x NQuad` or `None`       |
-    | `G_inv_mu_inv`                 | `NLayers x NQuad` or `None`                  |
+    | `mathscr_v_coeffs`             | `NLayers x NQuad x Nscoeffs` or `None`       |
     | `scaled_tau_arr_with_0`        | `NLayers + 1`                                |
     | `mu_arr_pos`                   | `NQuad/2`                                    |
     | `mu_arr_pos_times_W`           | `NQuad/2`                                    |
@@ -56,30 +55,37 @@ def _solve_for_coeffs(
     | `mu0`                          | scalar                                       |
     | `I0_div_4pi`                   | scalar                                       |
     | `there_is_beam_source`         | boolean                                      |
+    | `scaled_slant_tau_arr_with_0`  | `NLayers + 1` or `None`                      |
     | `b_pos`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  |
-    | `b_neg`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  | 
+    | `b_neg`                        | `NQuad/2 x NFourier` or `NQuad/2` or scalar  |
     | `b_pos_is_scalar`              | boolean                                      |
     | `b_neg_is_scalar`              | boolean                                      |
     | `b_pos_is_vector`              | boolean                                      |
     | `b_neg_is_vector`              | boolean                                      |
-    | `Nscoeffs`                     | scalar                                       |
-    | `scaled_s_poly_coeffs`         | `NLayers x Nscoeffs`                         |
     | `there_is_iso_source`          | boolean                                      |
     | `use_banded_solver_NLayers`    | scalar                                       |
-    
+
     Notable internal variables of _solve_for_coeffs
-    |   Variable   |             Shape            |
-    | ------------ | ---------------------------- |
-    | `C_collect`  | `NFourier x NLayers x NQuad` | Stored as `NFourier x NLayers*NQuad` until it is returned
+    |      Variable       |             Shape            |
+    | ------------------- | ---------------------------- |
+    | `C_collect`         | `NFourier x NLayers x NQuad` | Stored as `NFourier x NLayers*NQuad` until it is returned
+    | `beam_arr_with_0`   | `NLayers + 1`                | Transmittance of the direct beam at each layer boundary
+    | `mathscr_v_top`     | `NLayers x NQuad`            | Particular solution for isotropic internal sources at the top of each layer
+    | `mathscr_v_bottom`  | `NLayers x NQuad`            | Same but at the bottom of each layer
 
     """
     ################################## Solve for coefficients of homogeneous solution ##########################################
     ############# Refer to section 3.6.2 (single-layer) and 4 (multi-layer) of the Comprehensive Documentation #################
-    
+
     use_banded_solver = (NLayers >= use_banded_solver_NLayers)
     dim = NLayers * NQuad
     C_collect = np.empty((NFourier, dim))
     thickness = np.diff(scaled_tau_arr_with_0)                                                       # (NLayers,)
+    if there_is_beam_source:
+        beam_arr_with_0 = np.exp(-scaled_slant_tau_arr_with_0)
+    if there_is_iso_source:
+        mathscr_v_top = _poly_tau_derivative(mathscr_v_coeffs, scaled_tau_arr_with_0[:-1], 0)
+        mathscr_v_bottom = _poly_tau_derivative(mathscr_v_coeffs, scaled_tau_arr_with_0[1:], 0)
 
     RHS = np.empty(dim)
     i_bot = dim - N # Equals `j_bot_right`
@@ -197,91 +203,36 @@ def _solve_for_coeffs(
         
         if m_equals_0 and there_is_iso_source:
             # Top boundary
-            RHS[:N] -= _mathscr_v(
-                        np.array([0]),
-                        None,
-                        np.array([0]),
-                        Nscoeffs,
-                        scaled_s_poly_coeffs[[0], :],
-                        G_collect_m[[0], N:, :],
-                        K_collect_m[[0], :],
-                        G_inv_mu_inv[[0]],
-                    ).ravel()
-        
+            RHS[:N] -= mathscr_v_top[0, N:]
+
             if is_atmos_multilayered:
-                indices = np.arange(NLayers - 1)
-                indicesp1 = indices + 1
-                RHS[N:-N] += (
-                    _mathscr_v(
-                        scaled_tau_arr_with_0[1:-1],
-                        None,
-                        indices,
-                        Nscoeffs,
-                        scaled_s_poly_coeffs[indicesp1],
-                        G_collect_m[indicesp1],
-                        K_collect_m[indicesp1],
-                        G_inv_mu_inv[indicesp1],
-                    )
-                    - _mathscr_v(
-                        scaled_tau_arr_with_0[1:-1],
-                        None,
-                        indices,
-                        Nscoeffs,
-                        scaled_s_poly_coeffs[indices],
-                        G_collect_m[indices],
-                        K_collect_m[indices],
-                        G_inv_mu_inv[indices],
-                    )
-                ).ravel(order='F')
-                
+                RHS[N:-N] += (mathscr_v_top[1:, :] - mathscr_v_bottom[:-1, :]).ravel()
+
             # Bottom boundary
-            RHS[-N:] -= _mathscr_v(
-                scaled_tau_arr_with_0[[-1]],
-                None,
-                np.array([0]),
-                Nscoeffs,
-                scaled_s_poly_coeffs[[-1], :],
-                G_collect_m[[-1], :N, :],
-                K_collect_m[[-1], :],
-                G_inv_mu_inv[[-1]],
-            ).ravel()
-            
+            RHS[-N:] -= mathscr_v_bottom[-1, :N]
+
             if there_is_BDRF_mode:
-                RHS[-N:] += (
-                    R
-                    @ _mathscr_v(
-                        scaled_tau_arr_with_0[[-1]],
-                        None,
-                        np.array([0]),
-                        Nscoeffs,
-                        scaled_s_poly_coeffs[[-1], :],
-                        G_collect_m[[-1], N:, :],
-                        K_collect_m[[-1], :],
-                        G_inv_mu_inv[[-1]],
-                    ).ravel()
-                )
-        
+                RHS[-N:] += R @ mathscr_v_bottom[-1, N:]
+
         if there_is_beam_source:
             B_collect_m = B_collect[m, :, :]
-        
+
             # Top boundary
             RHS[:N] -= B_collect_m[0, N:]
-        
+
             if is_atmos_multilayered:
-                indicesp1 = np.arange(1, NLayers)
                 RHS[N:-N] += (
-                    (B_collect_m[indicesp1, :] - B_collect_m[indicesp1 - 1, :])
-                    * np.exp(-scaled_tau_arr_with_0 / mu0)[indicesp1, None]
+                    (B_collect_m[1:, :] - B_collect_m[:-1, :]) * beam_arr_with_0[1:-1, None]
                 ).ravel()
-            
+
             # Bottom boundary
             if there_is_BDRF_mode:
                 RHS[-N:] += (
                     mathscr_X_pos + R @ B_collect_m[-1, N:] - B_collect_m[-1, :N]
-                ) * np.exp(-scaled_tau_arr_with_0[-1] / mu0)
+                ) * beam_arr_with_0[-1]
 
             else:
-                RHS[-N:] -= B_collect_m[-1, :N] * np.exp(-scaled_tau_arr_with_0[-1] / mu0)
+                RHS[-N:] -= B_collect_m[-1, :N] * beam_arr_with_0[-1]
             
         # --------------------------------------------------------------------------------------------------------------------------
         

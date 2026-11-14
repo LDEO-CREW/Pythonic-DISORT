@@ -271,7 +271,6 @@ def test_8ARTS_A():
     NT_cor = False
     BDRF_Fourier_modes = []
     use_banded_solver_NLayers = 10
-    autograd_compatible = False
     
     ARTS_results = np.load("Stamnes_results/8ARTS_A_test.npy")
     assert np.max(np.abs(pyth[:, -1, -1] - ARTS_results) / ARTS_results) < 1e-2

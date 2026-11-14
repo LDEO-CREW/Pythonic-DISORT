@@ -3,16 +3,15 @@
 
 # Introduction
 The PythonicDISORT package is a Discrete Ordinates Solver for the (1D) Radiative Transfer Equation 
-in a plane-parallel, horizontally homogeneous atmosphere.
+in a plane-parallel, horizontally homogeneous atmosphere, with an optional pseudo-spherical correction for a low sun.
 It is coded entirely in Python 3 and is not a wrapper.
 PythonicDISORT has been optimized for speed and **as of v1.8 is one-third the speed of FORTRAN DISORT while being NumPy and Scipy only**.
 PythonicDISORT is intended to be easier to install, use, and modify than FORTRAN-based Discrete Ordinates Solvers.
 
 PythonicDISORT is based on Stamnes' FORTRAN DISORT (see References, in particular [2, 3, 8]),
-as of v1.8 the only **missing features** are $\delta$-M+ scaling (PythonicDISORT instead implements NT corrections), 
-the Chapman function for near-horizon solar angles, and pseudo-spherical corrections. 
+as of v1.10 the only **missing feature** is $\delta$-M+ scaling (PythonicDISORT instead implements NT corrections). 
 On the other hand, we added a subroutine to compute actinic fluxes to satisfy a user request, 
-added analytic integration with respect to optical depth, and improved the handling of singularities.
+added analytic differentiation and integration with respect to optical depth, and improved the handling of singularities.
 Further feature requests as well as feedback are welcome.
 
 You may contact me, Dion, through dh3065@columbia.edu.
@@ -52,8 +51,10 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 (no corresponding Jupyter Notebook)
 * Test Problem 11: Single-Layer vs. Multiple Layers
 * Test Problem I: Antiderivative / integration functionality
+* Test Problem D: Derivative functionality
 * Test Problem NT: NT corrections, at the quadrature nodes and at arbitrary polar angles
 * Test Problem IotS: Intensity at arbitrary polar angles (`interpolate_mu=True`)
+* Test Problem PS: Pseudo-spherical correction (`radii_arr`)
 
 # Installation
 
@@ -65,7 +66,6 @@ These notebooks double up as examples of how to use PythonicDISORT. The tests wh
 * Python 3.10+
 * `numpy >= 1.23.5`
 * `scipy >= 1.15.0`
-* (OPTIONAL) `autograd >= 1.5` (`autograd` can be used to compute gradients of the output functions)
 * (OPTIONAL) `pytest >= 6.2.5` (Required to use the command `pytest`, see *PyTest and examples of how to use PythonicDISORT*)
 
 ## (OPTIONAL) Additional requirements to run the Jupyter Notebook

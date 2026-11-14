@@ -14,6 +14,7 @@ import pytest
 # Test Problem IotS: intensities at arbitrary polar angles by the integration of the source function,
 # i.e. the intensity functions of `pydisort` when `interpolate_mu=True`
 # ============================================================================================================
+# This subsumes test problem 10 of Stamnes' DISORT (`disotest.f90`), see `test_IotS_reproduces_quadrature_nodes`
 
 rng = np.random.default_rng(0) # Seed the RNG
 NLayers = 5
@@ -35,7 +36,7 @@ def BDRF_mode0(mu, neg_mup):
     return 0.1 + 0.05 * np.outer(mu, neg_mup)
 
 
-def _pydisort(**kwargs):
+def _pydisort(NQuad=NQuad, tau_arr=tau_arr, **kwargs):
     kwargs.setdefault("BDRF_Fourier_modes", [BDRF_mode0, 0.02])
     return PythonicDISORT.pydisort(
         tau_arr, omega_arr,
@@ -52,18 +53,32 @@ def _pydisort(**kwargs):
 
 def test_IotS_reproduces_quadrature_nodes():
     # At the quadrature nodes the integration of the source function reproduces the discrete ordinates solution,
-    # and the NT corrections at those `mu` values are those at the quadrature nodes
+    # and the NT corrections at those `mu` values are those at the quadrature nodes.
+    # The same holds for the antiderivative and the derivative with respect to tau, and the fluxes are unaffected.
+    # The second configuration has the features of test problem 10 of Stamnes' DISORT, which compares
+    # USRANG = TRUE at the quadrature nodes against USRANG = FALSE: 4 streams, thick layers and a Lambertian surface.
     print()
-    for NT_cor in (False, True):
-        mu_arr, _, _, u0_nodes, u_nodes = _pydisort(NT_cor=NT_cor)
-        _, _, _, u0, u = _pydisort(NT_cor=NT_cor, interpolate_mu=True)
-        for is_antiderivative_wrt_tau in (False, True):
-            ref = u_nodes(tau_eval, phi_eval, is_antiderivative_wrt_tau)
-            res = u(mu_arr, tau_eval, phi_eval, is_antiderivative_wrt_tau)
-            assert np.max(np.abs(res - ref)) < 1e-12 * np.max(np.abs(ref))
-            ref0 = u0_nodes(tau_eval, is_antiderivative_wrt_tau)
-            res0 = u0(mu_arr, tau_eval, is_antiderivative_wrt_tau)
-            assert np.max(np.abs(res0 - ref0)) < 1e-12 * np.max(np.abs(ref0))
+    configs = ({}, {"NQuad": 4, "tau_arr": 5 * tau_arr, "BDRF_Fourier_modes": [0.5]})
+    for config in configs:
+        tau_eval_config = tau_eval * config.get("tau_arr", tau_arr)[-1] / tau_arr[-1]
+        for NT_cor in (False, True):
+            mu_arr, flux_up_nodes, flux_down_nodes, u0_nodes, u_nodes = _pydisort(NT_cor=NT_cor, **config)
+            _, flux_up, flux_down, u0, u = _pydisort(NT_cor=NT_cor, interpolate_mu=True, **config)
+            for tau_derivative_order in (0, -1, 1):
+                ref = u_nodes(tau_eval_config, phi_eval, tau_derivative_order)
+                res = u(mu_arr, tau_eval_config, phi_eval, tau_derivative_order)
+                assert np.max(np.abs(res - ref)) < 1e-12 * np.max(np.abs(ref))
+                ref0 = u0_nodes(tau_eval_config, tau_derivative_order)
+                res0 = u0(mu_arr, tau_eval_config, tau_derivative_order)
+                assert np.max(np.abs(res0 - ref0)) < 1e-12 * np.max(np.abs(ref0))
+                assert np.array_equal(
+                    flux_up(tau_eval_config, tau_derivative_order),
+                    flux_up_nodes(tau_eval_config, tau_derivative_order),
+                )
+                assert np.array_equal(
+                    flux_down(tau_eval_config, tau_derivative_order),
+                    flux_down_nodes(tau_eval_config, tau_derivative_order),
+                )
 
 
 def test_IotS_boundary_conditions():
@@ -85,9 +100,24 @@ def test_IotS_antiderivative():
         phi = np.array([0.0, 1.3])
         tops = np.concatenate([[0], np.nextafter(tau_arr[:-1], np.inf)])
         for top, bottom in zip(tops, tau_arr):
-            integral = u(mu_eval, bottom, phi, True) - u(mu_eval, top, phi, True)
+            integral = u(mu_eval, bottom, phi, -1) - u(mu_eval, top, phi, -1)
             quad = quad_vec(lambda t: u(mu_eval, t, phi), top, bottom, epsabs=1e-13, epsrel=1e-12)[0]
             assert np.max(np.abs(integral - quad)) < 1e-9 * np.max(np.abs(quad))
+
+
+def test_IotS_derivative():
+    # The tau-derivative against central finite differences of the intensity, at arbitrary mu
+    print()
+    tau_interior = np.random.default_rng(1).uniform(0.01, tau_arr[-1] - 0.01, 12)
+    h = 1e-5
+    for NT_cor in (False, True):
+        _, _, _, u0, u = _pydisort(NT_cor=NT_cor, interpolate_mu=True)
+        derivative = u(mu_eval, tau_interior, phi_eval, 1)
+        finite_diff = (u(mu_eval, tau_interior + h, phi_eval) - u(mu_eval, tau_interior - h, phi_eval)) / (2 * h)
+        assert np.max(np.abs(derivative - finite_diff)) < 1e-7 * np.max(np.abs(derivative))
+        derivative = u0(mu_eval, tau_interior, 1)
+        finite_diff = (u0(mu_eval, tau_interior + h) - u0(mu_eval, tau_interior - h)) / (2 * h)
+        assert np.max(np.abs(derivative - finite_diff)) < 1e-7 * np.max(np.abs(derivative))
 
 '''
 def test_IotS_call_patterns():
@@ -113,12 +143,12 @@ def test_IotS_u0_and_only_flux():
     assert len(outputs) == 4
     Nphi = 33
     phi = 2 * pi * np.arange(Nphi) / Nphi
-    for is_antiderivative_wrt_tau in (False, True):
-        ref = u0(mu_eval, tau_eval, is_antiderivative_wrt_tau)
+    for tau_derivative_order in (0, -1, 1):
+        ref = u0(mu_eval, tau_eval, tau_derivative_order)
         scale = np.max(np.abs(ref))
-        average = np.mean(u(mu_eval, tau_eval, phi, is_antiderivative_wrt_tau), axis=-1)
+        average = np.mean(u(mu_eval, tau_eval, phi, tau_derivative_order), axis=-1)
         assert np.max(np.abs(average - ref)) < 1e-12 * scale
-        assert np.max(np.abs(outputs[3](mu_eval, tau_eval, is_antiderivative_wrt_tau) - ref)) < 1e-12 * scale
+        assert np.max(np.abs(outputs[3](mu_eval, tau_eval, tau_derivative_order) - ref)) < 1e-12 * scale
 
     # The actinic fluxes are computed from `u0` at the quadrature nodes whether or not `interpolate_mu=True`
     u0_nodes = _pydisort()[3]
@@ -144,19 +174,25 @@ def test_IotS_cached_BDRF():
 def test_IotS_Fourier_error_and_input_checks():
     print()
     u = _pydisort(interpolate_mu=True)[-1]
-    for is_antiderivative_wrt_tau in (False, True):
-        vals, Fourier_error = u(mu_eval, tau_eval, phi_eval, is_antiderivative_wrt_tau, True)
-        assert np.array_equal(vals, u(mu_eval, tau_eval, phi_eval, is_antiderivative_wrt_tau))
+    for tau_derivative_order in (0, -1, 1):
+        vals, Fourier_error = u(mu_eval, tau_eval, phi_eval, tau_derivative_order, True)
+        assert np.array_equal(vals, u(mu_eval, tau_eval, phi_eval, tau_derivative_order))
         assert np.isscalar(Fourier_error) and Fourier_error >= 0
     # Fourier modes >= 1 vanish at mu = +-1
-    assert u(np.array([1.0, -1.0]), tau_eval, phi_eval, False, True)[1] < 1e-12
+    assert u(np.array([1.0, -1.0]), tau_eval, phi_eval, 0, True)[1] < 1e-12
 
     with pytest.raises(ValueError):
         u(1.1, 0, 0)
     with pytest.raises(ValueError):
         u(0.5, tau_arr[-1] * 1.1, 0)
+    # The tau-derivative requires `mu` values bounded away from 0
     with pytest.raises(ValueError):
-        _pydisort(interpolate_mu=True, autograd_compatible=True)
+        u(0.0, 0.5, 0, 1)
+    # `True` was the antiderivative of the boolean flag which `tau_derivative_order` replaced; it must not be read as 1
+    with pytest.raises(ValueError):
+        u(0.5, 0.5, 0, True)
+    with pytest.raises(ValueError):
+        u(0.5, 0.5, 0, 2)
 
 
 def test_IotS_vs_Stamnes_DISORT():

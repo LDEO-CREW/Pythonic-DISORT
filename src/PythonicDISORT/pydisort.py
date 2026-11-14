@@ -23,14 +23,14 @@ def pydisort(
     BDRF_Fourier_modes=[],
     s_poly_coeffs=np.array([[]]),
     use_banded_solver_NLayers=10,
-    autograd_compatible=False,
     cache_asso_leg=None,
     interpolate_mu=False,
+    radii_arr=None,
 ):
     """Solves the 1D RTE for the fluxes, and optionally intensity,
     of a multi-layer atmosphere with the specified optical properties, boundary conditions
-    and sources. Optionally performs delta-M scaling and NT corrections, and optionally
-    returns the intensity at arbitrary polar angles instead of at the quadrature nodes.
+    and sources. Optionally performs delta-M scaling, NT corrections and the pseudo-spherical correction,
+    and optionally returns the intensity at arbitrary polar angles instead of at the quadrature nodes.
     Refer to the ``*_test.ipynb`` Jupyter Notebooks in the ``pydisotest`` directory for examples of use.
     
         See https://pythonic-disort.readthedocs.io/en/latest/Pythonic-DISORT.html#1.-USER-INPUT-REQUIRED:-Choose-parameters
@@ -79,7 +79,8 @@ def pydisort(
         Perform Nakajima-Tanaka intensity corrections?
         The corrections are applied at the quadrature points or, if ``interpolate_mu=True``,
         directly at the ``mu`` values that are passed to ``u``, as Stamnes' DISORT does,
-        which requires ``|mu| >= 1e-8``.
+        which requires ``|mu| >= 1e-8``. As in Stamnes' DISORT, the corrections are not performed
+        if the pseudo-spherical correction is applied (see ``radii_arr``).
     BDRF_Fourier_modes : optional, list of functions
         BDRF Fourier modes, each a float, or a function with arguments ``mu, -mu_p`` of type array
         which output has the same dimensions as the outer product of the two arrays.
@@ -89,9 +90,6 @@ def pydisort(
         Arrange coefficients from lowest order term to highest.
     use_banded_solver_NLayers : optional, int
         At or above how many atmospheric layers should ``scipy.linalg.solve_banded`` be used?
-    autograd_compatible : optional, bool
-        If ``True``, the autograd package: https://github.com/HIPS/autograd can be used to compute
-        the ``tau``-derivatives of the output functions but ``pydisort`` will be less efficient.
     cache_asso_leg : optional, {None, "no_mu0", "mu0"}
         In-process caching of the seminormalized associated Legendre table, keyed on
         (``NQuad``, ``NLeg``) and, for the direct beam, on ``mu0``.
@@ -118,7 +116,14 @@ def pydisort(
         the boundary conditions at every ``mu``. Vector boundary conditions ``b_pos`` and ``b_neg`` are only
         known at the quadrature nodes and are interpolated polynomially.
         It is fastest to pass all the ``mu`` values of interest in one call of ``u``.
-        Not supported when ``autograd_compatible=True``.
+    radii_arr : optional, array
+        Distance of each layer boundary from the centre of the planet, from the top boundary to the
+        bottom boundary (``NLayers + 1`` values) and in any unit of length, e.g. the radius of the planet
+        plus the altitude of each boundary. If provided, the pseudo-spherical correction is applied:
+        the direct beam is attenuated along its path through the spherical atmosphere rather than
+        through a plane-parallel one, which matters when the sun is low. ``mu0`` is then the cosine of
+        the angle between the beam and the local vertical.
+        The diffuse radiation is still treated as plane-parallel.
 
     Returns
     -------
@@ -127,17 +132,17 @@ def pydisort(
     Fp(tau) : function
         (Energetic) Flux function with argument ``tau`` (type: array or float) for positive (upward) ``mu`` values.
         Returns the diffuse flux magnitudes (same type and size as ``tau``).
-        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of this function with respect to ``tau``.
-        For example, ``Fp(tau_arr, True) - Fp(np.insert(np.nextafter(tau_arr[:-1], np.inf), 0, 0), True)``
+        Pass ``tau_derivative_order = 1`` or ``-1`` (defaults to ``0``)
+        to switch to the derivative or an antiderivative of this function with respect to ``tau``.
+        For example, ``Fp(tau_arr, -1) - Fp(np.insert(np.nextafter(tau_arr[:-1], np.inf), 0, 0), -1)``
         will produce an array of the tau-integral over each layer.
         Carries ``tau_arr`` as an attribute.
     Fm(tau) : function
         (Energetic) Flux function with argument ``tau`` (type: array or float) for negative (downward) ``mu`` values.
         Returns a tuple of the diffuse and direct flux magnitudes respectively where each entry is of the
         same type and size as ``tau``.
-        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of this function with respect to ``tau``.
+        Pass ``tau_derivative_order = 1`` or ``-1`` (defaults to ``0``)
+        to switch to the derivative or an antiderivative of this function with respect to ``tau``.
         Carries ``tau_arr`` as an attribute.
     u0(tau) or u0(mu, tau) : function
         Zeroth Fourier mode of the intensity with argument ``tau`` (type: array or float)
@@ -147,16 +152,16 @@ def pydisort(
         This function is useful for calculating actinic fluxes and other quantities of interest,
         but reclassification of delta-scaled flux and other corrections must be done manually
         (for actinic flux ``subroutines.generate_diff_act_flux_funcs`` will automatically perform the reclassification).
-        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of this function with respect to ``tau``.
+        Pass ``tau_derivative_order = 1`` or ``-1`` (defaults to ``0``)
+        to switch to the derivative or an antiderivative of this function with respect to ``tau``.
         Carries ``tau_arr`` as an attribute.
     u(tau, phi) or u(mu, tau, phi) : function, optional
         Intensity function with arguments ``(tau, phi)`` each of type array or float
         or, if ``interpolate_mu=True``, with arguments ``(mu, tau, phi)`` each of type array or float.
         Returns an ndarray with axes corresponding to variation with ``mu, tau, phi`` respectively,
         where ``mu`` are the quadrature nodes ``mu_arr`` unless ``interpolate_mu=True``.
-        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of this function with respect to ``tau``.
+        Pass ``tau_derivative_order = 1`` or ``-1`` (defaults to ``0``)
+        to switch to the derivative or an antiderivative of this function with respect to ``tau``.
         Pass ``return_Fourier_error = True`` (defaults to ``False``) to return the
         Cauchy / Fourier convergence evaluation (type: float) for the last Fourier term,
         over the points at which the intensity is evaluated.
@@ -184,9 +189,9 @@ def pydisort(
     | `BDRF_Fourier_modes`        | `NBDRF`                                         |
     | `s_poly_coeffs`             | `NLayers x Nscoeffs`                            |
     | `use_banded_solver_NLayers` | scalar                                          |
-    | `autograd_compatible`       | boolean                                         |
     | `cache_asso_leg`            | None, "no_mu0" or "mu0"                         |
     | `interpolate_mu`            | boolean                                         |
+    | `radii_arr`                 | `NLayers + 1`                                   |
 
     Notable internal variables of pydisort
     |          Variable            |     Type / Shape     |
@@ -205,12 +210,11 @@ def pydisort(
     | `scaled_thickness_arr`       | `NLayers`            |
     | `scaled_omega_arr`           | `NLayers`            |
     | `scaled_s_poly_coeffs`       | `NLayers x Nscoeffs` |
+    | `mu0_arr`                    | `NLayers`            |
+    | `slant_tau_arr_with_0`       | `NLayers + 1`        |
+    | `scaled_mu0_arr`             | `NLayers`            |
+    | `scaled_slant_tau_arr_with_0`| `NLayers + 1`        |
     """
-    
-    if autograd_compatible:
-        import autograd.numpy as np
-    else:
-        import numpy as np
     
     # Turn floats into arrays
     # --------------------------------------------------------------------------------------------------------------------------
@@ -327,9 +331,13 @@ def pydisort(
     # Associated Legendre table caching mode
     if cache_asso_leg not in (None, "no_mu0", "mu0"):
         raise ValueError('`cache_asso_leg` must be one of None, "no_mu0" or "mu0".')
-    # The intensity functions at arbitrary `mu` are not compatible with autograd
-    if interpolate_mu and autograd_compatible:
-        raise ValueError("`interpolate_mu=True` is not supported when `autograd_compatible=True`.")
+    # The radii of the layer boundaries must be positive and decrease from the top boundary to the bottom boundary
+    if radii_arr is not None:
+        radii_arr = np.array(radii_arr, dtype=float)
+        if not np.shape(radii_arr) == (NLayers + 1,):
+            raise ValueError("`radii_arr` must have one radius for each layer boundary, i.e. one more than the number of layers.")
+        if not (np.all(np.diff(radii_arr) < 0) and radii_arr[-1] > 0):
+            raise ValueError("The radii of the layer boundaries must be positive and strictly decreasing (top to bottom).")
     # --------------------------------------------------------------------------------------------------------------------------
     
     # Post input checks setup
@@ -412,6 +420,29 @@ def pydisort(
     I0_div_4pi = I0 / (4 * pi)
     # --------------------------------------------------------------------------------------------------------------------------
 
+    # Direct beam: its slant optical depth at each layer boundary and its cosine in each layer,
+    # for the atmosphere and for the delta-scaled atmosphere.
+    # Refer to section 4.2 of the Comprehensive Documentation for the pseudo-spherical correction.
+    # --------------------------------------------------------------------------------------------------------------------------
+    if not there_is_beam_source:
+        mu0_arr = scaled_mu0_arr = slant_tau_arr_with_0 = scaled_slant_tau_arr_with_0 = None
+
+    elif radii_arr is None:
+        # Plane-parallel atmosphere
+        mu0_arr = scaled_mu0_arr = np.full(NLayers, mu0)
+        slant_tau_arr_with_0 = prepend(tau_arr, NLayers, 0) / mu0
+        scaled_slant_tau_arr_with_0 = scaled_tau_arr_with_0 / mu0
+
+    else:
+        # Pseudo-spherical correction: the slant optical depth follows from the Chapman factors at the layer
+        # boundaries and is linear in tau within each layer, where the beam therefore has an effective cosine
+        Chapman_factors = subroutines._Chapman_factors(mu0, radii_arr)
+        slant_tau_arr_with_0 = prepend(Chapman_factors @ thickness_arr, NLayers, 0)
+        scaled_slant_tau_arr_with_0 = prepend(Chapman_factors @ scaled_thickness_arr, NLayers, 0)
+        mu0_arr = thickness_arr / np.diff(slant_tau_arr_with_0)
+        scaled_mu0_arr = scaled_thickness_arr / np.diff(scaled_slant_tau_arr_with_0)
+    # --------------------------------------------------------------------------------------------------------------------------
+
     # Delta-M scaled solution; the flux is never NT-corrected
     outputs = _assemble_intensity_and_fluxes(
         scaled_omega_arr,
@@ -427,16 +458,16 @@ def pydisort(
         mu0, I0, I0_div_4pi,
         rescale_factor, phi0,
         there_is_beam_source,
+        mu0_arr, slant_tau_arr_with_0,
+        scaled_mu0_arr, scaled_slant_tau_arr_with_0,
         b_pos, b_neg,
         b_pos_is_scalar, b_neg_is_scalar,
         b_pos_is_vector, b_neg_is_vector,
-        Nscoeffs,
         scaled_s_poly_coeffs,
         there_is_iso_source,
         scale_tau,
         only_flux,
         use_banded_solver_NLayers,
-        autograd_compatible,
         cache_asso_leg,
         interpolate_mu,
     )
@@ -444,10 +475,11 @@ def pydisort(
         return (mu_arr,) + outputs
     flux_up, flux_down, u0, u_star = outputs
 
-    # NT corrections to the intensity but not the flux (refer to section 3.7.2 of the Comprehensive Documentation)
+    # NT corrections to the intensity but not the flux (refer to section 3.7.2 of the Comprehensive Documentation).
+    # As in Stamnes' DISORT, they are not performed if the pseudo-spherical correction is applied.
     u = _NT_corrections(
         u_star,
-        NT_cor,
+        NT_cor and radii_arr is None,
         interpolate_mu,
         tau_arr,
         thickness_arr,
@@ -466,7 +498,6 @@ def pydisort(
         mu0, phi0, I0_div_4pi,
         rescale_factor,
         there_is_beam_source,
-        autograd_compatible,
     )
 
     return mu_arr, flux_up, flux_down, u0, u

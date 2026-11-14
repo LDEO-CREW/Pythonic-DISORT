@@ -274,14 +274,14 @@ def generate_diff_act_flux_funcs(u0):
     Fp_act(tau) : function
         Actinic flux function with argument ``tau`` (type: array) for positive (upward) ``mu`` values.
         Returns the diffuse flux magnitudes (type: array).
-        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of this function with respect to ``tau``.
+        Pass ``tau_derivative_order = 1`` or ``-1`` (defaults to ``0``)
+        to switch to the derivative or an antiderivative of this function with respect to ``tau``.
         Carries ``tau_arr`` as an attribute.
     Fm_act(tau) : function
         Actinic flux function with argument ``tau`` (type: array) for negative (downward) ``mu`` values.
         Returns the diffuse flux magnitudes (type: array).
-        Pass ``is_antiderivative_wrt_tau = True`` (defaults to ``False``)
-        to switch to an antiderivative of this function with respect to ``tau``.
+        Pass ``tau_derivative_order = 1`` or ``-1`` (defaults to ``0``)
+        to switch to the derivative or an antiderivative of this function with respect to ``tau``.
         Carries ``tau_arr`` as an attribute.
 
     """
@@ -290,13 +290,13 @@ def generate_diff_act_flux_funcs(u0):
     GL_weights = Gauss_Legendre_quad(N)[1]
 
     # Note that the zeroth axis of the array u0(tau) captures variation with mu
-    def flux_act_up(tau, is_antiderivative_wrt_tau=False):
-        return np.squeeze(2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[:N])[()]
+    def flux_act_up(tau, tau_derivative_order=0):
+        return np.squeeze(2 * pi * GL_weights @ u0(tau, tau_derivative_order)[:N])[()]
 
-    def flux_act_down_diffuse(tau, is_antiderivative_wrt_tau=False):
-        # `u0` is evaluated first and it validates `tau` (no need to repeat the validation here)
-        result_without_reclassification = 2 * pi * GL_weights @ u0(tau, is_antiderivative_wrt_tau)[N:]
-        act_dscale_reclassification = u0._act_dscale_reclassification(tau, is_antiderivative_wrt_tau)
+    def flux_act_down_diffuse(tau, tau_derivative_order=0):
+        # `u0` is evaluated first and it validates `tau` and `tau_derivative_order` (no need to repeat the validation here)
+        result_without_reclassification = 2 * pi * GL_weights @ u0(tau, tau_derivative_order)[N:]
+        act_dscale_reclassification = u0._act_dscale_reclassification(tau, tau_derivative_order)
         return np.squeeze(result_without_reclassification + act_dscale_reclassification)[()]
 
     flux_act_up.tau_arr = flux_act_down_diffuse.tau_arr = u0.tau_arr
@@ -499,65 +499,29 @@ def cache_BDRF_Fourier_modes(N, BDRF_Fourier_modes, mu0=0):
         or a function with arguments ``mu, -mu_p`` of type array
         which output has the same dimensions as the outer product of the two arrays.
     """
-    
-    if (0 < mu0 and mu0 <= 1):
-        mu0_caching = True
-    else:
-        mu0_caching = False
-        warnings.warn("No caching with respect to `mu0`.")
-    
-    NBDRF = len(BDRF_Fourier_modes)
     mu_arr_pos = Gauss_Legendre_quad(N)[0]
-    
-    if mu0_caching:
-        BDRF_Fourier_modes_evaluated = [
-            (
-                BDRF_Fourier_modes[m]
-                if np.isscalar(BDRF_Fourier_modes[m])
-                else BDRF_Fourier_modes[m](mu_arr_pos, np.append(mu_arr_pos, mu0))
-            )
-            for m in range(NBDRF)
-        ]
+    cache_mu0 = 0 < mu0 <= 1
+    if not cache_mu0:
+        warnings.warn("No caching with respect to `mu0`.")
 
-        cached_BDRF_Fourier_modes = [
-            (
-                BDRF_Fourier_modes_evaluated[m]
-                if np.isscalar(BDRF_Fourier_modes_evaluated[m])
-                else lambda mu, neg_mup, m=m: (
-                    BDRF_Fourier_modes[m](mu, neg_mup)
-                    if not np.array_equal(mu, mu_arr_pos)
-                    else BDRF_Fourier_modes_evaluated[m][:, [-1]]
-                    if np.array_equal(neg_mup, [mu0])
-                    else BDRF_Fourier_modes_evaluated[m][:, :-1]
-                )
-            )
-            for m in range(NBDRF)
-        ]
-        
-    else:
-        BDRF_Fourier_modes_evaluated = [
-            (
-                BDRF_Fourier_modes[m]
-                if np.isscalar(BDRF_Fourier_modes[m])
-                else BDRF_Fourier_modes[m](mu_arr_pos, mu_arr_pos)
-            )
-            for m in range(NBDRF)
-        ]
+    def cache(BDRF_Fourier_mode):
+        if np.isscalar(BDRF_Fourier_mode):
+            return BDRF_Fourier_mode
+        at_nodes = BDRF_Fourier_mode(mu_arr_pos, mu_arr_pos)
+        at_mu0 = BDRF_Fourier_mode(mu_arr_pos, np.array([mu0])) if cache_mu0 else None
 
-        cached_BDRF_Fourier_modes = [
-            (
-                BDRF_Fourier_modes_evaluated[m]
-                if np.isscalar(BDRF_Fourier_modes_evaluated[m])
-                else lambda mu, neg_mup, m=m: (
-                    BDRF_Fourier_modes[m](mu, neg_mup)
-                    if len(neg_mup) == 1 or not np.array_equal(mu, mu_arr_pos)
-                    else BDRF_Fourier_modes_evaluated[m]
-                )
-            )
-            for m in range(NBDRF)
-        ]
+        def cached_BDRF_Fourier_mode(mu, neg_mup):
+            # The cached values if the arguments are those which were cached, else evaluate the mode
+            if np.array_equal(mu, mu_arr_pos):
+                if np.array_equal(neg_mup, mu_arr_pos):
+                    return at_nodes
+                if cache_mu0 and np.array_equal(neg_mup, [mu0]):
+                    return at_mu0
+            return BDRF_Fourier_mode(mu, neg_mup)
 
-    return cached_BDRF_Fourier_modes
+        return cached_BDRF_Fourier_mode
+
+    return [cache(BDRF_Fourier_mode) for BDRF_Fourier_mode in BDRF_Fourier_modes]
 
 
 
@@ -843,122 +807,119 @@ def to_diag_ordered_form(A, Nsuperdiags, Nsubdiags):
 
 
     
-def _mathscr_v(tau,                             # Input optical depths
-               scale_tau,                       # Delta-scale factor for tau
-               l,                               # Layer index of each input optical depth
-               Nscoeffs,                        # Number of isotropic source polynomial coefficients
-               s_poly_coeffs,                   # Polynomial coefficients of isotropic source
-               G,                               # Eigenvector matrices
-               K,                               # Eigenvalues
-               G_inv_mu_inv,                    # Inverse of eigenvector matrix @ (1 / `mu_arr`)
-               is_antiderivative_wrt_tau=False, # Switch to an antiderivative of the function?
-               autograd_compatible=False,       # Should the output functions be compatible with autograd?
-               ):
-    """Particular solution for isotropic internal sources.
-    Refer to section 3.6.1 of the Comprehensive Documentation.
-    It has many seemingly redundant arguments to maximize 
-    precomputation in the ``_assemble_intensity_and_fluxes`` 
-    and ``_solve_for_coeffs`` functions which call it.
-    
-    Arguments of _mathscr_v
-    |          Variable             |                   Shape                   |
-    | ----------------------------- | ----------------------------------------- |
-    | ``tau``                       | ``Ntau``                                  |
-    | ``scale_tau``                 | ``NL``                                |
-    | ``l``                         | ``Ntau``                                  |
-    | ``Nscoeffs``                  | scalar                                    |
-    | ``s_poly_coeffs``             | ``NL x Nscoeffs``                         |
-    | ``G``                         | ``NL x NQuad x NQuad``                    |
-    | ``K``                         | ``NL x NQuad``                            |
-    | ``G_inv_mu_inv``              | ``NL x NQuad``                            |
-    | ``is_antiderivative_wrt_tau`` | boolean                                   |
-    | ``autograd_compatible``       | boolean                                   |
-    
+def _check_tau_derivative_order(tau_derivative_order):
+    """Validates the ``tau_derivative_order`` argument of the output functions of ``pydisort``."""
+    # `True == 1` in Python, so the `True` of the boolean flag which this argument replaced must not be read as 1
+    if tau_derivative_order is True or tau_derivative_order not in (-1, 0, 1):
+        raise ValueError("`tau_derivative_order` must be -1 (antiderivative), 0 or 1 (derivative).")
+
+
+
+def _poly_tau_derivative(coeffs, tau, order):
+    """The ``order``-th derivative (an antiderivative if ``order`` is -1) of polynomials in tau, each evaluated
+    at its own value of tau. The exponentials in tau of the solution are instead differentiated by
+    multiplying each by its rate to the power of ``order``.
+
+    Arguments of _poly_tau_derivative
+    |    Variable    |              Shape              |
+    | -------------- | ------------------------------- |
+    | ``coeffs``     | ``Ntau x ... x Ncoeffs``        | Arranged from lowest order term to highest
+    | ``tau``        | ``Ntau``                        |
+    | ``order``      | scalar                          |
+
+    Returns an array of shape ``Ntau x ...``.
     """
-    if autograd_compatible:
-        import autograd.numpy as np
-    else:
-        import numpy as np
+    p = np.arange(np.shape(coeffs)[-1])
+    # The derivative of tau^p is p! / (p - order)! * tau^(p - order), which is zero if order > p
+    monomials = (
+        sc.special.gamma(p + 1) * sc.special.rgamma(p + 1 - order) * tau[:, None] ** np.maximum(p - order, 0)
+    )
+    return np.einsum("t...p, tp -> t...", coeffs, monomials)
 
-    K_inv = 1 / K  # (NL, NQuad)
 
-    # --------------------- Nscoeffs == 1 ---------------------
-    if Nscoeffs == 1:
-        s0 = s_poly_coeffs[:, 0:1]
-        c0w = s0 * K_inv * G_inv_mu_inv  # (NL, 1) * (NL, NQuad) -> (NL, NQuad)
 
-        d0 = np.einsum("lij, lj -> il", G, c0w)
+def _mathscr_v_coeffs(s_poly_coeffs, G, K, G_inv_mu_inv):
+    """Polynomial coefficients of the particular solution for isotropic internal sources,
+    arranged from lowest order term to highest. Refer to section 3.6.1 of the Comprehensive Documentation.
+    The polynomials are in the same (delta-scaled) tau as ``s_poly_coeffs``
+    and are evaluated by ``_poly_tau_derivative``.
 
-        if is_antiderivative_wrt_tau:
-            p0 = tau
-            return (d0 / scale_tau[None, :])[:, l] * p0[None, :]
-        else:
-            return d0[:, l]
+    Arguments of _mathscr_v_coeffs
+    |      Variable       |           Shape           |
+    | ------------------- | ------------------------- |
+    | ``s_poly_coeffs``   | ``NLayers x Nscoeffs``    |
+    | ``G``               | ``NLayers x NQuad x NQuad`` |
+    | ``K``               | ``NLayers x NQuad``       |
+    | ``G_inv_mu_inv``    | ``NLayers x NQuad``       | Inverse of eigenvector matrix @ (1 / ``mu_arr``)
 
-    # --------------------- Nscoeffs == 2 ---------------------
-    elif Nscoeffs == 2:
-        s1 = s_poly_coeffs[:, 1:2]  # (NL, )
-        s0 = s_poly_coeffs[:, 0:1]  # (NL, )
+    Returns an array of shape ``NLayers x NQuad x Nscoeffs``.
+    """
+    Nscoeffs = np.shape(s_poly_coeffs)[1]
+    if Nscoeffs > 10:
+        warnings.warn("`Nscoeffs` is large and may cause instability.")
 
-        K_inv2 = K_inv * K_inv
+    # Coefficient of tau^q in the p-th derivative of the source polynomial; (NLayers, p, q)
+    p = np.arange(Nscoeffs)[:, None]
+    q = np.arange(Nscoeffs)[None, :]
+    factorials = sc.special.factorial(np.arange(2 * Nscoeffs))
+    source_derivs = np.pad(s_poly_coeffs, ((0, 0), (0, Nscoeffs)))[:, p + q] * (factorials[p + q] / factorials[q])
 
-        c0w = s1 * K_inv * G_inv_mu_inv
-        c1w = (s0 * K_inv + s1 * K_inv2) * G_inv_mu_inv
-        
-        d0 = np.einsum("lij, lj -> il", G, c0w)  # (NQuad, NL)
-        d1 = np.einsum("lij, lj -> il", G, c1w)  # (NQuad, NL)
+    K_inv_powers = (1 / K)[:, :, None] ** (np.arange(Nscoeffs) + 1)                 # (NLayers, NQuad, p)
+    return G @ (G_inv_mu_inv[:, :, None] * (K_inv_powers @ source_derivs))
 
-        if is_antiderivative_wrt_tau:
-            p0 = tau * tau / 2
-            p1 = tau
-            return (d0 / scale_tau[None, :])[:, l] * p0[None, :] + (d1 / scale_tau[None, :])[:, l] * p1[None, :]
-        else:
-            p0 = tau
-            #p1 = np.ones_like(tau) 
-            return d0[:, l] * p0[None, :] + d1[:, l]
-        
-    # --------------------- Nscoeffs > 2 ----------------------
-    else:
-        if Nscoeffs > 10:
-            warnings.warn("`Nscoeffs` is large and may cause instability.")
-        n = Nscoeffs - 1
 
-        # K_invP[..., powers] = K_inv^(powers + 1); (NL, NQuad, Nscoeffs)
-        K_invP = np.cumprod(
-            np.broadcast_to(K_inv[:, :, None], K_inv.shape + (Nscoeffs,)),
-            axis=-1
+
+def _Chapman_factors(mu0, radii_arr):
+    """Chapman factors of the direct beam in a spherical atmosphere, for the pseudo-spherical correction.
+    Entry [l, n] is the ratio of the slant path to the vertical path across layer n for the beam which
+    reaches the bottom of layer l at the polar angle arccos(``mu0``); it is zero if layer n is below layer l.
+    Their product with the optical thicknesses of the layers is therefore the slant optical depth of the
+    direct beam at the bottom of each layer. Refer to section 4.2 of the Comprehensive Documentation.
+
+    Arguments of _Chapman_factors
+    |    Variable    |      Shape      |
+    | -------------- | --------------- |
+    | ``mu0``        | scalar          |
+    | ``radii_arr``  | ``NLayers + 1`` | Distance of each layer boundary from the centre of the planet, top to bottom
+
+    Returns an array of shape ``NLayers x NLayers``.
+    """
+    NLayers = len(radii_arr) - 1
+    # The beam which reaches the bottom of layer l is closest to the centre of the planet at the distance `closest[l]`,
+    # and it crosses the boundary of radius r at the distance sqrt(r^2 - closest[l]^2) along the beam from that point
+    closest = np.sqrt(1 - mu0**2) * radii_arr[1:]                                              # (NLayers,)
+    along_beam = np.sqrt(np.maximum(radii_arr[None, :] ** 2 - closest[:, None] ** 2, 0))       # (NLayers, NLayers + 1)
+    # The slant path across a layer is the difference of `along_beam` between its boundaries and the vertical path
+    # is the difference of their radii; the ratio is written as below to avoid subtracting nearly equal numbers
+    return np.divide(
+        (radii_arr[:-1] + radii_arr[1:])[None, :],
+        along_beam[:, :-1] + along_beam[:, 1:],
+        out=np.zeros((NLayers, NLayers)),
+        where=np.tri(NLayers, dtype=bool),
+    )
+
+
+
+def _Fourier_error(um_last, cos_last, u):
+    """Cauchy / Fourier convergence evaluation for the last Fourier term of the intensity ``u``:
+    the largest ratio of that term to the intensity, over the points where the intensity is not negligible.
+
+    Arguments of _Fourier_error
+    |    Variable    |         Shape          |
+    | -------------- | ---------------------- |
+    | ``um_last``    | ``Nmu x Ntau``         | Last Fourier mode of the intensity
+    | ``cos_last``   | ``Nphi``               | Cosine of that mode at each azimuthal angle
+    | ``u``          | ``Nmu x Ntau x Nphi``  |
+    """
+    u_abs = np.abs(u)
+    return np.max(
+        np.divide(
+            np.abs(um_last[:, :, None] * cos_last[None, None, :]),
+            u_abs,
+            out=np.zeros_like(u_abs),
+            where=u_abs > 1e-8,
         )
-
-        ii = np.arange(Nscoeffs, dtype=int)[:, None]
-        pp = np.arange(Nscoeffs, dtype=int)[None, :]
-        jj = ii - pp
-
-        # Factorials
-        fac = np.empty(Nscoeffs)
-        fac[0] = 1
-        if Nscoeffs > 1:
-            fac[1:] = np.cumprod(np.arange(1, Nscoeffs))
-        fac_rev = fac[::-1]
-        inv_fac_rev = 1 / fac_rev
-
-        weighted_mathscr_a = s_poly_coeffs[:, ::-1] * fac_rev[None, :]
-        
-        # Only take lower triangle values
-        lower_tri = np.where((jj >= 0)[None, :, :], np.take(weighted_mathscr_a, jj, axis=1), 0)
-        
-        unweighted_mathscr_b_sigma = K_invP @ np.swapaxes(lower_tri, 1, 2)
-        mathscr_b_sigma = unweighted_mathscr_b_sigma * inv_fac_rev[None, None, :]
-        mathscr_b_right = mathscr_b_sigma * G_inv_mu_inv[:, :, None]
-        mathscr_b = G @ mathscr_b_right
-
-        powers = np.arange(Nscoeffs - 1, -1, -1)[None, :]
-        if is_antiderivative_wrt_tau:
-            p = powers + 1
-            tau_poly = (tau[:, None] ** p) / p
-            return np.einsum("tqp, tp -> qt", (mathscr_b / scale_tau[:, None, None])[l, :, :], tau_poly)
-        else:
-            tau_poly = tau[:, None] ** powers
-            return np.einsum("tqp, tp -> qt", mathscr_b[l, :, :], tau_poly)
+    )
 
 
 

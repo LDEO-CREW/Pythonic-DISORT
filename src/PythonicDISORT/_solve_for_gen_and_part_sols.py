@@ -113,6 +113,7 @@ def _solve_for_gen_and_part_sols(
     weighted_scaled_Leg_coeffs,  # Weighted and delta-scaled Legendre coefficients
     mu0, I0_div_4pi,             # Primary properties of the direct beam
     there_is_beam_source,        # Is there a beam source?
+    scaled_mu0_arr,              # Cosine of the direct beam in each delta-scaled layer
     there_is_iso_source,         # Is there an isotropic source?
     cache_asso_leg,              # Assoc. Legendre table cache mode: None, "no_mu0" or "mu0"
 ):
@@ -143,6 +144,7 @@ def _solve_for_gen_and_part_sols(
     | `mu0`                          | scalar                             |
     | `I0_div_4pi`                   | scalar                             |
     | `there_is_beam_source`         | boolean                            |
+    | `scaled_mu0_arr`               | `NLayers` or `None`                |
     | `there_is_iso_source`          | boolean                            |
     | `cache_asso_leg`               | None, "no_mu0" or "mu0"            |
 
@@ -156,6 +158,7 @@ def _solve_for_gen_and_part_sols(
     | `B_collect`         | `NFourier*NLayers x NQuad` or `None`   | Reshaped to NFourier x NLayers x NQuad
     | `eigenvecs_GpG_arr` | `Nns x NQuad/2 x NQuad/2`              |
     | `eigenvecs_GmG_arr` | `Nns x NQuad/2 x NQuad/2`              |
+    | `inv_mu0_arr`       | `Nns`                                  | Rate at which the direct beam decays in the layer of each pair
     | `G_inv_collect_0`   | `NLayers x NQuad x NQuad` or `None`    |
     | `asso_leg_table`    | `NFourier x NLeg x (NQuad/2 or NQuad/2 + 1)` | Entry [m, r, :] has degree l = m + r; the last column is at `-mu0` (if there is a beam)
 
@@ -329,8 +332,12 @@ def _solve_for_gen_and_part_sols(
         
         if there_is_beam_source:
             
+            # The direct beam decays at the rate 1/mu0 in the layer of each (mode, layer) pair
+            inv_mu0_arr = 1 / scaled_mu0_arr[np.array(no_shortcut_indices) % NLayers]
+            resonant = np.any(np.abs(K_arr + inv_mu0_arr[:, None]) < 1e-8, axis=1)
+
             # Warn if -1/mu0 is close to an eigenvalue (see section 3.6.1 of the Comprehensive Documentation)
-            if np.any(np.abs(K_arr + 1 / mu0) < 1e-8) and not np.any(np.abs(M_inv - 1 / mu0) < 1e-8):
+            if np.any(resonant & ~np.any(np.abs(M_inv[None, :] - inv_mu0_arr[:, None]) < 1e-8, axis=1)):
                 warnings.warn(
                     "`-1/mu0` is close to an eigenvalue so the results may be inaccurate."
                     + " Consider slightly perturbing `mu0`."
@@ -343,28 +350,29 @@ def _solve_for_gen_and_part_sols(
                     # Note that the minus sign has been absorbed into `X_arr`
                     (
                         G_collect[no_shortcut_indices_0, :, :]
-                        / (1 / mu0 + K_collect[no_shortcut_indices_0, None, :])
+                        / (inv_mu0_arr[:len_no_shortcut_indices_0, None, None] + K_collect[no_shortcut_indices_0, None, :])
                     )
                     @ (G_inv_collect_0[no_shortcut_indices_0, :, :] @ X_arr[no_shortcut_indices_0, :, None])
                 ).squeeze(-1)
                 no_shortcut_indices = no_shortcut_indices[len_no_shortcut_indices_0:]
+                inv_mu0_arr = inv_mu0_arr[len_no_shortcut_indices_0:]
+                resonant = resonant[len_no_shortcut_indices_0:]
             
             if len(no_shortcut_indices) > 0:
                 A_arr = A_arr[len_no_shortcut_indices_0:]
                 A_arr[:, :N, N:] = -A_arr[:, N:, :N]
                 A_arr[:, :N, :N] = -A_arr[:, N:, N:]
-                A_arr.reshape(-1, NQuad * NQuad)[:, ::NQuad + 1] += 1 / mu0
+                A_arr.reshape(-1, NQuad * NQuad)[:, ::NQuad + 1] += inv_mu0_arr[:, None]
                 X_arr = X_arr[no_shortcut_indices, :, None]
                 # If -1/mu0 equals an eigenvalue to rounding, e.g. when `mu0` is a quadrature node which a
                 # high Fourier mode barely scatters into or out of, the matrix is singular to working precision and
                 # `solve` returns a huge, inaccurate `B`. The (mode, layer) pairs which trip the test of the warning above
                 # are therefore solved by a pseudoinverse instead, which drops the directions that are singular to rounding.
                 # Each row is first scaled to unit size so that the cutoff of the pseudoinverse is relative to that row.
-                resonant = np.any(np.abs(K_arr[len_no_shortcut_indices_0:] + 1 / mu0) < 1e-8, axis=1)
                 # Note that the minus sign has been absorbed into `X_arr`
                 if np.any(resonant):
                     B_arr = np.empty((len(no_shortcut_indices), NQuad))
-                    row_scale = (1 / (np.concatenate([M_inv, M_inv]) + 1 / mu0))[:, None]
+                    row_scale = 1 / (np.concatenate([M_inv, M_inv])[None, :, None] + inv_mu0_arr[resonant, None, None])
                     B_arr[resonant] = (
                         np.linalg.pinv(row_scale * A_arr[resonant], 1e-13) @ (row_scale * X_arr[resonant])
                     ).squeeze(-1)

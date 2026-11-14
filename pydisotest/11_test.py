@@ -31,7 +31,6 @@ def test_11a():
     NFourier=None
     only_flux=False
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
     

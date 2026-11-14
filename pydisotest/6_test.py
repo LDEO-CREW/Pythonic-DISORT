@@ -50,7 +50,6 @@ def test_6b():
     BDRF_Fourier_modes = []
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers = 10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -125,7 +124,6 @@ def test_6c():
     NT_cor = False
     s_poly_coeffs=np.array([[]])
     use_banded_solver_NLayers = 10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -210,7 +208,6 @@ def test_6d():
     NT_cor = False
     s_poly_coeffs = np.array([[]])
     use_banded_solver_NLayers = 10
-    autograd_compatible = False
 
     ####################################################################################################
 
@@ -304,7 +301,6 @@ def test_6e():
     NT_cor = False
     s_poly_coeffs = np.array([[]])
     use_banded_solver_NLayers = 10
-    autograd_compatible = False
 
     ####################################################################################################
 
@@ -396,7 +392,6 @@ def test_6f():
     NT_cor = False
     s_poly_coeffs = np.array([[]])
     use_banded_solver_NLayers = 10
-    autograd_compatible = False
 
     ####################################################################################################
 
@@ -490,7 +485,6 @@ def test_6g():
     f_arr = 0
     NT_cor = False
     use_banded_solver_NLayers = 10
-    autograd_compatible = False
 
     ####################################################################################################
 
@@ -585,7 +579,6 @@ def test_6h():
     f_arr = 0
     NT_cor = False
     use_banded_solver_NLayers = 10
-    autograd_compatible = False
 
     ####################################################################################################
 

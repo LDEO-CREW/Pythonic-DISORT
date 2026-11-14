@@ -43,7 +43,6 @@ def test_7a():
     NT_cor = False
     BDRF_Fourier_modes = []
     use_banded_solver_NLayers = 10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -122,7 +121,6 @@ def test_7b():
     NT_cor = False
     BDRF_Fourier_modes = []
     use_banded_solver_NLayers = 10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -204,7 +202,6 @@ def test_7c():
     only_flux = False
     BDRF_Fourier_modes = []
     use_banded_solver_NLayers = 10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -291,7 +288,6 @@ def test_7d():
     b_pos = 0
     only_flux = False
     use_banded_solver_NLayers = 10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -403,7 +399,6 @@ def test_7e():
     NFourier = None
     NT_cor = False
     use_banded_solver_NLayers = 10
-    autograd_compatible=False
 
     ####################################################################################################
 

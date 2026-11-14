@@ -44,9 +44,9 @@ def test_NT_at_quad_nodes():
     mu_arr, _, _, _, u_nodes = _pydisort(True)
     u = _pydisort(True, interpolate_mu=True)[4]
 
-    for is_anti in (False, True):
-        ref = u_nodes(tau_eval, phi_eval, is_anti)
-        res = u(mu_arr, tau_eval, phi_eval, is_anti)
+    for tau_derivative_order in (0, -1, 1):
+        ref = u_nodes(tau_eval, phi_eval, tau_derivative_order)
+        res = u(mu_arr, tau_eval, phi_eval, tau_derivative_order)
         assert np.max(np.abs(res - ref)) < 1e-12 * np.max(np.abs(ref))
 
 
@@ -61,10 +61,28 @@ def test_interp_NT_antiderivative():
 
     integral = quad_vec(lambda tau: u(mu_eval, tau, phi_eval), 0, end)[0]
     telescoped = (
-        u(mu_eval, upper, phi_eval, True)
-        - u(mu_eval, lower, phi_eval, True)
+        u(mu_eval, upper, phi_eval, -1)
+        - u(mu_eval, lower, phi_eval, -1)
     ).sum(axis=1)
     assert np.allclose(integral, telescoped)
+
+
+def test_NT_derivative():
+    """The tau-derivative of the corrected intensity must match central finite differences of it,
+    at the quadrature nodes and at arbitrary `mu` (`interpolate_mu=True`), including at the
+    removable singularities of the corrections."""
+    tau_interior = np.array([0.3, 1.1, 1.99, 2.5, 4.2, 5.01, 6.6, 7.9])
+    h = 1e-5
+    u_nodes = _pydisort(True)[4]
+    derivative = u_nodes(tau_interior, phi_eval, 1)
+    finite_diff = (u_nodes(tau_interior + h, phi_eval) - u_nodes(tau_interior - h, phi_eval)) / (2 * h)
+    assert np.max(np.abs(derivative - finite_diff)) < 1e-7 * np.max(np.abs(derivative))
+
+    u = _pydisort(True, interpolate_mu=True)[4]
+    mu = np.append(mu_eval, -mu0)
+    derivative = u(mu, tau_interior, phi_eval, 1)
+    finite_diff = (u(mu, tau_interior + h, phi_eval) - u(mu, tau_interior - h, phi_eval)) / (2 * h)
+    assert np.max(np.abs(derivative - finite_diff)) < 1e-7 * np.max(np.abs(derivative))
 
 
 def test_NT_Fourier_error_passthrough():
@@ -76,19 +94,19 @@ def test_NT_Fourier_error_passthrough():
     u_true_at_mu = _pydisort(True, interpolate_mu=True)[4]
     u_false_at_mu = _pydisort(False, interpolate_mu=True)[4]
 
-    for is_anti in (False, True):
-        Fourier_error_ref = u_false(tau_eval, phi_eval, is_anti, True)[1]
+    for tau_derivative_order in (0, -1, 1):
+        Fourier_error_ref = u_false(tau_eval, phi_eval, tau_derivative_order, True)[1]
         assert np.isscalar(Fourier_error_ref) and Fourier_error_ref >= 0
 
-        vals, Fourier_error = u_true(tau_eval, phi_eval, is_anti, True)
-        assert np.allclose(vals, u_true(tau_eval, phi_eval, is_anti))
+        vals, Fourier_error = u_true(tau_eval, phi_eval, tau_derivative_order, True)
+        assert np.allclose(vals, u_true(tau_eval, phi_eval, tau_derivative_order))
         assert np.isclose(Fourier_error, Fourier_error_ref)
 
-        Fourier_error_ref = u_false_at_mu(mu_eval, tau_eval, phi_eval, is_anti, True)[1]
+        Fourier_error_ref = u_false_at_mu(mu_eval, tau_eval, phi_eval, tau_derivative_order, True)[1]
         assert np.isscalar(Fourier_error_ref) and Fourier_error_ref >= 0
 
-        vals, Fourier_error = u_true_at_mu(mu_eval, tau_eval, phi_eval, is_anti, True)
-        assert np.allclose(vals, u_true_at_mu(mu_eval, tau_eval, phi_eval, is_anti))
+        vals, Fourier_error = u_true_at_mu(mu_eval, tau_eval, phi_eval, tau_derivative_order, True)
+        assert np.allclose(vals, u_true_at_mu(mu_eval, tau_eval, phi_eval, tau_derivative_order))
         assert np.isclose(Fourier_error, Fourier_error_ref)
 
 

@@ -39,7 +39,6 @@ def test_Ia():
     NFourier=None
     only_flux=False
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -66,11 +65,11 @@ def test_Ia():
     # per-layer local antiderivatives telescope when sampled at each layer bottom minus each layer top (+eps to ensure correct layer).
     upper = tau_arr
     lower = np.insert(tau_arr[:-1] + 1e-15, 0, 0)
-    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, True) - u(lower, phi_arr, True)).sum(axis=1))
-    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, True) - u0(lower, True)).sum(axis=-1))
-    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, True) - flux_up(lower, True)).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, True)[0] - flux_down(lower, True)[0]).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, True)[1] - flux_down(lower, True)[1]).sum())
+    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, -1) - u(lower, phi_arr, -1)).sum(axis=1))
+    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, -1) - u0(lower, -1)).sum(axis=-1))
+    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, -1) - flux_up(lower, -1)).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, -1)[0] - flux_down(lower, -1)[0]).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, -1)[1] - flux_down(lower, -1)[1]).sum())
     # ------------------------------------------------------------------------------------------------------------------
 
 
@@ -103,7 +102,6 @@ def test_Ib():
     NFourier=None
     only_flux=False
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -129,11 +127,11 @@ def test_Ib():
     # Multi-layer integration via the documented antiderivative idiom.
     upper = tau_arr
     lower = np.insert(tau_arr[:-1] + 1e-15, 0, 0)
-    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, True) - u(lower, phi_arr, True)).sum(axis=1))
-    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, True) - u0(lower, True)).sum(axis=-1))
-    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, True) - flux_up(lower, True)).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, True)[0] - flux_down(lower, True)[0]).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, True)[1] - flux_down(lower, True)[1]).sum())
+    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, -1) - u(lower, phi_arr, -1)).sum(axis=1))
+    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, -1) - u0(lower, -1)).sum(axis=-1))
+    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, -1) - flux_up(lower, -1)).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, -1)[0] - flux_down(lower, -1)[0]).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, -1)[1] - flux_down(lower, -1)[1]).sum())
     # ------------------------------------------------------------------------------------------------------------------
 
 
@@ -166,7 +164,6 @@ def test_Ic():
     NFourier=None
     only_flux=False
     use_banded_solver_NLayers=10
-    autograd_compatible=False
 
     ####################################################################################################
 
@@ -192,11 +189,11 @@ def test_Ic():
     # Multi-layer integration via the documented antiderivative idiom.
     upper = tau_arr
     lower = np.insert(tau_arr[:-1] + 1e-15, 0, 0)
-    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, True) - u(lower, phi_arr, True)).sum(axis=1))
-    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, True) - u0(lower, True)).sum(axis=-1))
-    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, True) - flux_up(lower, True)).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, True)[0] - flux_down(lower, True)[0]).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, True)[1] - flux_down(lower, True)[1]).sum())
+    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, -1) - u(lower, phi_arr, -1)).sum(axis=1))
+    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, -1) - u0(lower, -1)).sum(axis=-1))
+    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, -1) - flux_up(lower, -1)).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, -1)[0] - flux_down(lower, -1)[0]).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, -1)[1] - flux_down(lower, -1)[1]).sum())
     # ------------------------------------------------------------------------------------------------------------------
 
 
@@ -230,7 +227,6 @@ def test_Id(): # inhomogeneous 3-layer atmosphere with cubic source
     NFourier = None
     only_flux = False
     use_banded_solver_NLayers = 10
-    autograd_compatible = False
 
     ####################################################################################################
 
@@ -256,11 +252,11 @@ def test_Id(): # inhomogeneous 3-layer atmosphere with cubic source
     # Multi-layer integration via the documented antiderivative idiom.
     upper = tau_arr
     lower = np.insert(tau_arr[:-1] + 1e-15, 0, 0)
-    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, True) - u(lower, phi_arr, True)).sum(axis=1))
-    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, True) - u0(lower, True)).sum(axis=-1))
-    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, True) - flux_up(lower, True)).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, True)[0] - flux_down(lower, True)[0]).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, True)[1] - flux_down(lower, True)[1]).sum())
+    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, -1) - u(lower, phi_arr, -1)).sum(axis=1))
+    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, -1) - u0(lower, -1)).sum(axis=-1))
+    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, -1) - flux_up(lower, -1)).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, -1)[0] - flux_down(lower, -1)[0]).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[1], 0, end)[0], (flux_down(upper, -1)[1] - flux_down(lower, -1)[1]).sum())
     # ------------------------------------------------------------------------------------------------------------------
 
 
@@ -307,8 +303,8 @@ def test_Ie(): # no beam source: only boundary and isotropic sources
     # Multi-layer integration via the documented antiderivative idiom.
     upper = tau_arr
     lower = np.insert(tau_arr[:-1] + 1e-15, 0, 0)
-    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, True) - u(lower, phi_arr, True)).sum(axis=1))
-    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, True) - u0(lower, True)).sum(axis=-1))
-    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, True) - flux_up(lower, True)).sum())
-    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, True)[0] - flux_down(lower, True)[0]).sum())
+    assert np.allclose(quad_vec(lambda tau: u(tau, phi_arr), 0, end)[0], (u(upper, phi_arr, -1) - u(lower, phi_arr, -1)).sum(axis=1))
+    assert np.allclose(quad_vec(u0, 0, end)[0], (u0(upper, -1) - u0(lower, -1)).sum(axis=-1))
+    assert np.allclose(quad(flux_up, 0, end)[0], (flux_up(upper, -1) - flux_up(lower, -1)).sum())
+    assert np.allclose(quad(lambda tau: flux_down(tau)[0], 0, end)[0], (flux_down(upper, -1)[0] - flux_down(lower, -1)[0]).sum())
     # ------------------------------------------------------------------------------------------------------------------

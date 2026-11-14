@@ -1,4 +1,5 @@
 from PythonicDISORT import subroutines
+from PythonicDISORT.subroutines import _check_tau_derivative_order
 
 import numpy as np
 import scipy as sc
@@ -25,7 +26,6 @@ def _NT_corrections(
     mu0, phi0, I0_div_4pi,              # Direct beam parameters
     rescale_factor,                     # Rescale factor of the sources
     there_is_beam_source,               # Is there a beam source?
-    autograd_compatible,                # Should the output functions be compatible with autograd?
 ):
     """Performs the Nakajima-Tanaka (NT) corrections on the intensity, but not the flux, if `NT_cor`
     and if the corrections are applicable. Returns the intensity function `u`, which is otherwise `u_star`.
@@ -63,7 +63,6 @@ def _NT_corrections(
     | `I0_div_4pi`                   | scalar                   |
     | `rescale_factor`               | scalar                   |
     | `there_is_beam_source`         | boolean                  |
-    | `autograd_compatible`          | boolean                  |
 
     Notable internal variables of _NT_corrections
     |          Variable            |        Type / Shape        |
@@ -78,11 +77,6 @@ def _NT_corrections(
     | `Leg_coeffs_residue_avg`     | `(NLayers + 1) x NLeg_all` |
     | `IMS_Leg_coeffs`             | `(NLayers + 1) x NLeg_all` |
     """
-    if autograd_compatible:
-        import autograd.numpy as np
-    else:
-        import numpy as np
-
     # NT corrections require a beam source, delta-M scaling (`f_arr > 0`), scattering
     # (`omega_arr > 0`) and a truncated phase function (`NLeg < NLeg_all`)
     if not (NT_cor and there_is_beam_source and np.any(f_arr > 0) and NLeg < NLeg_all and np.any(omega_arr > 0)):
@@ -139,12 +133,14 @@ def _NT_corrections(
     ##################################################### Apply NT Corrections ####################################################
 
     def _NT_corrections_at(
-        mu_pos, abs_mu_neg, tau, phi, is_antiderivative_wrt_tau, TMS_statics_pos=None, TMS_statics_neg=None
+        mu_pos, abs_mu_neg, tau, phi, tau_derivative_order, TMS_statics_pos=None, TMS_statics_neg=None
     ):
-        """NT (TMS + IMS) corrections at the upward `mu_pos` and the downward `-abs_mu_neg`, in that order.
+        """NT (TMS + IMS) corrections, or their `tau`-derivative of order `tau_derivative_order`, at the upward
+        `mu_pos` and the downward `-abs_mu_neg`, in that order.
         Returns an (Npos + Nneg, Ntau, Nphi) array. The optional `_TMS_mu_statics` of the two hemispheres
         are only passed for the quadrature nodes, where they are precomputed.
         """
+        _check_tau_derivative_order(tau_derivative_order)
         if np.any(tau < 0) or np.any(tau > tau_arr[-1]):
             raise ValueError("tau input outside the tau range specified for the atmosphere (check `tau_arr`).")
         Nmu_pos = len(mu_pos)
@@ -174,36 +170,36 @@ def _NT_corrections(
         series_values = _legendre_series(nu, series)
 
         # TMS correction for the intensity (see section 3.7.2)
+        mathscr_B_series = np.moveaxis(np.reshape(series_values[0], (NLayers, Nmu, Nphi)), 0, 1)
         NT_corrections = _TMS_correction(
             mu_pos, abs_mu_neg,
-            np.moveaxis(np.reshape(series_values[0], (NLayers, Nmu, Nphi)), 0, 1),
+            mathscr_B_series,
             l, scaled_tau,
-            is_antiderivative_wrt_tau,
+            tau_derivative_order == -1,
             mu0,
             scale_tau, scaled_thickness_arr,
             scaled_tau_arr_with_0, exp_scaled_tau_arr_with_0,
             NLayers, is_atmos_multilayered,
-            autograd_compatible,
             TMS_statics_pos,
             TMS_statics_neg,
         )
+        if tau_derivative_order == 1:
+            # The TMS correction solves the transfer equation along each `mu` with the source function `mathscr_B`
+            # (without its factor that depends on `mu`) times the transmittance of the beam, i.e.
+            # mu d(correction)/dt = correction - source function, t being the delta-scaled tau
+            NT_corrections = (
+                NT_corrections - mathscr_B_series[:, l, :] * np.exp(-scaled_tau / mu0)[None, :, None]
+            ) * (scale_tau[l][None, :, None] / np.concatenate([mu_pos, -abs_mu_neg])[:, None, None])
 
         # IMS correction for the intensity (see section 3.7.2); it applies only to downward directions
         if Nmu_pos < Nmu:
-            IMS_corrections = _IMS_correction(
+            NT_corrections[Nmu_pos:, :, :] -= _IMS_correction(
                 abs_mu_neg,
                 np.reshape(series_values[1], (len(boundaries), Nmu - Nmu_pos, Nphi)), boundaries,
                 tau, l,
-                is_antiderivative_wrt_tau,
+                tau_derivative_order,
                 scaled_mu0, tau_arr_with_0,
-                autograd_compatible,
             )
-            if autograd_compatible:
-                NT_corrections = NT_corrections - np.concatenate(
-                    [np.zeros((Nmu_pos, len(tau), Nphi)), IMS_corrections], axis=0
-                )
-            else:
-                NT_corrections[Nmu_pos:, :, :] -= IMS_corrections
 
         return NT_corrections
 
@@ -213,7 +209,7 @@ def _NT_corrections(
 
         # The corrected intensity: `u_star` plus the TMS and IMS corrections evaluated at the same `mu` values
         # --------------------------------------------------------------------------------------------------------------------------
-        def u_corrected(mu, tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False):
+        def u_corrected(mu, tau, phi, tau_derivative_order=0, return_Fourier_error=False):
             mu = np.atleast_1d(mu)
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
@@ -225,12 +221,12 @@ def _NT_corrections(
             mask_pos = mu > 0
             Nmu_pos = np.count_nonzero(mask_pos)
             if Nmu_pos == len(mu):
-                NT_corrections = _NT_corrections_at(mu, mu[:0], tau, phi, is_antiderivative_wrt_tau)
+                NT_corrections = _NT_corrections_at(mu, mu[:0], tau, phi, tau_derivative_order)
             elif Nmu_pos == 0:
-                NT_corrections = _NT_corrections_at(mu[:0], -mu, tau, phi, is_antiderivative_wrt_tau)
+                NT_corrections = _NT_corrections_at(mu[:0], -mu, tau, phi, tau_derivative_order)
             else:
                 mask_neg = ~mask_pos
-                unordered = _NT_corrections_at(mu[mask_pos], -mu[mask_neg], tau, phi, is_antiderivative_wrt_tau)
+                unordered = _NT_corrections_at(mu[mask_pos], -mu[mask_neg], tau, phi, tau_derivative_order)
                 # Return to the original `mu` ordering
                 NT_corrections = np.empty(np.shape(unordered))
                 NT_corrections[mask_pos] = unordered[:Nmu_pos]
@@ -239,10 +235,10 @@ def _NT_corrections(
 
             # The corrected intensity
             if return_Fourier_error:
-                u_star_val, Fourier_error = u_star(mu, tau, phi, is_antiderivative_wrt_tau, True)
+                u_star_val, Fourier_error = u_star(mu, tau, phi, tau_derivative_order, True)
                 return u_star_val + NT_corrections, Fourier_error
             else:
-                return u_star(mu, tau, phi, is_antiderivative_wrt_tau) + NT_corrections
+                return u_star(mu, tau, phi, tau_derivative_order) + NT_corrections
 
     else:
 
@@ -256,22 +252,22 @@ def _NT_corrections(
 
         # The corrected intensity: `u_star` plus the TMS and IMS corrections evaluated at the quadrature nodes
         # --------------------------------------------------------------------------------------------------------------------------
-        def u_corrected(tau, phi, is_antiderivative_wrt_tau=False, return_Fourier_error=False):
+        def u_corrected(tau, phi, tau_derivative_order=0, return_Fourier_error=False):
             tau = np.atleast_1d(tau)
             phi = np.atleast_1d(phi)
             NT_corrections = rescale_factor * np.squeeze(
                 _NT_corrections_at(
-                    mu_arr_pos, mu_arr_pos, tau, phi, is_antiderivative_wrt_tau,
+                    mu_arr_pos, mu_arr_pos, tau, phi, tau_derivative_order,
                     TMS_statics_quad_pos, TMS_statics_quad_neg,
                 )
             )
 
             # The corrected intensity
             if return_Fourier_error:
-                u_star_val, Fourier_error = u_star(tau, phi, is_antiderivative_wrt_tau, True)
+                u_star_val, Fourier_error = u_star(tau, phi, tau_derivative_order, True)
                 return u_star_val + NT_corrections, Fourier_error
             else:
-                return u_star(tau, phi, is_antiderivative_wrt_tau) + NT_corrections
+                return u_star(tau, phi, tau_derivative_order) + NT_corrections
 
     # `u_corrected` wraps `u_star`, so it needs its own copy of the attribute
     # that `_assemble_intensity_and_fluxes` attaches to `u_star`
@@ -363,7 +359,6 @@ def _TMS_correction(
     exp_scaled_tau_arr_with_0,      # exp(-scaled_tau_arr_with_0 / mu0)
     NLayers,                        # Number of layers
     is_atmos_multilayered,          # Is the atmosphere multilayered?
-    autograd_compatible,            # Should the output functions be compatible with autograd?
     statics_pos=None,               # Optional precomputed `_TMS_mu_statics` for `mu_pos` (multi-layer only)
     statics_neg=None,               # Optional precomputed `_TMS_mu_statics` for `abs_mu_neg` (multi-layer only)
 ):
@@ -387,11 +382,6 @@ def _TMS_correction(
     | `statics_pos`                | 2-tuple of `Npos x NLayers`     |
     | `statics_neg`                | 2-tuple of `Nneg x NLayers`     |
     """
-    if autograd_compatible:
-        import autograd.numpy as np
-    else:
-        import numpy as np
-
     Nmu_pos = len(mu_pos)
     Nmu_neg = len(abs_mu_neg)
     Nphi = np.shape(mathscr_B_series)[-1]
@@ -463,16 +453,6 @@ def _TMS_correction(
                     axis=1,
                 )                                                       # (Npos, len(l_uniq), Nphi)
                 Acc_index = np.searchsorted(l_uniq, l)
-            elif autograd_compatible:
-                acc0 = np.zeros((Nmu_pos, Nphi))
-                acc = acc0
-                cols_rev = [acc0]  # Acc_{NLayers-1} = 0
-                for r in range(NLayers - 1, l_min, -1):
-                    term = coef_pos[:, r][:, None] * Bpos[:, r, :]          # (Npos, Nphi)
-                    acc = term + decay_pos[:, r][:, None] * acc
-                    cols_rev.append(acc)
-                Acc_pos = np.stack(cols_rev[::-1], axis=1)                  # (Npos, Nacc, Nphi)
-                Acc_index = l - l_min
             else:
                 Nacc = NLayers - l_min  # Only layers >= l_min are needed; layer r is stored at index r - l_min
                 Acc_pos = np.empty((Nmu_pos, Nacc, Nphi))
@@ -567,16 +547,6 @@ def _TMS_correction(
                     axis=1,
                 )                                                       # (Nneg, len(l_uniq), Nphi)
                 Acc_index = np.searchsorted(l_uniq, l)
-            elif autograd_compatible:
-                acc0 = np.zeros((Nmu_neg, Nphi))
-                acc = acc0
-                cols = [acc0]  # Acc_0 = 0
-                for r in range(0, l_max):
-                    term = coef_neg[:, r][:, None] * Bneg[:, r, :]          # (Nneg, Nphi)
-                    acc = term + decay_neg[:, r][:, None] * acc
-                    cols.append(acc)
-                Acc_neg = np.stack(cols, axis=1)                            # (Nneg, Nacc, Nphi)
-                Acc_index = l
             else:
                 Nacc = l_max + 1  # Only layers <= l_max are needed
                 Acc_neg = np.empty((Nmu_neg, Nacc, Nphi))
@@ -614,10 +584,9 @@ def _IMS_correction(
     boundaries,                     # Sorted indices of the layer boundaries whose series are in `IMS_series`
     tau,                            # Optical depths of the evaluation points (NOT delta-scaled)
     l,                              # Atmospheric layer indices of the evaluation points
-    is_antiderivative_wrt_tau,      # Switch to an antiderivative of the function?
+    tau_derivative_order,           # Order of the derivative with respect to tau (an antiderivative if -1)
     scaled_mu0,                     # mu0' at each layer boundary
     tau_arr_with_0,                 # Lower boundary of layers with 0 inserted in front
-    autograd_compatible,            # Should the output functions be compatible with autograd?
 ):
     """IMS correction to the intensity at arbitrary downward `mu` evaluation points.
     Refer to section 3.7.2 of the Comprehensive Documentation.
@@ -635,31 +604,29 @@ def _IMS_correction(
     | `boundaries`                 | `Nboundaries`                |
     | `tau`                        | `Ntau`                       |
     | `l`                          | `Ntau`                       |
+    | `tau_derivative_order`       | scalar                       |
     | `scaled_mu0`                 | `NLayers + 1`                |
     | `tau_arr_with_0`             | `NLayers + 1`                |
     """
-    if autograd_compatible:
-        import autograd.numpy as np
-    else:
-        import numpy as np
-
     exp_tau_mu = np.exp(-tau[None, :] / abs_mu_neg[:, None])            # (Nneg, Ntau)
 
-    def chi_kernels(smu0, need_chichi_anti=True):
-        """chi or, on the antiderivative branch, chi_anti and optionally chichi_anti (the first and
-        second tau-antiderivatives of chi), each of shape (Nneg, Ntau), for the `scaled_mu0` value
-        `smu0` (Ntau,) of each evaluation point. Near the removable singularity at mu = smu0 (|z| < 1)
-        each is evaluated through phi2(z), and phi2 through its Taylor series."""
+    def chi_kernels(smu0):
+        """The `tau`-derivatives of chi of orders `tau_derivative_order` and `tau_derivative_order - 1`
+        (antiderivatives if negative), each of shape (Nneg, Ntau), for the `scaled_mu0` value `smu0` (Ntau,)
+        of each evaluation point. The latter is only required to interpolate a derivative or an
+        antiderivative and is zero if `tau_derivative_order` is 0. Near the removable singularity at
+        mu = smu0 (|z| < 1) chi and its antiderivatives are evaluated through phi2(z), and phi2 through
+        its Taylor series."""
         x = 1 / abs_mu_neg[:, None] - 1 / smu0[None, :]                 # (Nneg, Ntau)
         z = -tau[None, :] * x
         near_singularity = np.abs(z) < 1.0
         x_safe = np.where(x == 0.0, 1.0, x)
         exp_tau_smu0 = np.exp(-tau / smu0)[None, :]
         phi2 = _PHI2_TAYLOR_COEFFS[-1]
-        for c in _PHI2_TAYLOR_COEFFS[-2::-1]:                           # Horner evaluation; written to be autograd-compatible
+        for c in _PHI2_TAYLOR_COEFFS[-2::-1]:                           # Horner evaluation
             phi2 = phi2 * z + c
 
-        if is_antiderivative_wrt_tau:
+        if tau_derivative_order == -1:
             chi_anti = np.where(
                 near_singularity,
                 -exp_tau_smu0
@@ -670,8 +637,6 @@ def _IMS_correction(
                     - abs_mu_neg[:, None] * exp_tau_mu
                 ) / (abs_mu_neg[:, None] * smu0[None, :] * x_safe**2),
             )
-            if not need_chichi_anti:
-                return chi_anti, None
             chichi_anti = np.where(
                 near_singularity,
                 exp_tau_smu0
@@ -687,49 +652,38 @@ def _IMS_correction(
                 ) / (abs_mu_neg[:, None] * smu0[None, :] * x_safe**2),
             )
             return chi_anti, chichi_anti
-        else:
-            chi = np.where(
-                near_singularity,
-                tau[None, :] ** 2 * exp_tau_smu0 * phi2 / (abs_mu_neg[:, None] * smu0[None, :]),
-                (
-                    (tau[None, :] - 1 / x_safe) * exp_tau_smu0 + exp_tau_mu / x_safe
-                ) / (abs_mu_neg[:, None] * smu0[None, :] * x_safe),
-            )
-            return chi
 
-    if len(scaled_mu0) == 2:
-        # Single-layer atmosphere: the two boundary sets are identical so there is nothing to interpolate
-        smu0 = scaled_mu0[np.full(len(tau), 1)]
-        scalP = IMS_series[0][:, None, :]
-        if is_antiderivative_wrt_tau:
-            return scalP * chi_kernels(smu0, need_chichi_anti=False)[0][:, :, None]
-        else:
-            return scalP * chi_kernels(smu0)[:, :, None]
+        chi = np.where(
+            near_singularity,
+            tau[None, :] ** 2 * exp_tau_smu0 * phi2 / (abs_mu_neg[:, None] * smu0[None, :]),
+            (
+                (tau[None, :] - 1 / x_safe) * exp_tau_smu0 + exp_tau_mu / x_safe
+            ) / (abs_mu_neg[:, None] * smu0[None, :] * x_safe),
+        )
+        if tau_derivative_order == 0:
+            return chi, np.zeros_like(chi)
+        # chi solves the transfer equation |mu| d(chi)/d(tau) = tau exp(-tau / smu0) / smu0 - chi
+        return (tau[None, :] * exp_tau_smu0 / smu0[None, :] - chi) / abs_mu_neg[:, None], chi
 
     # Interpolate between the correction functions of the top ("lo", k = l) and bottom ("hi", k = l + 1)
-    # boundaries of the layer containing each `tau`
+    # boundaries of the layer containing each `tau`; in a single-layer atmosphere the two are identical
     t0 = tau_arr_with_0[l]                                              # (Ntau,)
     thickness_l = tau_arr_with_0[l + 1] - t0                            # (Ntau,)
+    w = (tau - t0) / thickness_l                                        # (Ntau,)
 
     # The scalar factor times the square-bracketed Legendre series (DISORT's `PSPIKE`) of the two boundary sets
     scalP_lo = np.moveaxis(IMS_series[np.searchsorted(boundaries, l)], 0, 1)      # (Nneg, Ntau, Nphi)
     scalP_hi = np.moveaxis(IMS_series[np.searchsorted(boundaries, l + 1)], 0, 1)  # (Nneg, Ntau, Nphi)
 
-    if is_antiderivative_wrt_tau:
-        # Per-layer antiderivative of the interpolated correction (refer to section 3.7.2),
-        # where Y1 and Y2 are the first and second antiderivatives of the boundary correction functions
-        chi_anti_lo, chichi_anti_lo = chi_kernels(scaled_mu0[l])
-        chi_anti_hi, chichi_anti_hi = chi_kernels(scaled_mu0[l + 1])
-        Y1_lo = scalP_lo * chi_anti_lo[:, :, None]
-        Y1_hi = scalP_hi * chi_anti_hi[:, :, None]
-        Y2_diff = scalP_hi * chichi_anti_hi[:, :, None] - scalP_lo * chichi_anti_lo[:, :, None]
-        return Y1_lo + (
-            (tau - t0)[None, :, None] * (Y1_hi - Y1_lo) - Y2_diff
-        ) / thickness_l[None, :, None]
-    else:
-        w = (tau - t0) / thickness_l                                    # (Ntau,)
-        y_lo = scalP_lo * chi_kernels(scaled_mu0[l])[:, :, None]
-        y_hi = scalP_hi * chi_kernels(scaled_mu0[l + 1])[:, :, None]
-        return y_lo + w[None, :, None] * (y_hi - y_lo)
+    # The derivative (antiderivative) of the interpolated correction is the interpolated derivative (antiderivative)
+    # plus (minus) the difference of the boundary correction functions of one order lower divided by the layer
+    # thickness (refer to section 3.7.2)
+    y_lo, y_lo_lower = (scalP_lo * kernel[:, :, None] for kernel in chi_kernels(scaled_mu0[l]))
+    y_hi, y_hi_lower = (scalP_hi * kernel[:, :, None] for kernel in chi_kernels(scaled_mu0[l + 1]))
+    return (
+        y_lo
+        + w[None, :, None] * (y_hi - y_lo)
+        + tau_derivative_order * (y_hi_lower - y_lo_lower) / thickness_l[None, :, None]
+    )
 
 ##############################################################################################################################
